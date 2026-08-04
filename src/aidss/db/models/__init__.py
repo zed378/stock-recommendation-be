@@ -1,0 +1,105 @@
+"""Every ORM model (Section 8.2).
+
+Note what is **not** here, and must never be added: ``orders``, ``executions``,
+or ``brokers`` tables. Their absence is an architectural hard constraint
+(Sections 3, 4, 8), not a deferred feature - and it is enforced automatically
+by ``tests/test_architecture_constraints.py``.
+"""
+
+from aidss.db.models.ai import (
+    AIConversation,
+    AIMessage,
+    AIProviderConfig,
+    KnowledgeBaseDocument,
+    KnowledgeChunk,
+    PromptTemplate,
+)
+from aidss.db.models.analysis import (
+    AnalysisResult,
+    InvestmentHorizon,
+    PortfolioAnalysis,
+    Recommendation,
+    RecommendationLabel,
+    RiskAssessment,
+)
+from aidss.db.models.asset import (
+    Asset,
+    FeatureSnapshot,
+    FundamentalMetric,
+    HistoricalPrice,
+    TechnicalIndicator,
+)
+from aidss.db.models.news import (
+    NewsEmbedding,
+    NewsItem,
+    ScheduleStatus,
+    SentimentScore,
+    TickerNewsSchedule,
+)
+from aidss.db.models.system import (
+    ActorType,
+    AuditLog,
+    JobQueueEntry,
+    JobStatus,
+    LeaderLease,
+    Notification,
+    ProviderIngestionRun,
+    ProviderQuotaUsage,
+    SchedulerJob,
+    SystemConfiguration,
+)
+from aidss.db.models.user import (
+    HoldingInputMethod,
+    InvestmentJournalEntry,
+    Portfolio,
+    PortfolioHolding,
+    User,
+    UserPreference,
+    UserRole,
+    Watchlist,
+    WatchlistItem,
+)
+
+__all__ = [
+    "ActorType",
+    "AIConversation",
+    "AIMessage",
+    "AIProviderConfig",
+    "AnalysisResult",
+    "Asset",
+    "AuditLog",
+    "FeatureSnapshot",
+    "FundamentalMetric",
+    "HistoricalPrice",
+    "HoldingInputMethod",
+    "InvestmentHorizon",
+    "InvestmentJournalEntry",
+    "JobQueueEntry",
+    "JobStatus",
+    "KnowledgeBaseDocument",
+    "KnowledgeChunk",
+    "LeaderLease",
+    "NewsEmbedding",
+    "NewsItem",
+    "Notification",
+    "Portfolio",
+    "PortfolioAnalysis",
+    "PortfolioHolding",
+    "PromptTemplate",
+    "ProviderIngestionRun",
+    "ProviderQuotaUsage",
+    "Recommendation",
+    "RecommendationLabel",
+    "RiskAssessment",
+    "ScheduleStatus",
+    "SchedulerJob",
+    "SentimentScore",
+    "SystemConfiguration",
+    "TechnicalIndicator",
+    "TickerNewsSchedule",
+    "User",
+    "UserPreference",
+    "UserRole",
+    "Watchlist",
+    "WatchlistItem",
+]

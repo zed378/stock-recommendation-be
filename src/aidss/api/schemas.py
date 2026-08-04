@@ -1,0 +1,551 @@
+"""API request and response schemas (Section 10)."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from aidss.agents.conversation import ChatMode
+from aidss.db.models.news import ScheduleStatus
+from aidss.db.models.system import ActorType, JobStatus
+from aidss.db.models.user import HoldingInputMethod, UserRole
+from aidss.domain.types import InvestmentHorizon, RecommendationLabel, Timeframe
+
+
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Auth -----------------------------------------------------------------
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=72)
+    full_name: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+
+
+class UserResponse(ORMModel):
+    id: uuid.UUID
+    email: str
+    full_name: str | None
+    role: UserRole
+    mfa_enabled: bool
+
+
+# --- Assets & market data --------------------------------------------------
+
+
+class AssetCreate(BaseModel):
+    ticker: str = Field(min_length=1, max_length=20)
+    exchange: str = "IDX"
+    name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    currency: str = "IDR"
+
+
+class AssetResponse(ORMModel):
+    id: uuid.UUID
+    ticker: str
+    exchange: str
+    name: str | None
+    sector: str | None
+    industry: str | None
+    currency: str
+
+
+class CandleResponse(BaseModel):
+    timestamp: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+
+
+class IngestRequest(BaseModel):
+    timeframe: Timeframe = Timeframe.D1
+    days: int = Field(default=365, ge=1, le=3650)
+
+
+class IngestResponse(BaseModel):
+    ticker: str
+    timeframe: Timeframe
+    provider: str
+    fetched: int
+    inserted: int
+    updated: int
+    rejected: int
+    rejection_reasons: list[str]
+    indicators_inserted: int
+    indicators_updated: int
+
+
+class FundamentalIngestResponse(BaseModel):
+    ticker: str
+    fetched: int
+    inserted: int
+    updated: int
+    #: True when the provider publishes no fundamental data at all - a fact,
+    #: not a failure.
+    unsupported: bool
+    note: str
+
+
+class FundamentalMetricResponse(BaseModel):
+    metric: str
+    period: date
+    #: quarterly / annual / ttm. Travels with the number, because a quarterly
+    #: figure read as annual is a factor-of-four error.
+    period_type: str
+    value: Decimal | None
+    source: str
+
+
+# --- Indicators & features -------------------------------------------------
+
+
+class IndicatorSnapshotResponse(BaseModel):
+    ticker: str
+    timeframe: Timeframe
+    snapshot: dict[str, Any]
+    features: dict[str, Any]
+    #: Attached to every analytical response, per Section 2.7.
+    disclaimer: str
+
+
+# --- AI analysis (Phase 4) -------------------------------------------------
+
+
+class AnalysisRequest(BaseModel):
+    timeframe: Timeframe = Timeframe.D1
+    exchange: str = "IDX"
+    #: Off skips the Recommendation Agent, which is the most expensive call in
+    #: the run. Useful when only the analyzer readings are wanted.
+    include_recommendation: bool = True
+
+
+class RecommendationResponse(BaseModel):
+    """The complete Section 5.4 structure.
+
+    Prices are strings so a Decimal survives JSON without being rounded
+    through a float on the way out.
+    """
+
+    label: RecommendationLabel
+    #: The calibrated score. Section 5.4 requires a consistent calibration
+    #: rather than an arbitrary number from the model.
+    confidence: float = Field(ge=0, le=100)
+    #: How that score was reached, so it can be explained rather than trusted.
+    confidence_basis: dict[str, Any]
+    #: Kept for comparison against the calibrated figure; never published as
+    #: the confidence itself.
+    model_self_reported_confidence: float | None = None
+
+    reasoning: str
+    supporting_factors: list[str]
+    #: Never empty - enforced before the recommendation is stored.
+    conflicting_factors: list[str]
+    risk_factors: list[str]
+    bullish_scenario: str
+    bearish_scenario: str
+
+    support_level: str | None = None
+    resistance_level: str | None = None
+    target_price: str | None = None
+    target_price_method: str | None = None
+    #: Named a suggestion throughout, in the schema as well as the prose.
+    suggested_stop: str | None = None
+    suggested_stop_method: str | None = None
+
+    horizon: InvestmentHorizon
+    prompt_version: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    attempts: int | None = None
+
+
+class AgentSkipResponse(BaseModel):
+    agent: str
+    reason: str
+
+
+class AnalysisUsageResponse(BaseModel):
+    total_tokens: int
+    estimated_cost: str
+
+
+class AnalysisResponse(BaseModel):
+    ticker: str
+    timeframe: Timeframe
+    analysis_result_id: uuid.UUID | None
+    #: Absent when it was not requested, or when the Section 5.4 rules rejected
+    #: every attempt - in which case the reason appears under `failed`.
+    recommendation: RecommendationResponse | None = None
+    #: Keyed by agent name; each value is that agent's validated output plus
+    #: the provider, model, and prompt version that produced it.
+    agents: dict[str, Any]
+    #: Agents that had nothing to work with, kept distinct from failures so a
+    #: missing data source does not read as a broken component.
+    skipped: list[AgentSkipResponse]
+    failed: list[AgentSkipResponse]
+    usage: AnalysisUsageResponse
+    disclaimer: str
+
+
+# --- Watchlist -------------------------------------------------------------
+
+
+class WatchlistItemCreate(BaseModel):
+    ticker: str
+    exchange: str = "IDX"
+    note: str | None = None
+
+
+class WatchlistItemResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str
+    exchange: str
+    note: str | None
+    added_at: datetime
+
+
+# --- Portfolio -------------------------------------------------------------
+
+
+class HoldingUpsert(BaseModel):
+    ticker: str
+    exchange: str = "IDX"
+    quantity: Decimal = Field(gt=0)
+    average_price: Decimal = Field(gt=0)
+    input_method: HoldingInputMethod = HoldingInputMethod.MANUAL
+
+
+class HoldingResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str
+    exchange: str
+    quantity: Decimal
+    average_price: Decimal
+    input_method: HoldingInputMethod
+    updated_at: datetime
+
+
+class PortfolioResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    base_currency: str
+    holdings: list[HoldingResponse]
+
+
+# --- Portfolio intelligence (Phase 6) --------------------------------------
+
+
+class PortfolioAnalysisResponse(BaseModel):
+    portfolio: str
+    #: Deterministic figures - concentration, weights, diversification.
+    metrics: dict[str, Any]
+    #: Historical risk figures, each carrying its observation count.
+    risk: dict[str, Any]
+    correlation: dict[str, Any]
+    holdings: list[dict[str, Any]]
+    #: Model narrative, keyed by agent, with the prompt version that produced it.
+    agents: dict[str, Any]
+    skipped: list[AgentSkipResponse]
+    failed: list[AgentSkipResponse]
+    disclaimer: str
+
+
+class AllocationChangeRequest(BaseModel):
+    ticker: str
+    #: Absolute target quantity, not a delta. Zero removes the position.
+    quantity: Decimal = Field(ge=0)
+
+
+class SimulationRequest(BaseModel):
+    changes: list[AllocationChangeRequest] = Field(min_length=1, max_length=50)
+
+
+class SimulationResponse(BaseModel):
+    changes: list[dict[str, Any]]
+    before: dict[str, Any]
+    after: dict[str, Any]
+    #: What actually moved, so a reader need not diff two payloads by eye.
+    deltas: dict[str, Any]
+    correlation_after: dict[str, Any]
+    note: str
+    disclaimer: str
+
+
+# --- Investment journal (FR-10) --------------------------------------------
+
+
+class JournalEntryCreate(BaseModel):
+    #: Free text on purpose: a closed vocabulary would push people toward the
+    #: words the platform offers, and the point is what they actually thought.
+    decision: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=4000)
+    ticker: str | None = None
+    exchange: str = "IDX"
+    #: Optional link to a recommendation. Nullable because an investor does not
+    #: always follow, or even consult, one.
+    recommendation_ref: uuid.UUID | None = None
+
+
+class JournalEntryResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str | None
+    decision: str
+    note: str | None
+    recommendation_ref: uuid.UUID | None
+    created_at: datetime
+
+
+class JournalSummaryResponse(BaseModel):
+    entries: int
+    by_decision: dict[str, int]
+    first_entry_at: str | None
+    linked_to_recommendation: int
+
+
+class ReflectionResponse(BaseModel):
+    summary: str
+    #: Patterns in how this investor decides - not an assessment of returns.
+    patterns: list[str]
+    #: Where the journal is too thin to support a pattern. Naming it is what
+    #: stops the agent inventing one.
+    insufficient_evidence_for: list[str]
+    questions_to_consider: list[str]
+    entries_reviewed: int
+    model: str | None
+    prompt_version: str | None
+    disclaimer: str
+
+
+# --- Conversation (Section 10 `/chat`) -------------------------------------
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=2000)
+    #: Supplied, not inferred: guessing intent would add a classifier that can
+    #: be wrong and would need its own evaluation.
+    mode: ChatMode = ChatMode.KNOWLEDGE
+    #: Required by research mode, ignored by the others.
+    ticker: str | None = None
+
+
+class ChatResponse(BaseModel):
+    mode: ChatMode
+    agent: str
+    answer: str
+    summary: str
+    data_sufficiency: str
+    #: What the model says it drew on. Empty means it answered from its own
+    #: training rather than from retrieved context.
+    sources_used: list[str]
+    #: The passages themselves, so the answer can be checked against what it
+    #: was given.
+    retrieved: list[dict[str, Any]]
+    follow_up_questions: list[str]
+    model: str | None
+    prompt_version: str | None
+    disclaimer: str
+
+
+# --- Audit log (Sections 10, 13) -------------------------------------------
+
+
+class AuditLogResponse(BaseModel):
+    id: uuid.UUID
+    actor_type: ActorType
+    actor_id: str | None
+    action: str
+    entity: str
+    entity_id: str | None
+    before: dict[str, Any] | None
+    after: dict[str, Any] | None
+    created_at: datetime
+
+
+# --- Knowledge base & RAG (Phase 7) ----------------------------------------
+
+
+class KnowledgeDocumentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    content: str = Field(min_length=1, max_length=500_000)
+    source: str | None = None
+    category: str | None = None
+
+
+class KnowledgeDocumentResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    source: str | None
+    category: str | None
+    #: How many retrievable chunks the document produced. Zero means it was
+    #: stored but is unreachable by search.
+    chunks: int
+    uploaded_at: datetime
+
+
+class RetrievalResponse(BaseModel):
+    query: str
+    results: list[dict[str, Any]]
+
+
+# --- Scheduled news ingestion (Section 6.3) --------------------------------
+
+
+class CronPresetResponse(BaseModel):
+    key: str
+    label: str
+    expression: str
+    suited_to: str
+
+
+class NewsScheduleCreate(BaseModel):
+    ticker: str
+    exchange: str = "IDX"
+    #: Either a preset key or a custom expression; the preset wins if both are
+    #: supplied, because it is the one the user actually clicked.
+    preset: str | None = None
+    cron_expression: str | None = None
+
+
+class NewsScheduleResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str
+    cron_expression: str
+    preset_label: str | None
+    is_active: bool
+    #: `needs_attention` after repeated failures - flagged rather than
+    #: disabled, so a broken schedule cannot be mistaken for a quiet one.
+    status: ScheduleStatus
+    consecutive_failures: int
+    last_fetched_at: datetime | None
+    next_run_at: datetime | None
+
+
+class ScheduleRunResponse(BaseModel):
+    ticker: str
+    fetched: int
+    inserted: int
+    duplicates: int
+    scored: int
+    chunks_indexed: int
+    error: str | None
+    #: Non-fatal problems. Articles were stored, but something downstream did
+    #: not complete - kept separate so a sentiment outage does not read as a
+    #: failed ingestion.
+    warnings: list[str]
+    status: ScheduleStatus
+    next_run_at: datetime | None
+
+
+# --- Background jobs (Sections 2.6, 4) -------------------------------------
+
+
+class JobAcceptedResponse(BaseModel):
+    job_id: uuid.UUID
+    job_type: str
+    #: True when an identical job was already queued and this returns that one.
+    deduplicated: bool
+    poll_url: str
+    note: str
+
+
+class JobResponse(BaseModel):
+    id: uuid.UUID
+    job_type: str
+    #: `dead` means the retries are exhausted; `last_error` says why.
+    status: JobStatus
+    retry_count: int
+    max_retries: int
+    last_error: str | None
+    result: dict[str, Any] | None
+    available_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+
+
+class QueueStatsResponse(BaseModel):
+    by_status: dict[str, int]
+    #: What this build knows how to run. A job type missing from here will
+    #: dead-letter.
+    registered_job_types: list[str]
+    #: Which process currently holds the scheduler lease, and whether it is
+    #: still live. Absent or `expired` means nothing is enqueueing scheduled
+    #: work - a failure that otherwise looks exactly like "nothing is due".
+    scheduler_leader: dict[str, str] | None = None
+    note: str
+
+
+# --- Reporting, notifications, admin (Phase 8) -----------------------------
+
+
+class ReportResponse(BaseModel):
+    title: str
+    generated_at: datetime
+    #: The document itself. Request `?format=markdown` to get it as the
+    #: response body rather than a string inside JSON.
+    markdown: str
+    #: The same content as data, for a UI that lays it out itself.
+    payload: dict[str, Any]
+
+
+class NotificationResponse(BaseModel):
+    id: uuid.UUID
+    channel: str
+    subject: str | None
+    message: str
+    status: str
+    created_at: datetime
+
+
+class OperationsOverviewResponse(BaseModel):
+    generated_at: str
+    window_days: int
+    inventory: dict[str, Any]
+    ingestion: dict[str, Any]
+    #: Token and cost totals, per agent. Estimates from the configured price
+    #: table, not billed amounts (Section 12.9).
+    ai_usage: dict[str, Any]
+    #: Things an operator should look at: flagged schedules, recent failures.
+    attention: list[dict[str, Any]]
+    providers: dict[str, Any]
+
+
+# --- Providers (admin) -----------------------------------------------------
+
+
+class BudgetStatusResponse(BaseModel):
+    spent: str
+    ceiling: str | None
+    #: ok / warning / exceeded. `exceeded` means further AI calls are blocked
+    #: until the 24-hour window rolls forward (Section 12.9).
+    state: str
+    utilisation: float | None
+    window_start: str
+    message: str
+
+
+class ProviderInventoryResponse(BaseModel):
+    registered: dict[str, list[str]]
+    active: dict[str, str]
