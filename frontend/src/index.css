@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* A dark, low-chroma surface. Financial dashboards are read for long stretches,
+   so the palette keeps contrast for numbers and stays quiet everywhere else -
+   which is what lets colour mean something on the rare occasions it appears. */
+@theme {
+  --color-surface: #0b0f14;
+  --color-raised: #121821;
+  --color-hover: #1a2230;
+  --color-line: #1e2733;
+
+  --color-ink: #e6edf3;
+  --color-muted: #8b98a9;
+  --color-faint: #5c6b7d;
+
+  /* Direction colours follow the local convention: on IDX green is a rise and
+     red a fall, the same way round as most Western markets. */
+  --color-rise: #26a69a;
+  --color-fall: #ef5350;
+
+  /* Stance colours are deliberately not a green-to-red gradient. A `watchlist`
+     verdict is not a weak buy, and colouring it as one invites reading a
+     spectrum where there are only distinct stances. */
+  --color-buy: #26a69a;
+  --color-hold: #6b7f95;
+  --color-watch: #b8893f;
+  --color-sell: #ef5350;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Figures line up column-wise when they are tabular, which is most of this
+   application. Proportional digits make a price column impossible to scan. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-hover);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

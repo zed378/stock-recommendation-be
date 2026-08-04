@@ -128,13 +128,20 @@ class FundamentalPoint:
     metric: str
     period: date
     value: Decimal | None
-    #: "quarterly", "annual", or "ttm". A quarterly figure compared against an
-    #: annual one is a factor-of-four error waiting to happen, so the basis
-    #: travels with the number.
+    #: "quarterly", "annual", "ttm", or "ytd". A quarterly figure compared
+    #: against an annual one is a factor-of-four error waiting to happen, so
+    #: the basis travels with the number.
+    #:
+    #: `ytd` is here because IDX reports year-to-date cumulative figures: a
+    #: statement dated 30 September carries nine months of revenue. None of the
+    #: other three describes that. Calling it annual overstates by a third,
+    #: quarterly understates threefold, and `ttm` is a different window
+    #: entirely - so the honest answer was a fourth basis rather than the
+    #: nearest of three wrong ones.
     period_type: str = "quarterly"
 
     def __post_init__(self) -> None:
-        allowed = {"quarterly", "annual", "ttm"}
+        allowed = {"quarterly", "annual", "ttm", "ytd"}
         if self.period_type not in allowed:
             raise ValueError(f"period_type must be one of {sorted(allowed)}")
 

@@ -33,15 +33,16 @@ from aidss.llm.errors import GatewayError
 from aidss.llm.provisioning import build_gateway
 from aidss.news.collector import NewsCollector, NewsScheduler
 from aidss.news.schedules import PRESETS, InvalidScheduleError, next_run_at, resolve
-from aidss.plugins.registry import get_ai_provider, get_news_provider
+from aidss.plugins.registry import get_news_provider
 from aidss.rag.engine import RAGEngine
+from aidss.rag.provisioning import build_rag
 from aidss.security.rbac import Permission
 
 router = APIRouter(tags=["knowledge"])
 
 
 def _rag(session: Session) -> RAGEngine:
-    return RAGEngine(session, get_ai_provider())
+    return build_rag(session)
 
 
 # --- Knowledge base --------------------------------------------------------

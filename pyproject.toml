@@ -23,6 +23,10 @@ dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
     "croniter>=2.0",
+    # Required only by the IDX adapter: its endpoint sits behind Cloudflare and
+    # refuses an ordinary HTTP client. Imported lazily, so the rest of the
+    # platform runs without it.
+    "curl_cffi>=0.7",
     # Windows ships no IANA database, and the Alpha Vantage adapter reads the
     # exchange time zone out of each response to place intraday bars. Declared
     # explicitly rather than leaned on as a transitive dependency of pandas.

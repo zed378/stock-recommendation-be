@@ -212,10 +212,20 @@ class AnalysisResponse(BaseModel):
 # --- Watchlist -------------------------------------------------------------
 
 
+#: The group an item belongs to. Named watchlists were always in the schema -
+#: `watchlists` carries a `name` with a unique constraint per user - but every
+#: endpoint hardcoded "Default", so the grouping existed and was unreachable.
+#: `category` is that name, surfaced.
+DEFAULT_CATEGORY = "Default"
+
+
 class WatchlistItemCreate(BaseModel):
     ticker: str
     exchange: str = "IDX"
     note: str | None = None
+    #: Created on first use rather than declared up front: a category with no
+    #: members is not a thing anyone wants to manage.
+    category: str = Field(default=DEFAULT_CATEGORY, min_length=1, max_length=120)
 
 
 class WatchlistItemResponse(BaseModel):
@@ -224,6 +234,20 @@ class WatchlistItemResponse(BaseModel):
     exchange: str
     note: str | None
     added_at: datetime
+    category: str = DEFAULT_CATEGORY
+    #: Carried so the list is readable and searchable by more than a code.
+    #: `name` is null until an ingest fills it in, which the UI has to handle.
+    name: str | None = None
+    sector: str | None = None
+
+
+class WatchlistCategoryResponse(BaseModel):
+    name: str
+    count: int
+
+
+class WatchlistItemMove(BaseModel):
+    category: str = Field(min_length=1, max_length=120)
 
 
 # --- Portfolio -------------------------------------------------------------

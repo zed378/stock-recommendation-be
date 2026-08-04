@@ -173,6 +173,211 @@ def test_watchlist_is_scoped_to_its_owner(client: TestClient, auth_headers) -> N
     assert client.delete(f"/watchlist/{item_id}", headers=other_headers).status_code == 404
 
 
+# --- Watchlist categories --------------------------------------------------
+#
+# Named watchlists were always in the schema; every endpoint just hardcoded
+# "Default". These tests pin the behaviour now that the name is reachable.
+
+
+def add(client: TestClient, headers, ticker: str, category: str | None = None, note=None):
+    body: dict = {"ticker": ticker}
+    if category:
+        body["category"] = category
+    if note:
+        body["note"] = note
+    return client.post("/watchlist", json=body, headers=headers)
+
+
+def test_an_item_lands_in_the_category_it_was_given(client: TestClient, auth_headers) -> None:
+    response = add(client, auth_headers, "BBCA", "Perbankan")
+    assert response.status_code == 201
+    assert response.json()["category"] == "Perbankan"
+
+
+def test_no_category_means_the_default_one(client: TestClient, auth_headers) -> None:
+    assert add(client, auth_headers, "BBCA").json()["category"] == "Default"
+
+
+def test_the_same_ticker_may_sit_in_two_categories(client: TestClient, auth_headers) -> None:
+    """A bank that pays dividends belongs in both, and forcing a choice would
+    make the grouping less useful than no grouping."""
+    assert add(client, auth_headers, "BBCA", "Perbankan").status_code == 201
+    assert add(client, auth_headers, "BBCA", "Dividen").status_code == 201
+
+    listed = client.get("/watchlist", headers=auth_headers).json()
+    assert sorted(item["category"] for item in listed) == ["Dividen", "Perbankan"]
+
+
+def test_a_duplicate_within_one_category_is_still_refused(
+    client: TestClient, auth_headers
+) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan")
+    duplicate = add(client, auth_headers, "BBCA", "Perbankan")
+    assert duplicate.status_code == 409
+    assert "Perbankan" in duplicate.json()["detail"]
+
+
+def test_a_category_name_is_trimmed(client: TestClient, auth_headers) -> None:
+    """Otherwise "Perbankan" and "Perbankan " become two groups that look
+    identical in the interface."""
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "BBRI", "  Perbankan  ")
+
+    names = [row["name"] for row in client.get("/watchlist/categories", headers=auth_headers).json()]
+    assert names == ["Perbankan"]
+
+
+def test_categories_report_their_sizes(client: TestClient, auth_headers) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "BBRI", "Perbankan")
+    add(client, auth_headers, "ADRO", "Energi")
+
+    rows = client.get("/watchlist/categories", headers=auth_headers).json()
+    assert {row["name"]: row["count"] for row in rows} == {"Energi": 1, "Perbankan": 2}
+
+
+def test_an_emptied_category_still_exists(client: TestClient, auth_headers) -> None:
+    """Removing the last item empties a group; it does not delete it. Hiding it
+    would make the removal look as though it took the group with it."""
+    item_id = add(client, auth_headers, "BBCA", "Perbankan").json()["id"]
+    client.delete(f"/watchlist/{item_id}", headers=auth_headers)
+
+    rows = client.get("/watchlist/categories", headers=auth_headers).json()
+    assert {"name": "Perbankan", "count": 0} in rows
+
+
+def test_listing_can_be_narrowed_to_one_category(client: TestClient, auth_headers) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "ADRO", "Energi")
+
+    listed = client.get("/watchlist", params={"category": "Energi"}, headers=auth_headers).json()
+    assert [item["ticker"] for item in listed] == ["ADRO"]
+
+
+def test_an_item_outside_the_default_category_can_be_deleted(
+    client: TestClient, auth_headers
+) -> None:
+    """The bug categories would have introduced: delete used to scope to the
+    "Default" list alone, which would have stranded everything else."""
+    item_id = add(client, auth_headers, "BBCA", "Perbankan").json()["id"]
+    assert client.delete(f"/watchlist/{item_id}", headers=auth_headers).status_code == 204
+    assert client.get("/watchlist", headers=auth_headers).json() == []
+
+
+def test_an_item_can_be_moved_between_categories(client: TestClient, auth_headers) -> None:
+    item_id = add(client, auth_headers, "BBCA", "Perbankan").json()["id"]
+    moved = client.patch(
+        f"/watchlist/{item_id}", json={"category": "Dividen"}, headers=auth_headers
+    )
+    assert moved.status_code == 200
+    assert moved.json()["category"] == "Dividen"
+
+
+def test_moving_onto_an_existing_entry_is_refused_cleanly(
+    client: TestClient, auth_headers
+) -> None:
+    """Checked rather than left to the unique constraint, which would surface
+    as a 500 with a database message in it."""
+    add(client, auth_headers, "BBCA", "Dividen")
+    item_id = add(client, auth_headers, "BBCA", "Perbankan").json()["id"]
+
+    clash = client.patch(
+        f"/watchlist/{item_id}", json={"category": "Dividen"}, headers=auth_headers
+    )
+    assert clash.status_code == 409
+
+
+def test_moving_an_item_that_is_not_yours_is_a_404(client: TestClient, auth_headers) -> None:
+    item_id = add(client, auth_headers, "BBCA", "Perbankan").json()["id"]
+    client.post(
+        "/auth/register", json={"email": "mover@example.com", "password": "correct-horse-battery"}
+    )
+    token = client.post(
+        "/auth/login", json={"email": "mover@example.com", "password": "correct-horse-battery"}
+    ).json()["access_token"]
+
+    response = client.patch(
+        f"/watchlist/{item_id}",
+        json={"category": "Milik Saya"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+# --- Watchlist search ------------------------------------------------------
+
+
+def test_search_matches_a_ticker(client: TestClient, auth_headers) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "ADRO", "Energi")
+
+    found = client.get("/watchlist/search", params={"q": "BBC"}, headers=auth_headers).json()
+    assert [item["ticker"] for item in found] == ["BBCA"]
+
+
+def test_search_matches_the_users_own_note(client: TestClient, auth_headers) -> None:
+    """The note is where the reason for following something lives, and that is
+    more often what someone is looking for than a code they already know."""
+    add(client, auth_headers, "BBCA", "Perbankan", note="kandidat dividen kuartal depan")
+    add(client, auth_headers, "ADRO", "Energi", note="menunggu laporan Q3")
+
+    found = client.get("/watchlist/search", params={"q": "dividen"}, headers=auth_headers).json()
+    assert [item["ticker"] for item in found] == ["BBCA"]
+
+
+def test_search_is_case_insensitive(client: TestClient, auth_headers) -> None:
+    """`like` is case-sensitive on PostgreSQL, which would turn searching your
+    own free-text note into a guess about how you typed it."""
+    add(client, auth_headers, "BBCA", "Perbankan", note="Kandidat Dividen")
+    found = client.get("/watchlist/search", params={"q": "KANDIDAT"}, headers=auth_headers).json()
+    assert [item["ticker"] for item in found] == ["BBCA"]
+
+
+def test_search_matches_a_category_name(client: TestClient, auth_headers) -> None:
+    """Someone reading a group heading on screen and typing it into the box
+    expects to find that group. Leaving the category out of the search made the
+    most obvious query return nothing at all."""
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "ADRO", "Energi")
+
+    found = client.get("/watchlist/search", params={"q": "perbank"}, headers=auth_headers).json()
+    assert [item["ticker"] for item in found] == ["BBCA"]
+
+
+def test_search_can_be_narrowed_to_a_category(client: TestClient, auth_headers) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan", note="dividen")
+    add(client, auth_headers, "ADRO", "Energi", note="dividen")
+
+    found = client.get(
+        "/watchlist/search", params={"q": "dividen", "category": "Energi"}, headers=auth_headers
+    ).json()
+    assert [item["ticker"] for item in found] == ["ADRO"]
+
+
+def test_search_returns_nothing_rather_than_everything_on_no_match(
+    client: TestClient, auth_headers
+) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan")
+    assert client.get("/watchlist/search", params={"q": "zzz"}, headers=auth_headers).json() == []
+
+
+def test_search_does_not_reach_another_users_items(client: TestClient, auth_headers) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan", note="rahasia")
+    client.post(
+        "/auth/register", json={"email": "nosy@example.com", "password": "correct-horse-battery"}
+    )
+    token = client.post(
+        "/auth/login", json={"email": "nosy@example.com", "password": "correct-horse-battery"}
+    ).json()["access_token"]
+
+    found = client.get(
+        "/watchlist/search",
+        params={"q": "rahasia"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert found.json() == []
+
+
 # --- Portfolio -------------------------------------------------------------
 
 

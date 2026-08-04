@@ -1,0 +1,20 @@
+# Both of these are produced *inside* the image, and copying them in would be
+# worse than wasteful: `node_modules` built on a developer's OS can carry
+# native binaries that do not run in the container, and they would silently
+# shadow the ones `npm ci` installs.
+node_modules
+dist
+
+.git
+.gitignore
+.vscode/
+.idea/
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+.env
+.env.*
+!.env.example

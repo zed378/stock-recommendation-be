@@ -130,48 +130,116 @@ pytest -m network        # hits the live endpoints; deselected by default
 
 ### Fundamentals come from somewhere else
 
-Yahoo's `quoteSummary` endpoint answers **401** now — the chart endpoint used for prices
-is still open, but the fundamentals one is not. Three candidates were probed rather than
-read about:
+Yahoo's `quoteSummary` endpoint answers **401** now — the chart endpoint used for prices is
+still open, the fundamentals one is not. Four candidates were probed rather than read
+about, and the results decided the design:
 
 | Source | Result |
 |---|---|
-| **IDX's own JSON** | 403 behind a Cloudflare challenge. Getting past it is bot-detection evasion, which is a different thing from using an undocumented but open endpoint. |
+| **Yahoo `quoteSummary`** | 401. An authentication requirement the provider added; not worked around. |
 | **Financial Modeling Prep** | Its `demo` key no longer authenticates at all, so no response shape could be verified before writing a parser against it. |
-| **Alpha Vantage** | Answered, with a documented contract and free keys. This is the one. |
+| **Alpha Vantage** | Answers, documented, free keys — and, tested against a real key, publishes **nothing for IDX**. `BBCA.JKT`, `BBCA.JK`, `BBRI.JKT` all return `{}`. Right for US equities, useless for this market. |
+| **IDX's own statistics API** | Answers, with real Indonesian fundamentals — behind Cloudflare. This is the one, and the choice is discussed below rather than glossed. |
 
-So the working configuration draws each half from the provider that can supply it:
+So the working configuration draws each half from whichever provider can actually supply
+it:
 
 ```bash
 AIDSS_MARKET_DATA_PROVIDER=composite
-AIDSS_COMPOSITE_PRICE_PROVIDER=yahoo          # free, no key, real IDX coverage
-AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER=alphavantage
-AIDSS_ALPHAVANTAGE_API_KEY=...                # free key, 25 requests/day
+AIDSS_COMPOSITE_PRICE_PROVIDER=yahoo   # free, no key, real IDX price coverage
+AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER=idx
 ```
 
-That ceiling is unusable for prices and ample for figures that change quarterly, which is
-exactly why the two halves are split. The composite delegates and holds no parsing of its
-own, so it cannot develop opinions that differ from the adapter behind it — and a stored
-metric is attributed to the half that answered, because `composite` names a wrapper and
-answers nobody's question about where a figure came from.
+The composite delegates and holds no parsing of its own, so it cannot develop opinions
+that differ from the adapter behind it — and a stored metric is attributed to the half
+that answered, because `composite` names a wrapper and answers nobody's question about
+where a figure came from.
 
-Two things about Alpha Vantage shape the adapter more than its happy path does. It returns
-**HTTP 200 for every failure** — bad symbol, exhausted quota, premium-only endpoint — so
-the body is inspected before the status code is believed, and the three error keys are
-mapped onto retryable/permanent separately (a quota resets; a wrong key does not). And it
-writes missing numbers as the **string `"None"`**, which `Decimal` refuses, so one absent
-field must not take out the rest of the payload.
+#### The IDX adapter impersonates a browser, deliberately
 
-Two categories in the response are **deliberately not stored**. `AnalystTargetPrice` and
-the analyst rating counts are other firms' recommendations; filing them as fundamentals
-would let a third party's conclusion enter the evidence base and be cited back as data.
-The 52-week range and moving averages are price statistics the Indicator Engine already
-computes from stored candles, and a second source of truth would drift against the first.
+The endpoint refuses an ordinary HTTP client; `curl_cffi` presents a browser's TLS
+fingerprint so the request is accepted. That was the project owner's decision, taken with
+the alternatives above on the table, and it is worth being precise about what it does and
+does not involve. There is **no account, no credential, and no paywall**: IDX publishes
+these figures for the investing public, free and without a login, so what is got past is
+bot management rather than access control. What it does **not** clear is IDX's terms,
+which prohibit redistributing this data to third parties commercially — sound for personal
+research, and a question to revisit before wider use (Section 13).
 
-**Coverage outside US equities is uneven**, and whether Alpha Vantage publishes IDX
-fundamentals is a question only a real key can answer. `pytest -m network` asks it and
-reports the answer either way: an empty result is a legitimate "no coverage", which the
-collector records as `unsupported` and the Fundamental Analyzer skips on, saying so.
+Practically: it can break without notice, so the response shape is verified rather than
+trusted; a 403 reports *"the bot protection no longer accepts this client"* rather than as
+a generic client error, because that is the likeliest single cause and sending someone to
+look elsewhere would waste the hour; and requests are paced, since the endpoint
+rate-limits without publishing a limit.
+
+Two properties of the payload matter more than everything else in the adapter, because
+both are **silent hundred- or billion-fold errors** rather than parse failures, and
+neither is documented anywhere:
+
+- **Money is in billions of rupiah.** BBCA's assets arrive as `1538501.81`, meaning
+  Rp 1,538 trillion. Stored raw next to another provider's absolute figures, the two are a
+  billion apart in one column.
+- **`roa` and `roe` are percentages**, where every other provider here reports fractions.
+  IDX says `20.66`; Alpha Vantage says `0.345` for the same concept.
+
+Both were established by comparing issuers across three orders of magnitude — Adaro's
+Rp 165 trillion, a micro-cap's Rp 4 billion — against known figures. Every conversion is
+individually justified in the code, a live test pins the plausibility ranges, and a
+recorded-payload test checks that liabilities over equity still reproduces the reported
+ratio after scaling, which is an arithmetic identity the conversions cannot satisfy by
+accident.
+
+Two fields are **deliberately not stored**. `profitPeriod` is profit including minority
+interests where `profitAttrOwner` excludes them, and two near-identical names invite
+whichever one a reader happens to pick. `npm` is not the margin the rest of the system
+means by `profit_margin` — IDX reports 74.1% for BBCA while `profitAttrOwner / sales` from
+the very same row is 56.3%, so it is derived from a different denominator. Both inputs are
+stored, so a consistent margin can be derived where it is wanted.
+
+Reported periods get their own treatment. IDX's `fsDate` is not what it sounds like: for
+fiscal 2024 it returns a period end, for fiscal 2025 a *filing* date. Keying on it would
+make every refetch look like a new period rather than a revision of the same one, so the
+stored period is the **fiscal year end** and `period_type` says how much of that year the
+figures cover. That needed a fourth basis, `ytd`, because a statement filed in October
+carries nine months of revenue: calling it annual overstates by a third, quarterly
+understates threefold, and `ttm` is a different window entirely.
+
+#### Alpha Vantage is still there, for US equities
+
+Two things shape that adapter more than its happy path does. It returns **HTTP 200 for
+every failure** — bad symbol, exhausted quota, premium-only endpoint — so the body is
+inspected before the status code is believed, and the three error keys map onto
+retryable/permanent separately (a quota resets; a wrong key does not). And it writes
+missing numbers as the **string `"None"`**, which `Decimal` refuses, so one absent field
+must not take out the rest of the payload. Analyst targets and rating counts are not
+stored: they are other firms' recommendations, and filing them as fundamentals would let a
+third party's conclusion enter the evidence base and be cited back as data.
+
+Its free tier allows **25 requests a day**, which is a scheduling problem rather than an
+adapter one — see the quota section below.
+
+### Retrieval works without an embedding model
+
+Many self-hosted gateways front chat-only backends and answer `/embeddings` with 404 for
+every model they advertise. Naming a chat model does not help; it spends a failed round
+trip per batch and can trip the gateway's own rate limiter. So say it up front:
+
+```bash
+AIDSS_AI_EMBEDDING_MODEL=       # empty: lexical-only retrieval
+```
+
+Text is still chunked, stored, and retrieved — by BM25 alone. **Exact-token search is
+unaffected**, and a ticker, a metric name, or a ratio is most of what this domain asks
+for. What is lost is paraphrase matching, where a passage answers the question while
+sharing none of its words.
+
+This was found by running against a real gateway, and it was worse than a missing feature
+before it was fixed: the embedding call had no error handling, so a 404 propagated out of
+`index_news` and **took the articles with it**. Now an outage is reported on the index
+report and the text survives without its vectors, which is what the retrieval side already
+assumed. Verified against both configurations — a chat model that 404s, and no model
+configured at all — with all four test queries returning the right passage on `lexical`
+alone.
 
 The AI layer defaults to `AIDSS_AI_PROVIDER=fixture` — a deterministic provider, so the
 pipeline runs with no key, no network, and no cost. Point
@@ -183,7 +251,7 @@ reasoning.
 ## Tests
 
 ```bash
-python -m pytest              # 766 hermetic tests, SQLite only, no network
+python -m pytest              # 846 hermetic tests, SQLite only, no network
 python -m ruff check .
 ```
 
@@ -193,8 +261,14 @@ neither available, and neither is optional when it matters:
 
 ```bash
 python -m pytest -m postgres  # 11 tests; needs `docker compose up -d postgres`
-python -m pytest -m network   # 8 tests; hits Yahoo and Alpha Vantage for real
+python -m pytest -m network   # 17 tests; hits Yahoo, IDX, and Alpha Vantage for real
 ```
+
+The network group earns its keep here more than it usually would: two of the three sources
+are undocumented, so "has the contract changed?" is a question only a live call answers.
+The IDX tests in particular distinguish *IDX is down* (skip), *the bot protection
+tightened* (fail, loudly), and *the units changed* (fail, with the implausible number in
+the message).
 
 The PostgreSQL group exists because of a bug the hermetic suite could not have caught. The
 embedding columns are declared `vector(1536)`; PostgreSQL enforces that width and SQLite
@@ -224,6 +298,8 @@ The suite is organised around the risks the plan itself identifies:
 | [test_collector.py](tests/test_collector.py) | Bad bars never reach storage, provider quirks are normalised away, and re-running the same fetch changes nothing. |
 | [test_market_yahoo.py](tests/test_market_yahoo.py) | The unofficial endpoint's failure modes, against a mocked transport: null bars dropped rather than zero-filled, 429 retryable and 403 not, an HTML error page reported clearly, and a changed response shape naming itself. Depending on an undocumented source means its breakage paths deserve more test coverage than its happy path. |
 | [test_market_alphavantage.py](tests/test_market_alphavantage.py) | Mostly the ways this API lies. It answers **HTTP 200 for every failure**, so a quota note, a demo-key refusal, and an invalid symbol are each checked for the right retryable/permanent verdict — misclassifying the daily limit as permanent would silently stop fundamentals collection for good. Plus: the string `"None"` is absence rather than a parse error, a negative growth figure keeps its sign, intraday stamps are converted from the exchange-local zone the response names, and analyst targets are proven *absent* from what gets stored. The OVERVIEW payload is a real recorded response — testing against invented JSON would test the invention. |
+| [test_market_idx.py](tests/test_market_idx.py) | Mostly units, because units are where this provider is dangerous: nothing in the payload says money is in billions of rupiah or that `roe` is a percentage, and a mistake either way is silent. Tested at both ends of the scale — a bank's Rp 1,538 trillion and a micro-cap's Rp 4 billion — plus an arithmetic identity the conversions cannot satisfy by accident (liabilities ÷ equity must still reproduce the reported ratio). Also: `search` is a substring filter, so querying BBCA returns BBCAP too and the ticker is matched exactly; a Cloudflare challenge page is an HTML 200, so the body is the only signal there is. |
+| [test_quota.py](tests/test_quota.py) | Every ambiguous case resolves towards spending less, because over-counting collects a little less while under-counting ends in the provider refusing requests — which reads downstream as an outage and triggers retries that spend tomorrow's allowance too. Plus the distinction the whole thing rests on: a job deferred until midnight is **not** charged a retry, or three quiet days would dead-letter a job that had never once been attempted. And a reservation committed on its own session survives the caller's rollback, because the HTTP request it authorised cannot be rolled back with it. |
 | [test_market_composite.py](tests/test_market_composite.py) | That delegation is total and provenance survives it: prices reach only the price half, fundamentals only the other, and a metric collected through the composite is attributed to the adapter that answered rather than to the wrapper. A composite wrapping a composite is refused at construction *and* at configuration. It also pins the **shared metric vocabulary** — if one adapter renames `pe_ratio`, rows from the two providers stop being comparable while still looking like they are. |
 | [test_plugins.py](tests/test_plugins.py) | The registry actually enforces the plugin contract, and provider choice really is driven by configuration alone (FR-07). |
 | [test_jobs.py](tests/test_jobs.py) | Mostly failure paths, because a queue's happy path is the easy part: a permanent error dead-letters without retrying, an abandoned job is reclaimed while a merely-slow one is not, a handler that corrupts its session still has its failure recorded, one bad job does not poison the next, and ticking the scheduler twice enqueues once. Plus leader election — two schedulers, one leader; a follower takes over when the leader stops renewing; an expired lease reports as `expired` rather than as a holder. |
@@ -232,6 +308,105 @@ The suite is organised around the risks the plan itself identifies:
 | [test_reporting.py](tests/test_reporting.py) | Counter-evidence appears with equal prominence, what was *not* covered is named, opening a report runs no agents and returns identical text twice, and no notification event can express an instruction. |
 | [test_security.py](tests/test_security.py), [test_api.py](tests/test_api.py), [test_api_analysis.py](tests/test_api_analysis.py) | Password policy, token forgery, role boundaries, per-user data ownership, and the full HTTP flow including analysis. |
 | [test_postgres_integration.py](tests/test_postgres_integration.py) *(`-m postgres`)* | Only what SQLite cannot show. A wrong-width embedding is rejected by the database; enums are stored as their values, checked through raw SQL rather than through the ORM that would map them back either way; `Decimal` keeps eight decimal places; CHECK and unique constraints hold. And the concurrency: 8 threads over 40 jobs claim each exactly once, 10 racing schedulers produce exactly one leader. The contention assertions were themselves checked — the same pattern run against a naive claim produced 127 double-assignments, so those tests fail when they should. |
+
+---
+
+## The dashboard
+
+Vite + React + TypeScript in [frontend/](frontend/), served by nginx, talking to
+the API on the same origin.
+
+```bash
+docker compose up -d              # everything, dashboard on :5173
+
+# or, for development
+uvicorn aidss.main:app --port 8000
+cd frontend && npm install && npm run dev
+```
+
+**There is no default account.** Register from the sign-in page; a shipped default
+credential is a hole, not a convenience. New accounts get the `investor` role, which covers
+everything below — the admin endpoints are a later phase.
+
+### Types are generated, not written
+
+`frontend/src/api/schema.d.ts` comes from the API's own OpenAPI document via
+`npm run api:types`, and is committed. That is the coupling that matters: a renamed field
+in FastAPI becomes a TypeScript compile error rather than `undefined` on a screen months
+later. It already paid for itself twice while this was being built — once when the analysis
+endpoint turned out to take its timeframe in the request *body* rather than the query
+string, and once on a timeframe typed as `string` where the API accepts an enum.
+
+### Presentation decisions that are product decisions
+
+The recommendation view is where this is a decision-support tool rather than a signal feed,
+and three choices carry that:
+
+- **Conflicting factors sit beside supporting ones, at equal weight.** Section 5.4 requires
+  counter-evidence to be shown; putting it in a collapsed section under the case *for*
+  would satisfy the letter of that and defeat the point.
+- **The stance is a label, not a position on a scale.** No green-to-red gradient, because
+  `watchlist` is not a weak buy and a gradient invites reading it as one.
+- **The model's own confidence is shown struck through, beside the calibrated figure.**
+  Hiding it would make the distinction invisible; showing it plainly would suggest it
+  counted. It is precisely the number that does not.
+
+Elsewhere the same principle: a skipped agent is shown *with its reason*, because it is the
+direct cause of a lower confidence score and hiding it makes the score look arbitrary. A
+neutral stance with no target price says why there isn't one. Year-to-date fundamentals
+carry a note — but only when a `ytd` row is actually present, so the caveat stays meaningful
+instead of becoming boilerplate the eye skips.
+
+The disclaimer is in the footer of every page rather than behind a dialog. A modal accepted
+once six months ago is not present on output, which is what Section 13 asks for.
+
+### Bilingual, and that includes the numbers
+
+Indonesian by default, English on a switch. The locale changes number and date formatting
+along with the words, because it has to: in Indonesian the dot is a thousands separator, so
+`1.234,56` and `1,234.56` are the same string read as two different numbers. Indonesian is
+the source of truth for the message catalogue and English is typed against it, so a missing
+translation is a compile error rather than a key rendered raw on screen.
+
+### Deployment shape
+
+nginx serves the bundle and proxies `/api` to the API container. One origin, so no CORS and
+the bearer token never travels to a second host. The frontend is a **separate image** rather
+than static files mounted into FastAPI, and that is deliberate: a mistyped API path returns
+a JSON 404 instead of `index.html` with a 200, and the API image ships no HTML at all. The
+served image is nginx plus assets — 74 MB, no Node runtime, no `node_modules`.
+
+Verified end to end through that proxy: register → login → watchlist → 269 candles → 7
+indicators → 13 IDX fundamentals → analysis with 5 supporting and 5 conflicting factors →
+chat. Including the 404: `application/json`, not HTML.
+
+### Three things the type system could not catch
+
+Generated types stop a renamed field. They stop nothing where the API declares a field as a
+bare `object`, and all three of these were found by looking at the running application:
+
+- **The indicator snapshot is nested, not flat.** It holds `bars`, `as_of`, `last_close`,
+  `structure`, plus nested `indicators`, `levels`, and `breakout` — and MACD, Bollinger,
+  ADX, Stochastic, and Ichimoku each carry several components. Rendering it as a flat map
+  printed `[object Object]` in four cells. It now formats by scale as well as by shape:
+  a moving average is money, an RSI is a plain number, a volatility is a percentage, and
+  printing any of them as another is wrong in a way no test would notice.
+- **`confidence_basis` was dumped as raw JSON in a scrolling box** — which buried the one
+  sentence that makes the score legible: *"Calibrated from 2 usable evidence sources of 3
+  possible: coverage 80%, agreement 100%, balance 100%. Capped at 95 because no analysis is
+  certain."* That sentence now sits directly under the figure, with the three components
+  drawn as bars and the per-agent signals as a table. The raw JSON is still there, folded
+  away. A derived confidence that a reader cannot check is no better than an asserted one.
+- **The password hint stated a policy that did not exist.** It claimed twelve characters
+  with mixed case and a digit; the server enforces ten characters and nothing else.
+
+**Fixed, not accepted:** the `only-export-components` lint warnings on the context files
+were first written off here as costing only hot-reload state. That was wrong — the dev log
+showed them throwing `useI18n must be used inside an I18nProvider` and white-screening the
+app on every edit to either file, because Fast Refresh replaced the module and the context
+identity changed underneath every consumer. The hooks now live in `context.ts` beside their
+providers; verified by editing both files against a running server and getting two clean
+HMR updates.
 
 ---
 
@@ -351,6 +526,31 @@ one that runs in production — and because it self-heals: an expiry releases it
 anyone having to notice the holder died. The enqueue dedup key is still there, now as a
 safety net for the handover window rather than as the design.
 
+**A daily provider allowance is a scheduling problem, not an adapter one.** Alpha
+Vantage's free tier is 25 requests a day, and discovering that by being refused is the
+expensive way: the refusal arrives as an ordinary provider failure, the job retries with
+backoff, and the retries spend tomorrow's allowance too. So the budget is checked first.
+A caller reserves a slot, makes the call if it got one, and is told to come back after the
+reset if it did not.
+
+Three properties, each learned from something that would otherwise have gone wrong:
+
+- **Atomic**, so two workers cannot both take the last slot — one conditional
+  `UPDATE … WHERE used <= limit - count`, the same shape as the leader lease.
+- **Committed on its own session.** A reservation taken on the job's transaction is rolled
+  back when the job fails, and the HTTP request it authorised cannot be rolled back with
+  it. The spend would then have happened at the provider and not in our records, which is
+  the one direction of error that ends in being refused.
+- **Deferral is not failure.** `queue.defer` returns a job to pending without charging it
+  a retry, because "come back after midnight" is not something that went wrong — routing
+  it through `fail` would dead-letter a healthy job after three quiet days.
+
+The day is part of the primary key rather than a counter someone has to reset, since
+nobody is awake at midnight to reset it. The scheduler queues the stalest assets first,
+with an asset that has *no* fundamentals sorting ahead of every asset that has some —
+otherwise a large watchlist tops up what it already covers and never reaches what it does
+not.
+
 **The queue lives in the database, not a broker.** At this scale that is the better trade
 in both directions: a job is enqueued in the same transaction as the rows it concerns, so
 there is no window where the data was written and the job was not; and there is no second
@@ -412,9 +612,13 @@ matter most:
 |---|---|---|
 | `AIDSS_DATABASE_URL` | local PostgreSQL | |
 | `AIDSS_JWT_SECRET` | dev placeholder | **Must** be replaced outside development; use ≥32 bytes |
-| `AIDSS_MARKET_DATA_PROVIDER` | `fixture` | `composite`, `yahoo` (free, unofficial), `alphavantage`, `finnhub`, or `fixture`. `.env.example` and docker-compose set `yahoo`; the code default stays `fixture` so tests never reach the network. |
+| `AIDSS_MARKET_DATA_PROVIDER` | `fixture` | `composite`, `yahoo` (free, unofficial), `idx`, `alphavantage`, `finnhub`, or `fixture`. `.env.example` and docker-compose set `yahoo`; the code default stays `fixture` so tests never reach the network. |
 | `AIDSS_COMPOSITE_PRICE_PROVIDER` | `yahoo` | Read only when the provider is `composite`. Neither half may itself be `composite` — refused at startup. |
-| `AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER` | `alphavantage` | The half that answers `get_fundamentals`, and the name a stored metric is attributed to. |
+| `AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER` | `idx` | The half that answers `get_fundamentals`, and the name a stored metric is attributed to. `idx` for Indonesian equities; `alphavantage` for US. |
+| `AIDSS_IDX_IMPERSONATE` | `chrome` | The `curl_cffi` browser profile. The first thing to change when the IDX adapter starts getting refused. |
+| `AIDSS_AI_EMBEDDING_MODEL` | `text-embedding-3-small` | **Empty means lexical-only retrieval**, which is a supported configuration rather than a broken one — see above. |
+| `AIDSS_FUNDAMENTALS_DAILY_QUOTA` | `25` | Outbound fundamentals calls per UTC day per provider account. `0` means no ceiling — *unlimited*, not "spend nothing". |
+| `AIDSS_FUNDAMENTALS_REFRESH_INTERVAL_DAYS` | `30` | How stale a figure may get before it is queued. Refetching faster than filings change spends an allowance to rewrite identical numbers. |
 | `AIDSS_ALPHAVANTAGE_API_KEY` | unset | Free key, 25 requests/day. Without it the `alphavantage` adapter refuses to construct rather than failing later at collection time. |
 | `AIDSS_YAHOO_SYMBOL_SUFFIX` | `.JK` | Market suffix for Yahoo symbols; empty for US tickers |
 | `AIDSS_ALPHAVANTAGE_SYMBOL_SUFFIX` | `.JKT` | The same idea, different spelling — Jakarta is `.JKT` here, not `.JK` |
@@ -457,29 +661,31 @@ responded to the evidence, which is what it exists to do.
 
 Stated plainly rather than left to be discovered:
 
+- **The IDX adapter depends on getting past Cloudflare, and will break.** Not a
+  possibility to plan around later — an undocumented endpoint reached through bot
+  management is the most fragile thing in this codebase. When it goes, a 403 says so
+  specifically and `AIDSS_IDX_IMPERSONATE` is the first thing to try. The live tests
+  (`pytest -m network`) are the early warning, and they deliberately *fail* rather than
+  skip on a permanent refusal.
+- **IDX's terms prohibit redistributing this data commercially.** Personal research is
+  fine. This is a real constraint on where the platform can go, not a footnote, and it
+  belongs in the Section 13 legal review below.
 - **Yahoo's fundamentals endpoint returns 401, and that is not worked around.** The
-  `quoteSummary` endpoint requires authentication; the `chart` endpoint used for prices
-  does not. The parser is complete and tested against a recorded payload, and the live
-  test *skips with that reason* rather than failing, so a parser regression would still
-  fail. Defeating the access control is deliberately not implemented — using an
-  undocumented but open endpoint is one thing, getting past a control the provider added
-  is another. **Fundamentals come from Alpha Vantage instead**, via the composite
-  provider; the section above covers the setup.
-- **Whether Alpha Vantage covers IDX fundamentals is still unconfirmed.** Its coverage
-  outside US equities is uneven and the demo key cannot be used to check. The adapter and
-  the composite are complete and tested; what is untested is this specific provider's
-  answer for `.JKT` symbols, because that needs a real key. `pytest -m network` asks and
-  reports either way. If the answer is no, the Fundamental Analyzer keeps skipping and
-  the search moves to the next provider — which is now one settings change, not an
-  integration.
-- **Until fundamentals arrive for a given asset, the Fundamental Analyzer skips it.** The
-  agent, prompt, schema, collector, and endpoints are complete and tested — a test proves
-  that once metrics exist the analyzer runs and calibrated confidence rises. The visible
-  consequence is a lower confidence score, which is the honest one.
-- **Alpha Vantage's 25 requests/day is a real operating constraint.** Fine for figures
-  that change quarterly; the composite exists precisely so it is never asked for prices.
-  A deployment tracking more than ~25 assets needs to spread fundamentals collection
-  across days, and nothing in the scheduler does that for you yet.
+  parser is complete and tested against a recorded payload, and the live test *skips with
+  that reason* rather than failing, so a parser regression would still fail. The
+  distinction being drawn: an undocumented but open endpoint is one thing, and an
+  authentication requirement the provider added is another.
+- **Alpha Vantage publishes no IDX fundamentals.** Confirmed against a real key, not
+  inferred: `BBCA.JKT`, `BBCA.JK`, and `BBRI.JKT` all return `{}`. The adapter is complete
+  and useful for US equities; it is simply the wrong provider for this market.
+- **`ytd` figures are not directly comparable across issuers with different fiscal year
+  ends.** A December-year-end company at Q3 carries nine months; a June-year-end company
+  at the same date carries three. The basis and the period are both stored so the
+  difference is visible, but nothing automatically normalises it.
+- **Paraphrase retrieval is unavailable without an embedding model**, which is the
+  configuration this deployment runs. Exact-token search is unaffected. Confirming that
+  semantic retrieval works when embeddings *are* present still needs a real embedding
+  model and a judgement set.
 - **Rate-limit and circuit-breaker state is per-process.** Correct for a single worker;
   with several replicas the effective limit multiplies by the replica count. A shared
   store (Redis) makes it exact.
@@ -502,17 +708,17 @@ Stated plainly rather than left to be discovered:
 
 Following Section 19 of the planning document:
 
-1. **Get an Alpha Vantage key and confirm IDX coverage** with `pytest -m network`. That
-   single answer decides whether the Fundamental Analyzer starts running on Indonesian
-   assets or whether the search continues — and continuing is now a settings change,
-   because the composite provider makes the fundamentals half swappable on its own.
-2. **Spread fundamentals collection across days** if more than ~25 assets are tracked.
-   The free tier's daily ceiling is a scheduling problem, not an adapter problem, and the
-   job queue already has the dedup and backoff machinery it would need.
-3. **Choose a real IDX source of record.** Yahoo's chart endpoint is free and works, but
-   Section 19 recommends building against a real contract before scale — and the 401 on
-   its sibling endpoint, plus IDX's own Cloudflare challenge, are two concrete
-   demonstrations of why.
+1. **Run `pytest -m network` on a schedule.** It is the early warning for the two
+   undocumented sources this platform now depends on, and it distinguishes "IDX is down"
+   from "the bot protection tightened" from "the units changed" — three findings that
+   need three different responses.
+2. **Licensed IDX data, if this goes beyond personal use.** Section 19 recommends building
+   against a real contract before scale, and the terms constraint above makes that the
+   deciding factor rather than a technical preference. Everything downstream is already
+   provider-agnostic: it is one settings change.
+3. **An embedding model, if paraphrase retrieval is wanted.** The hybrid retrieval path is
+   built and the lexical half is measured; adding embeddings is a configuration change
+   plus a judgement set to verify the semantic half against.
 3. **A retrieval judgement set with a real embedding model**, so the semantic half can be
    measured the way the lexical half now is.
 4. **The legal review Section 13 asks for**, before the platform is used more widely than

@@ -31,8 +31,8 @@ from aidss.jobs import queue, quota
 from aidss.llm.provisioning import build_gateway
 from aidss.news.collector import NewsCollector, NewsScheduler
 from aidss.plugins.errors import ProviderUnavailableError
-from aidss.plugins.registry import get_ai_provider, get_market_data_provider, get_news_provider
-from aidss.rag.engine import RAGEngine
+from aidss.plugins.registry import get_market_data_provider, get_news_provider
+from aidss.rag.provisioning import build_rag
 
 Handler = Callable[[Session, dict[str, Any]], dict[str, Any]]
 
@@ -194,7 +194,7 @@ def run_news_schedule(session: Session, payload: dict[str, Any]) -> dict[str, An
         session,
         get_news_provider(),
         runner=_runner(session),
-        rag=RAGEngine(session, get_ai_provider()),
+        rag=build_rag(session),
     )
     report = NewsScheduler(session, collector).run_schedule(schedule)
 

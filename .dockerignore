@@ -1,15 +1,20 @@
-# Git
+# What the API image does NOT need.
+#
+# The frontend has its own build context and its own ignore file
+# (frontend/.dockerignore), so this file excludes the frontend entirely: the
+# API image serves JSON, not HTML, and shipping a React source tree inside it
+# would only enlarge the image and its attack surface.
+
+# --- Version control -------------------------------------------------------
 .git
 .gitignore
-
-# GitHub
 .github/
 
-# IDE
+# --- Editors ---------------------------------------------------------------
 .vscode/
 .idea/
 
-# Python
+# --- Python ----------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -19,42 +24,50 @@ venv/
 env/
 .mypy_cache/
 
-# Testing
+# --- Testing and linting ---------------------------------------------------
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
-
-# Linting
 .ruff_cache/
 
-# Build
+# --- Build artefacts -------------------------------------------------------
 build/
 dist/
 *.whl
 
-# Application data
+# --- Frontend --------------------------------------------------------------
+# Whole tree, not just node_modules: it is a separate image.
+frontend/
+openapi.json
+
+# --- Application data ------------------------------------------------------
 var/
 *.db
 *.sqlite3
 
-# Environment
+# --- Secrets ---------------------------------------------------------------
+# Every real env file. `.env.example` carries no secrets but is documentation
+# rather than runtime input, so it is excluded too - configuration reaches the
+# container through the environment, never through a baked-in file.
 .env
 .env.*
 
-# OS
+# --- OS --------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 Desktop.ini
 
-# Documentation
+# --- Documentation ---------------------------------------------------------
 Dokumen_*.md
 docs/
 
-# Docker
+# --- Docker itself ---------------------------------------------------------
 docker-compose*.yml
-Dockerfile
+Dockerfile*
+.dockerignore
 
-# Misc
+# --- Misc ------------------------------------------------------------------
 *.log
 *.tmp
 *.bak

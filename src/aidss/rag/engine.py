@@ -26,6 +26,7 @@ Three further design points:
 
 from __future__ import annotations
 
+import logging
 import math
 import uuid
 from dataclasses import dataclass, field
@@ -45,6 +46,8 @@ from aidss.plugins.interfaces import AIProvider
 from aidss.rag.chunking import chunk_article, chunk_text
 from aidss.rag.fusion import reciprocal_rank_fusion
 from aidss.rag.lexical import BM25Index
+
+logger = logging.getLogger("aidss.rag")
 
 #: How many chunks are embedded per provider call. Batching matters: one call
 #: per chunk turns a 200-chunk document into 200 round trips.
@@ -83,6 +86,12 @@ class IndexReport:
     chunks_created: int = 0
     chunks_skipped: int = 0
     embed_calls: int = 0
+    #: Set when the provider could not embed and the text was stored without a
+    #: vector. Reported rather than raised, because the alternative is losing
+    #: the text - but never silent, or a lexical-only index would look like a
+    #: healthy one until somebody asked a paraphrase question.
+    embeddings_unavailable: bool = False
+    embed_error: str | None = None
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -98,23 +107,89 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 class RAGEngine:
-    def __init__(self, session: Session, provider: AIProvider, *, embedding_model: str = "default"):
+    def __init__(
+        self,
+        session: Session,
+        provider: AIProvider,
+        *,
+        embedding_model: str | None = "default",
+    ):
         self._session = session
         self._provider = provider
         #: Recorded on every chunk so retrieval never compares vectors from
         #: two different embedding spaces.
-        self._model = embedding_model
+        #:
+        #: Empty or None means this deployment has no embedding model, and the
+        #: engine runs lexical-only: no embedding call is attempted at all.
+        #: That is a supported configuration rather than a degraded one - many
+        #: self-hosted gateways serve chat and nothing else - and saying so up
+        #: front beats a 404 per batch to learn the same thing.
+        self._model = embedding_model or ""
+
+    @property
+    def embeddings_enabled(self) -> bool:
+        return bool(self._model)
 
     # --- embedding -------------------------------------------------------
 
-    def _embed(self, texts: list[str], report: IndexReport | None = None) -> list[list[float]]:
-        vectors: list[list[float]] = []
+    def _embed(
+        self, texts: list[str], report: IndexReport | None = None
+    ) -> list[list[float] | None]:
+        """Embed, or return Nones when the provider cannot.
+
+        An embedding outage costs quality, not the feature. That was already
+        true on the read side - a chunk with no vector is retrieved lexically -
+        but the write side used to let the failure through, and the effect was
+        far worse than degraded search: an ingestion job died, and the articles
+        it was holding were lost with it.
+
+        Not every deployment even has an embedding model. A gateway serving
+        chat-only models answers `/embeddings` with 404 on every call, which is
+        a permanent condition rather than an outage, and one the platform has
+        to keep working under: BM25 does not need vectors.
+        """
+        if not self.embeddings_enabled:
+            if report is not None:
+                report.embeddings_unavailable = True
+                report.embed_error = "no embedding model configured"
+            return [None] * len(texts)
+
+        vectors: list[list[float] | None] = []
         for start in range(0, len(texts), EMBED_BATCH_SIZE):
             batch = texts[start : start + EMBED_BATCH_SIZE]
-            vectors.extend(self._provider.embed(batch))
+            try:
+                vectors.extend(self._provider.embed(batch))
+            except Exception as exc:  # noqa: BLE001 - any provider failure degrades the same way
+                logger.warning(
+                    "embedding unavailable; storing text without vectors",
+                    extra={"error": f"{type(exc).__name__}: {exc}", "chunks": len(batch)},
+                )
+                vectors.extend([None] * len(batch))
+                if report is not None:
+                    report.embeddings_unavailable = True
+                    report.embed_error = f"{type(exc).__name__}: {exc}"
+                continue
             if report is not None:
                 report.embed_calls += 1
         return vectors
+
+    def _embed_query(self, query: str) -> list[float] | None:
+        """The query side of the same problem.
+
+        Retrieval already tolerates chunks with no vector. It did not tolerate
+        failing to embed the *query*, so one 404 took out a search that BM25
+        could have answered on its own.
+        """
+        if not self.embeddings_enabled:
+            return None
+        try:
+            return self._provider.embed([query])[0]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "embedding unavailable; falling back to lexical retrieval",
+                extra={"error": f"{type(exc).__name__}: {exc}"},
+            )
+            return None
 
     # --- indexing --------------------------------------------------------
 
@@ -285,11 +360,15 @@ class RAGEngine:
 
         vectors = [embedding for _, embedding, _, _ in usable]
         if any(v is not None for v in vectors):
-            query_vector = self._embed([query])[0]
-            rankings["vector"] = [
-                cosine_similarity(query_vector, list(v)) if v is not None else 0.0
-                for v in vectors
-            ]
+            query_vector = self._embed_query(query)
+            # No query vector means no vector ranking at all. Ranking every
+            # chunk zero instead would add a ranker that says nothing, and RRF
+            # would still let it vote.
+            if query_vector is not None:
+                rankings["vector"] = [
+                    cosine_similarity(query_vector, list(v)) if v is not None else 0.0
+                    for v in vectors
+                ]
 
         fused = reciprocal_rank_fusion(rankings, limit=limit)
         results: list[RetrievedChunk] = []

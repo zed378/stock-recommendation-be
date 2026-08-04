@@ -249,6 +249,130 @@ def test_retrieval_still_works_without_usable_embeddings(session, engine: RAGEng
     assert set(top[0].ranks) == {"lexical"}
 
 
+# --- when the deployment has no embedding model at all ---------------------
+#
+# Not a hypothetical. A LiteLLM gateway fronting chat-only models answers
+# `/embeddings` with 404 for every model it advertises, and the whole platform
+# has to keep working on that, because BM25 does not need vectors. Before these
+# tests the failure propagated: news ingestion died and took the articles it
+# was holding with it.
+
+
+class NoEmbeddingsProvider(FixtureAIProvider):
+    """Chat works, embeddings 404 - the real shape of the problem."""
+
+    def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
+        raise RuntimeError("404 Not Found: this model group has no embeddings route")
+
+
+@pytest.fixture
+def chat_only(session) -> RAGEngine:
+    return RAGEngine(session, NoEmbeddingsProvider(), embedding_model="chat-only")
+
+
+def test_indexing_survives_a_provider_with_no_embeddings(session, chat_only) -> None:
+    """Losing the text would be far worse than losing the vectors."""
+    from sqlalchemy import select
+
+    from aidss.db.models import KnowledgeChunk
+
+    document = KnowledgeBaseDocument(title="Dividend", category="education")
+    session.add(document)
+    session.flush()
+
+    report = chat_only.index_document(document, CORPUS[0])
+
+    assert report.chunks_created > 0
+    assert report.embeddings_unavailable is True
+    assert "404" in (report.embed_error or "")
+
+    stored = session.scalars(select(KnowledgeChunk)).all()
+    assert stored
+    assert all(chunk.embedding is None for chunk in stored)
+    assert all(chunk.chunk_text for chunk in stored), "the text must survive"
+
+
+def test_the_text_is_still_retrievable_afterwards(session, chat_only) -> None:
+    """The whole justification for degrading rather than failing."""
+    document = KnowledgeBaseDocument(title="Dividend", category="education")
+    session.add(document)
+    session.flush()
+    chat_only.index_document(document, CORPUS[0])
+
+    top = chat_only.search_knowledge("dividend yield", limit=1)
+    assert top
+    assert "Dividend yield" in top[0].text
+    assert set(top[0].ranks) == {"lexical"}
+
+
+def test_a_failure_to_embed_the_query_falls_back_rather_than_raising(session) -> None:
+    """Retrieval already tolerated chunks with no vector. It did not tolerate
+    failing to embed the query, so one 404 took out a search BM25 could have
+    answered by itself."""
+    indexed = RAGEngine(session, FixtureAIProvider(), embedding_model="fixture-embed")
+    document = KnowledgeBaseDocument(title="Dividend", category="education")
+    session.add(document)
+    session.flush()
+    indexed.index_document(document, CORPUS[0])  # chunks *do* have vectors
+
+    # Same rows, a provider that can no longer embed the query.
+    degraded = RAGEngine(session, NoEmbeddingsProvider(), embedding_model="fixture-embed")
+    top = degraded.search_knowledge("dividend yield", limit=1)
+
+    assert top
+    assert "Dividend yield" in top[0].text
+    assert "vector" not in top[0].ranks
+
+
+def test_news_articles_are_not_lost_when_embedding_fails(session, chat_only) -> None:
+    """The failure that motivated all of this: an ingestion job raising here
+    lost the articles it was holding."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from aidss.db.models import NewsItem
+
+    asset = Asset(ticker="BBCA", exchange="IDX")
+    session.add(asset)
+    session.flush()
+    session.add(
+        NewsItem(
+            asset_id=asset.id,
+            source="test",
+            source_url="https://example.invalid/a",
+            dedup_hash="a",
+            headline="BBCA raises its dividend",
+            body_summary="The bank increased its dividend payout.",
+            published_at=datetime.now(UTC) - timedelta(days=1),
+        )
+    )
+    session.flush()
+
+    items = list(session.scalars(select(NewsItem)).all())
+    report = chat_only.index_news(items)
+
+    assert report.embeddings_unavailable is True
+    assert report.chunks_created > 0
+    assert all(item.is_indexed for item in items), "a retry must not re-embed them forever"
+
+    found = chat_only.search_news("dividend payout", asset_id=asset.id, limit=1)
+    assert found
+    assert "dividend" in found[0].text.lower()
+
+
+def test_a_healthy_provider_still_reports_embeddings_as_available(session, engine) -> None:
+    """The flag has to mean something, so the negative case is pinned too."""
+    document = KnowledgeBaseDocument(title="Dividend", category="education")
+    session.add(document)
+    session.flush()
+
+    report = engine.index_document(document, CORPUS[0])
+    assert report.embeddings_unavailable is False
+    assert report.embed_error is None
+    assert report.embed_calls > 0
+
+
 def test_news_retrieval_ranks_the_matching_article_first(session, engine: RAGEngine) -> None:
     from datetime import UTC, datetime, timedelta
 

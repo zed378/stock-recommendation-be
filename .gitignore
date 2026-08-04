@@ -1,3 +1,4 @@
+# --- Python ----------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -6,45 +7,66 @@ build/
 dist/
 
 .env
+# Vite's local-override convention. `.env.example` stays tracked on purpose:
+# it is documentation, and the only file here that should ever be read for
+# what a setting means.
+.env.local
+.env.*.local
 .venv/
 venv/
 
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 .ruff_cache/
+.mypy_cache/
 
+# --- Node / frontend -------------------------------------------------------
+# `frontend/.gitignore` covers these too. Repeated here deliberately: a second
+# Node package added anywhere else in the tree would otherwise commit its
+# `node_modules` before anyone noticed.
+node_modules/
+.vite/
+*.tsbuildinfo
+frontend/dist/
+frontend/coverage/
+
+# Generated from the running API by `npm run api:types`. The *types* it
+# produces (frontend/src/api/schema.d.ts) are committed on purpose - they are
+# the contract between the two halves, and a backend change showing up as a
+# type diff in review is the whole point. This intermediate is not.
+openapi.json
+
+# --- Application data ------------------------------------------------------
 var/
 *.db
 *.sqlite3
 
-# IDE
+# --- Editors ---------------------------------------------------------------
 .vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
 
-# OS
+# --- OS --------------------------------------------------------------------
 Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Logs
+# --- Logs and scratch ------------------------------------------------------
 *.log
-
-# Temporary files
 *.tmp
 *.bak
 *~
 *.swp
 
-# Mypy
-.mypy_cache/
-
-# Documentation build
+# --- Docs build ------------------------------------------------------------
 docs/_build/
 
-# Data artifacts
+# --- Data artifacts --------------------------------------------------------
+# Exported spreadsheets and dumps. Recorded test payloads live inline in the
+# test files rather than as data files, so nothing needed is caught by this.
 *.csv
 *.xlsx
 *.parquet

@@ -66,12 +66,34 @@ class Settings(BaseSettings):
     #: Alpha Vantage serves fundamentals but caps at 25 requests a day - so the
     #: working configuration draws each half from a different adapter.
     composite_price_provider: str = "yahoo"
-    composite_fundamentals_provider: str = "alphavantage"
+    #: `idx` rather than `alphavantage`: Alpha Vantage was tested against a
+    #: real key and publishes nothing at all for IDX symbols, so it is the
+    #: right default only for a watchlist of US equities.
+    composite_fundamentals_provider: str = "idx"
+
+    #: Browser profile `curl_cffi` presents to IDX. The endpoint sits behind
+    #: Cloudflare and refuses an ordinary HTTP client. Configurable because the
+    #: profile that gets through is the thing most likely to need changing when
+    #: this breaks.
+    idx_impersonate: str = "chrome"
 
     ai_base_url: str = "https://api.openai.com/v1"
     ai_api_key: str | None = None
     ai_chat_model: str = "gpt-4o-mini"
+    #: Leave **empty** when the endpoint serves no embedding model. Many
+    #: self-hosted gateways front chat-only backends and answer `/embeddings`
+    #: with 404 for every model they advertise; setting this to "" says so up
+    #: front rather than discovering it once per batch.
+    #:
+    #: Retrieval then runs on BM25 alone. Exact-token search - a ticker, a
+    #: metric name, a ratio - is unaffected and is most of what this domain
+    #: asks. What is lost is paraphrase matching: a passage that answers the
+    #: question while sharing none of its words.
     ai_embedding_model: str = "text-embedding-3-small"
+
+    @property
+    def embeddings_enabled(self) -> bool:
+        return bool(self.ai_embedding_model.strip())
 
     #: Vector width of the embedding model. A property of the model, not of the
     #: schema: text-embedding-3-small is 1536, -3-large is 3072, nomic-embed-text

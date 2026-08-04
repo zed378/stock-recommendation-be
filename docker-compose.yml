@@ -69,5 +69,20 @@ services:
     # the duplicates.
     command: python -m aidss.jobs
 
+  # The investor dashboard: a static bundle behind nginx, which also proxies
+  # /api to the service above. One origin, so the browser needs no CORS and the
+  # bearer token never leaves it.
+  #
+  # A separate image rather than static files mounted into the API, so that a
+  # mistyped API path still returns a JSON 404 instead of index.html - and so
+  # the API image ships no HTML at all.
+  frontend:
+    build: ./frontend
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "5173:80"
+
 volumes:
   postgres_data:

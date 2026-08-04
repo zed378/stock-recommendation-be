@@ -48,9 +48,8 @@ from aidss.db.models import (
 )
 from aidss.llm.errors import GatewayError
 from aidss.llm.provisioning import build_gateway
-from aidss.plugins.registry import get_ai_provider
 from aidss.prompts.validator import ValidationFailure
-from aidss.rag.engine import RAGEngine
+from aidss.rag.provisioning import build_rag
 from aidss.security.rbac import Permission
 
 router = APIRouter(tags=["journal"])
@@ -227,7 +226,7 @@ def chat(
     would add a classifier that can be wrong, needs its own evaluation, and
     would quietly route a research question to an explainer.
     """
-    rag = RAGEngine(session, get_ai_provider())
+    rag = build_rag(session)
     context = ConversationContextBuilder(session, rag).build(
         payload.question, mode=payload.mode, user_id=user.id, ticker=payload.ticker
     )
