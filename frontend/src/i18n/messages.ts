@@ -270,6 +270,67 @@ export const id = {
   "chat.you": "Anda",
   "chat.assistant": "AI",
 
+  // --- admin -------------------------------------------------------------
+  "nav.admin": "Admin",
+  "admin.title": "Dashboard admin",
+  "admin.forbidden": "Halaman ini hanya untuk admin.",
+  "admin.forbiddenHint":
+    "Akun baru mendapat peran investor. Promosi dilakukan dari shell, bukan lewat API — " +
+    "endpoint yang membagikan peran admin adalah celah eskalasi hak akses. Jalankan: " +
+    "python -m aidss.cli grant-admin {email}",
+
+  "admin.tab.overview": "Ringkasan",
+  "admin.tab.queue": "Antrean",
+  "admin.tab.providers": "Provider",
+  "admin.tab.budget": "Biaya AI",
+  "admin.tab.audit": "Jejak audit",
+
+  "admin.window": "Jendela",
+  "admin.windowDays": "{days} hari",
+  "admin.generatedAt": "Dihasilkan {time}",
+  "admin.attention": "Perlu perhatian",
+  "admin.attentionNone": "Tidak ada yang perlu perhatian.",
+  "admin.inventory": "Inventaris",
+  "admin.ingestion": "Aliran data",
+  "admin.aiUsage": "Pemakaian AI",
+  "admin.providersActive": "Provider aktif",
+  "admin.providersRegistered": "Adapter terdaftar",
+  "admin.providerNote":
+    "Mengganti provider adalah perubahan konfigurasi, bukan perubahan kode (FR-07). " +
+    "Daftar ini menunjukkan kedua sisinya: apa yang tersedia, dan mana yang dipakai.",
+
+  "admin.queue.depth": "Kedalaman antrean",
+  "admin.queue.types": "Tipe job yang dikenali",
+  "admin.queue.leader": "Leader scheduler",
+  "admin.queue.noLeader": "Tidak ada",
+  "admin.queue.noLeaderWarning":
+    "Tidak ada proses yang menjadwalkan pekerjaan. Ini terlihat persis seperti " +
+    "“tidak ada jadwal yang jatuh tempo”, sehingga harus dinyatakan.",
+  "admin.queue.expiresAt": "Kedaluwarsa",
+  "admin.jobs": "Job terakhir",
+  "admin.job.type": "Tipe",
+  "admin.job.status": "Status",
+  "admin.job.retries": "Percobaan",
+  "admin.job.error": "Galat terakhir",
+  "admin.job.created": "Dibuat",
+  "admin.job.filterAll": "Semua status",
+  "admin.jobsEmpty": "Belum ada job.",
+
+  "admin.budget.spent": "Terpakai",
+  "admin.budget.ceiling": "Plafon harian",
+  "admin.budget.utilisation": "Pemakaian",
+  "admin.budget.state": "Status",
+  "admin.budget.windowStart": "Sejak",
+  "admin.budget.noCeiling": "Tanpa plafon",
+
+  "admin.audit.actor": "Pelaku",
+  "admin.audit.action": "Aksi",
+  "admin.audit.entity": "Entitas",
+  "admin.audit.when": "Waktu",
+  "admin.audit.filterEntity": "Saring entitas",
+  "admin.audit.empty": "Belum ada catatan audit.",
+  "admin.audit.changes": "Perubahan",
+
   // --- generic -----------------------------------------------------------
   "common.loading": "Memuat…",
   "common.error": "Terjadi kesalahan.",
@@ -526,6 +587,66 @@ export const en: Record<MessageKey, string> = {
   "chat.emptyHint": "Ask a question to start.",
   "chat.you": "You",
   "chat.assistant": "AI",
+
+  "nav.admin": "Admin",
+  "admin.title": "Admin dashboard",
+  "admin.forbidden": "This page is for administrators.",
+  "admin.forbiddenHint":
+    "New accounts are investors. Promotion happens from a shell rather than the API — " +
+    "an endpoint that hands out the admin role is a privilege-escalation surface. Run: " +
+    "python -m aidss.cli grant-admin {email}",
+
+  "admin.tab.overview": "Overview",
+  "admin.tab.queue": "Queue",
+  "admin.tab.providers": "Providers",
+  "admin.tab.budget": "AI spend",
+  "admin.tab.audit": "Audit log",
+
+  "admin.window": "Window",
+  "admin.windowDays": "{days} days",
+  "admin.generatedAt": "Generated {time}",
+  "admin.attention": "Needs attention",
+  "admin.attentionNone": "Nothing needs attention.",
+  "admin.inventory": "Inventory",
+  "admin.ingestion": "Data flow",
+  "admin.aiUsage": "AI usage",
+  "admin.providersActive": "Active providers",
+  "admin.providersRegistered": "Registered adapters",
+  "admin.providerNote":
+    "Swapping a provider is a configuration change, never a code change (FR-07). This " +
+    "shows both halves: what is available, and what is selected.",
+
+  "admin.queue.depth": "Queue depth",
+  "admin.queue.types": "Recognised job types",
+  "admin.queue.leader": "Scheduler leader",
+  "admin.queue.noLeader": "None",
+  "admin.queue.noLeaderWarning":
+    "No process is scheduling work. This looks exactly like “nothing is due”, which is " +
+    "why it has to be stated.",
+  "admin.queue.expiresAt": "Expires",
+  "admin.jobs": "Recent jobs",
+  "admin.job.type": "Type",
+  "admin.job.status": "Status",
+  "admin.job.retries": "Attempts",
+  "admin.job.error": "Last error",
+  "admin.job.created": "Created",
+  "admin.job.filterAll": "All statuses",
+  "admin.jobsEmpty": "No jobs yet.",
+
+  "admin.budget.spent": "Spent",
+  "admin.budget.ceiling": "Daily ceiling",
+  "admin.budget.utilisation": "Utilisation",
+  "admin.budget.state": "State",
+  "admin.budget.windowStart": "Since",
+  "admin.budget.noCeiling": "No ceiling",
+
+  "admin.audit.actor": "Actor",
+  "admin.audit.action": "Action",
+  "admin.audit.entity": "Entity",
+  "admin.audit.when": "When",
+  "admin.audit.filterEntity": "Filter entity",
+  "admin.audit.empty": "No audit entries yet.",
+  "admin.audit.changes": "Changes",
 
   "common.loading": "Loading…",
   "common.error": "Something went wrong.",

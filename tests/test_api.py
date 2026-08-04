@@ -223,8 +223,8 @@ def test_a_category_name_is_trimmed(client: TestClient, auth_headers) -> None:
     add(client, auth_headers, "BBCA", "Perbankan")
     add(client, auth_headers, "BBRI", "  Perbankan  ")
 
-    names = [row["name"] for row in client.get("/watchlist/categories", headers=auth_headers).json()]
-    assert names == ["Perbankan"]
+    rows = client.get("/watchlist/categories", headers=auth_headers).json()
+    assert [row["name"] for row in rows] == ["Perbankan"]
 
 
 def test_categories_report_their_sizes(client: TestClient, auth_headers) -> None:

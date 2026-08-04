@@ -11,6 +11,7 @@ import { AssetDetail } from "@/pages/AssetDetail";
 import { Portfolio } from "@/pages/Portfolio";
 import { Journal } from "@/pages/Journal";
 import { Chat } from "@/pages/Chat";
+import { Admin } from "@/pages/Admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,11 @@ export default function App() {
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/journal" element={<Journal />} />
                 <Route path="/chat" element={<Chat />} />
+                {/* Registered for everyone; the page itself explains the role
+                    requirement. An unlinked route is still reachable by typing
+                    it, so hiding the link is not the control - the backend is,
+                    and this says why rather than 403ing every panel. */}
+                <Route path="/admin" element={<Admin />} />
               </Route>
               <Route path="*" element={<Navigate to="/watchlist" replace />} />
             </Routes>

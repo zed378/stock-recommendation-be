@@ -19,6 +19,10 @@ export function Layout() {
     { to: "/portfolio", label: t("nav.portfolio") },
     { to: "/journal", label: t("nav.journal") },
     { to: "/chat", label: t("nav.chat") },
+    // Shown only to admins. Not a security measure - the route and the API
+    // both stand on their own - just an absence of a link to somewhere the
+    // reader cannot use.
+    ...(user?.role === "admin" ? [{ to: "/admin", label: t("nav.admin") }] : []),
   ];
 
   return (

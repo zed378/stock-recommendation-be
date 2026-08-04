@@ -144,6 +144,29 @@ class Settings(BaseSettings):
     #: Fraction of the budget at which a warning is raised (Section 12.9).
     budget_warning_threshold: float = 0.8
 
+    @field_validator(
+        "daily_ai_budget",
+        "ai_api_key",
+        "finnhub_api_key",
+        "alphavantage_api_key",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """An empty environment variable means "not set", not "the empty value".
+
+        Environment variables are strings and have no null, so every deployment
+        mechanism spells "unset" as empty: `${VAR:-}` in Compose, an unfilled
+        key in a k8s ConfigMap, a blank line in an `.env` file. Without this,
+        `AIDSS_DAILY_AI_BUDGET=` fails to parse as a number and the process
+        exits before it can say anything more useful than a Pydantic
+        traceback - which is exactly how it was found.
+
+        Applied to the optional credentials too, so `is None` and falsiness
+        agree about them rather than one saying set and the other unset.
+        """
+        return None if isinstance(value, str) and not value.strip() else value
+
     @field_validator("environment")
     @classmethod
     def _known_environment(cls, v: str) -> str:

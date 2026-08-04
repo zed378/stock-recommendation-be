@@ -306,7 +306,8 @@ The suite is organised around the risks the plan itself identifies:
 | [test_retrieval_quality.py](tests/test_retrieval_quality.py) | Relevance, not plumbing: the right passage ranks first, a `BBCA` query does not return `BBRI`, `EV/EBITDA` survives tokenisation, padding a document does not raise its score, and IDF never goes negative (the textbook formula does, which would make a matching document score worse than a non-matching one). |
 | [test_observability.py](tests/test_observability.py) | That a counter cannot decrease, that the `+Inf` bucket equals the total count (Prometheus rejects an exposition where it does not), that metrics are labelled by route template so a ticker cannot mint a time series, that credentials never reach a log line, and that `/health` and `/metrics` stay reachable while a client is throttled. |
 | [test_reporting.py](tests/test_reporting.py) | Counter-evidence appears with equal prominence, what was *not* covered is named, opening a report runs no agents and returns identical text twice, and no notification event can express an instruction. |
-| [test_security.py](tests/test_security.py), [test_api.py](tests/test_api.py), [test_api_analysis.py](tests/test_api_analysis.py) | Password policy, token forgery, role boundaries, per-user data ownership, and the full HTTP flow including analysis. |
+| [test_security.py](tests/test_security.py), [test_api.py](tests/test_api.py), [test_api_analysis.py](tests/test_api_analysis.py) | Password policy, token forgery, role boundaries, per-user data ownership, and the full HTTP flow including analysis. Watchlist categories get their own block: the same ticker in two groups, a trimmed name so `"Perbankan"` and `"Perbankan "` do not become two groups that look identical, an emptied category that still exists, and the delete-scoping bug categories would have introduced. Search is pinned against the note, the category, and case — and against another user's rows, which it must never reach. |
+| [test_cli.py](tests/test_cli.py) | Why role changes are a shell command rather than an endpoint, made executable: a new account is an investor, promotion works and is written to the audit log with `actor_type=system`, a repeat grant writes nothing, and an unknown email exits non-zero so a provisioning script stops instead of reporting success while leaving nobody able to administer. |
 | [test_postgres_integration.py](tests/test_postgres_integration.py) *(`-m postgres`)* | Only what SQLite cannot show. A wrong-width embedding is rejected by the database; enums are stored as their values, checked through raw SQL rather than through the ORM that would map them back either way; `Decimal` keeps eight decimal places; CHECK and unique constraints hold. And the concurrency: 8 threads over 40 jobs claim each exactly once, 10 racing schedulers produce exactly one leader. The contention assertions were themselves checked — the same pattern run against a naive claim produced 127 double-assignments, so those tests fail when they should. |
 
 ---
@@ -326,7 +327,70 @@ cd frontend && npm install && npm run dev
 
 **There is no default account.** Register from the sign-in page; a shipped default
 credential is a hole, not a convenience. New accounts get the `investor` role, which covers
-everything below — the admin endpoints are a later phase.
+the whole investor dashboard.
+
+### Becoming an admin is a shell command, not an endpoint
+
+```bash
+python -m aidss.cli list-users
+python -m aidss.cli grant-admin you@example.com
+python -m aidss.cli revoke-admin someone@example.com
+```
+
+Deliberately not an API route. Any endpoint that hands out the admin role is a
+privilege-escalation surface — it has to be guarded by something, and whatever guards it
+becomes the new thing worth attacking. There is also a bootstrapping problem no endpoint
+solves: registration creates investors, so with API-only promotion the first admin could
+never exist without a back door shipped in the code. Shell access is a stronger proof of
+authority than any token, and whoever has it can already read the database.
+
+Every change is written to `audit_logs` with `actor_type=system`, because a role change
+made outside the application is exactly what someone later has to account for. A repeat
+grant is a quiet no-op and writes nothing, so re-running a provisioning script does not
+fill the log with changes that never happened.
+
+### Watchlist categories were already in the schema
+
+`watchlists` has carried a `name` with a unique constraint per user since the initial
+migration, and `watchlist_items` hangs off it — but every endpoint hardcoded `"Default"`,
+so a user could hold exactly one unnamed list. A **category is that name**, surfaced. No
+migration was needed; the grouping existed and was unreachable.
+
+Because uniqueness is on `(watchlist_id, asset_id)`, **the same ticker can sit in several
+categories**. BBCA is a bank and a dividend payer, and forcing a choice between the two
+would make the grouping less useful than no grouping. Groups are collapsible, and the
+interface remembers which are *shut* rather than which are open — storing the open ones
+would collapse every category the user has never seen, so a group they just created would
+arrive closed for no reason they could explain.
+
+Search covers ticker, company name, sector, category, **and the user's own note**. The note
+is where the reason for following something lives — *"kandidat dividen"*, *"menunggu laporan
+Q3"* — and that is more often what someone is looking for than a code they already know.
+Matching is `ilike`, not `like`: `like` is case-sensitive on PostgreSQL, which would turn
+searching your own free text into a guess about how you typed it. The category is in there
+because a live run found the most obvious query returning nothing — someone reading a group
+heading on screen and typing it into the box expects to find that group.
+
+Adding categories also exposed a latent bug: `DELETE` scoped itself to the `"Default"` list,
+which would have stranded every item in any other category. A test pins that specifically.
+
+### The admin dashboard
+
+Five panels behind the `admin` role: operations overview, queue and job history, provider
+inventory, AI spend against the daily ceiling, and the audit log.
+
+The route is registered for everyone and the *page* explains the role requirement, rather
+than being hidden. An unlinked route is still reachable by typing it, so hiding the link is
+not the control — the backend is. What hiding it would achieve is a page that renders its
+shell and then 403s every panel inside it, which reads as an outage. The nav link is
+omitted for non-admins simply because there is no reason to link somewhere unusable.
+
+Two panels state absence explicitly rather than rendering blank. *"Nothing needs
+attention"* is a different fact from *"the panel failed to load"*, and **no scheduler
+leader** is the failure that looks exactly like "nothing is due" — the queue panel says so
+in as many words. Verified end to end: all six admin endpoints refuse a fresh account with
+403, the CLI promotes, all six then answer 200, and the role change appears in the audit
+log.
 
 ### Types are generated, not written
 
