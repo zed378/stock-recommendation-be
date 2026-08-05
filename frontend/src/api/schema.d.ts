@@ -817,6 +817,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unread Notification Count
+         * @description Just the number, for the header badge.
+         *
+         *     Separate from the list because the badge is polled and the list is not:
+         *     fetching fifty rows every thirty seconds to render one integer is waste the
+         *     indicator does not need to cause.
+         */
+        get: operations["unread_notification_count_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/{notification_id}/read": {
         parameters: {
             query?: never;
@@ -1840,6 +1864,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Event */
+            event?: string | null;
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** OperationsOverviewResponse */
         OperationsOverviewResponse: {
@@ -2219,6 +2249,11 @@ export interface components {
              * @default false
              */
             is_personal: boolean;
+        };
+        /** UnreadCountResponse */
+        UnreadCountResponse: {
+            /** Unread */
+            unread: number;
         };
         /** UserResponse */
         UserResponse: {
@@ -3647,6 +3682,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                include_read?: boolean;
             };
             header?: never;
             path?: never;
@@ -3670,6 +3706,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unread_notification_count_notifications_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCountResponse"];
                 };
             };
         };

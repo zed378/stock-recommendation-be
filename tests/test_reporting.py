@@ -242,6 +242,78 @@ def test_notifications_are_readable_over_the_api(client, auth_headers, session) 
     assert body[0]["subject"] == "New analysis available"
 
 
+def test_the_event_and_context_reach_the_client(client, auth_headers, session) -> None:
+    """The interface groups and links on these. Storing them and then not
+    serving them would leave it parsing the subject line back into a category."""
+    from aidss.db.models import User as UserModel
+
+    investor = session.scalar(select(UserModel).where(UserModel.email == "investor@example.com"))
+    NotificationService(session).notify(
+        investor.id,
+        NotificationEvent.MONITORING_ALERT,
+        "Monitoring raised 2 alert(s) for BBCA.",
+        context={"count": 2, "tickers": ["BBCA"]},
+    )
+    session.commit()
+
+    [body] = client.get("/notifications", headers=auth_headers).json()
+    assert body["event"] == "monitoring_alert"
+    assert body["context"] == {"count": 2, "tickers": ["BBCA"]}
+
+
+def test_a_read_notification_is_still_findable_in_the_history(
+    client, auth_headers, session
+) -> None:
+    """Marking one read used to delete it from the only endpoint that returned
+    it, so "what was that alert an hour ago?" had no answer."""
+    from aidss.db.models import User as UserModel
+
+    investor = session.scalar(select(UserModel).where(UserModel.email == "investor@example.com"))
+    result = NotificationService(session).notify(
+        investor.id, NotificationEvent.REPORT_READY, "Your report is ready."
+    )[0]
+    session.commit()
+
+    client.post(f"/notifications/{result.notification_id}/read", headers=auth_headers)
+
+    assert client.get("/notifications", headers=auth_headers).json() == []
+    history = client.get(
+        "/notifications", params={"include_read": True}, headers=auth_headers
+    ).json()
+    assert [n["id"] for n in history] == [str(result.notification_id)]
+
+
+def test_the_unread_count_tracks_what_is_unread(client, auth_headers, session) -> None:
+    from aidss.db.models import User as UserModel
+
+    investor = session.scalar(select(UserModel).where(UserModel.email == "investor@example.com"))
+    service = NotificationService(session)
+    first = service.notify(investor.id, NotificationEvent.REPORT_READY, "One.")[0]
+    service.notify(investor.id, NotificationEvent.NEWS_INGESTED, "Two.")
+    session.commit()
+
+    assert client.get("/notifications/unread-count", headers=auth_headers).json() == {
+        "unread": 2
+    }
+
+    client.post(f"/notifications/{first.notification_id}/read", headers=auth_headers)
+    assert client.get("/notifications/unread-count", headers=auth_headers).json() == {
+        "unread": 1
+    }
+
+
+def test_the_unread_count_is_scoped_to_the_caller(client, auth_headers, session) -> None:
+    other = User(email="counted@example.com", password_hash=hash_password("correct-horse-b"))
+    session.add(other)
+    session.flush()
+    NotificationService(session).notify(other.id, NotificationEvent.REPORT_READY, "Theirs.")
+    session.commit()
+
+    assert client.get("/notifications/unread-count", headers=auth_headers).json() == {
+        "unread": 0
+    }
+
+
 # --- Operations overview ---------------------------------------------------
 
 

@@ -13,6 +13,7 @@ from aidss.api.schemas import (
     NotificationResponse,
     OperationsOverviewResponse,
     ReportResponse,
+    UnreadCountResponse,
 )
 from aidss.collectors.normalization import normalize_ticker
 from aidss.db.models import Asset, Portfolio, User
@@ -109,10 +110,16 @@ def portfolio_report(
 @router.get("/notifications", response_model=list[NotificationResponse])
 def list_notifications(
     limit: int = Query(default=50, ge=1, le=200),
+    #: Off by default so the existing "what's new" call is unchanged. The
+    #: notification screen turns it on, because a list that empties itself as
+    #: you read it cannot answer "what was that alert an hour ago?".
+    include_read: bool = Query(default=False),
     session: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
 ) -> list[NotificationResponse]:
-    rows = NotificationService(session).unread(user.id, limit=limit)
+    rows = NotificationService(session).recent(
+        user.id, limit=limit, include_read=include_read
+    )
     return [
         NotificationResponse(
             id=r.id,
@@ -121,9 +128,25 @@ def list_notifications(
             message=r.message,
             status=r.status,
             created_at=r.created_at,
+            event=r.event,
+            context=r.context,
         )
         for r in rows
     ]
+
+
+@router.get("/notifications/unread-count", response_model=UnreadCountResponse)
+def unread_notification_count(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> UnreadCountResponse:
+    """Just the number, for the header badge.
+
+    Separate from the list because the badge is polled and the list is not:
+    fetching fifty rows every thirty seconds to render one integer is waste the
+    indicator does not need to cause.
+    """
+    return UnreadCountResponse(unread=NotificationService(session).unread_count(user.id))
 
 
 @router.post("/notifications/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)

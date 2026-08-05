@@ -39,6 +39,7 @@ from aidss.indicators.features import compute_features
 from aidss.monitoring.alerts import AlertCandidate, evaluate, record
 from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.interfaces import MarketDataProvider
+from aidss.reporting.notifications import NotificationEvent, NotificationService
 
 logger = logging.getLogger("aidss.monitoring")
 
@@ -173,6 +174,10 @@ def poll_watched_assets(
     if asset_ids is not None:
         followers = {k: v for k, v in followers.items() if k in asset_ids}
 
+    #: Accumulated across the whole pass so each user is told once, however
+    #: many of their assets moved.
+    raised: dict[uuid.UUID, list[tuple[str, Alert]]] = {}
+
     for asset_id, user_ids in followers.items():
         asset = session.get(Asset, asset_id)
         if asset is None or not asset.is_active:
@@ -225,10 +230,58 @@ def poll_watched_assets(
             continue
 
         for user_id in user_ids:
-            report.alerts_raised += len(record(session, user_id, asset_id, candidates))
+            stored = record(session, user_id, asset_id, candidates)
+            report.alerts_raised += len(stored)
+            if stored:
+                raised.setdefault(user_id, []).extend(
+                    (asset.ticker, alert) for alert in stored
+                )
+
+    # Announced once per user per pass, not once per alert. A single pass
+    # raised eleven during testing, and eleven notifications arriving together
+    # is a flood that gets the whole feature muted. The alerts screen holds the
+    # detail; this says how much is waiting there.
+    _announce(session, raised)
 
     session.flush()
     return report
+
+
+def _announce(session: Session, raised: dict[uuid.UUID, list[tuple[str, Alert]]]) -> None:
+    """Tell each user what monitoring observed. Never raises.
+
+    Guarded for the same reason the analysis announcement is: the alerts are
+    already stored by this point, and failing here would throw away a completed
+    pass over an announcement.
+    """
+    if not raised:
+        return
+
+    service = NotificationService(session)
+    for user_id, entries in raised.items():
+        tickers = sorted({ticker for ticker, _ in entries})
+        listed = ", ".join(tickers[:5])
+        if len(tickers) > 5:
+            listed += f" and {len(tickers) - 5} more"
+
+        try:
+            service.notify(
+                user_id,
+                NotificationEvent.MONITORING_ALERT,
+                # States what was observed and where to read it. What any of it
+                # means is decided on the analysis screen, which is the only
+                # place carrying the confidence and the counter-evidence.
+                f"Monitoring raised {len(entries)} alert(s) for {listed}.",
+                context={
+                    "count": len(entries),
+                    "tickers": tickers,
+                    "kinds": sorted({alert.kind.value for _, alert in entries}),
+                },
+            )
+        except Exception:  # noqa: BLE001 - announcing must not fail the pass
+            logger.warning(
+                "alerts stored but not announced", extra={"user_id": str(user_id)}
+            )
 
 
 def recent_alerts(

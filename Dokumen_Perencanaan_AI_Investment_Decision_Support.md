@@ -1002,6 +1002,22 @@ Maka aturannya sempit dan mutlak: **alert menyatakan apa yang terjadi, dan sikap
 
 ---
 
+## 22a. Notifikasi
+
+Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada satu pun yang pernah menulis notifikasi.** Dua kejadian yang paling layak diberitahukan justru yang paling mudah terlewat: analisis selesai setelah pembaca berpindah layar, dan monitoring menemukan sesuatu pada emiten yang tidak sedang dibuka siapa pun.
+
+**Aturan alert berlaku utuh di sini.** Notifikasi adalah permukaan yang sama berbahayanya — datang tanpa diminta, dibaca dalam hitungan detik, terlepas dari confidence dan faktor penyeimbang di layar analisis. Maka pesannya kalimat fakta, `NotificationEvent` tetap enum tertutup berisi kejadian (tidak ada anggota yang bisa memuat perintah), dan **sikap berjalan sebagai data di `context`**, dirender antarmuka sebagai nilai berlabel di sebelah tautan kembali ke analisis — tidak pernah dilipat ke dalam kalimatnya.
+
+**Notifikasi tidak boleh membiayai pekerjaan yang sudah selesai.** Baik pengumuman analisis maupun alert dijalankan setelah semuanya tersimpan dan dibungkus penjaga: notifikasi yang gagal dicatat sebagai peringatan, bukan dilemparkan ke atas — melemparkannya berarti melaporkan kegagalan atas analisis yang sedang duduk di basis data.
+
+**Satu notifikasi per pengguna per pass monitoring, bukan per alert.** Satu pass atas watchlist pada hari pasar bergerak menaikkan satu alert per emiten; mengirim satu notifikasi masing-masing berarti belasan tiba dalam satu detik, dan itulah cara sebuah fitur dibisukan selamanya. Notifikasinya menyebut berapa banyak dan pada emiten apa; layar alert memuat rinciannya.
+
+**Kalimatnya disusun di klien, bukan dibaca dari server.** Pesan tersimpan ditulis sekali dalam satu bahasa pada saat kejadian, sehingga tidak bisa mengikuti sakelar bahasa yang ditekan pembaca setelahnya. Faktanya berjalan di `context` — ticker, jumlah agen, jumlah alert — dan kedua bahasa menyusun kalimat dari sana. Pesan tersimpan tetap ada sebagai rekaman dan sebagai fallback untuk kejadian yang belum dikenali build frontend.
+
+**Riwayat tidak menghapus dirinya sendiri.** Menandai terbaca sempat mengeluarkan notifikasi dari satu-satunya endpoint yang mengembalikannya, sehingga "alert satu jam lalu itu tentang apa?" tidak punya jawaban. `include_read` memisahkan lonceng (yang belum dibaca) dari panel (yang bisa menampilkan seluruhnya), dan `/notifications/unread-count` melayani lencana dengan satu bilangan — memoll lima puluh baris tiap setengah menit untuk merender satu angka adalah pemborosan yang tidak perlu diadakan.
+
+---
+
 ## 23. Terjemahan Analisis (Dwibahasa)
 
 **Desain yang tampak wajar dan salah:** menghasilkan analisis dua kali, satu per bahasa. Dua jalur independen atas bukti yang sama bisa mencapai sikap berbeda. Pembaca yang melihat "beli" di satu kolom dan "tahan" di kolom lain tidak punya cara menyelesaikannya, dan platform telah menerbitkan dua analisis yang bertentangan atas emiten yang sama dengan otoritas setara.

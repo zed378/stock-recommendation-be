@@ -636,6 +636,17 @@ class NotificationResponse(BaseModel):
     message: str
     status: str
     created_at: datetime
+    #: Which event this was, so the interface groups and routes on the
+    #: vocabulary rather than by parsing the subject line back into a category.
+    event: str | None = None
+    #: Structured detail - ticker, counts, and the stance where one applies.
+    #: The prose says what happened; anything actionable is here, rendered
+    #: beside a link back to the screen that carries the full context.
+    context: dict[str, Any] | None = None
+
+
+class UnreadCountResponse(BaseModel):
+    unread: int
 
 
 class OperationsOverviewResponse(BaseModel):

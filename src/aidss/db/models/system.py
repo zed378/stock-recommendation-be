@@ -47,7 +47,27 @@ class Notification(Base):
     subject: Mapped[str | None] = mapped_column(String(200), default=None)
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending")
+
+    #: Which event this was, so the interface can group and route without
+    #: parsing the subject line back into a category.
+    event: Mapped[str | None] = mapped_column(String(40), default=None)
+
+    #: Structured detail - the ticker, an id, a count. Where a stance travels
+    #: if one is relevant, for the same reason as on `alerts`: a notification is
+    #: read in seconds and stripped of the confidence and counter-evidence that
+    #: surround it on the analysis screen, so the prose states what happened and
+    #: anything actionable is data the interface renders beside a link back.
+    context: Mapped[dict[str, Any] | None] = mapped_column(default=None)
+
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    #: Every read of this table is "this user's rows, in this state, newest
+    #: first" - the badge polls the count and the list renders the rows. The
+    #: index matches that exactly, because the alternative is scanning a table
+    #: that only grows, several times a minute, forever.
+    __table_args__ = (
+        Index("ix_notifications_user_status_created", "user_id", "status", "created_at"),
+    )
 
 
 class AuditLog(Base):

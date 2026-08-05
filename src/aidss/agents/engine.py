@@ -18,6 +18,7 @@ than accidents:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -46,6 +47,9 @@ from aidss.recommendations.engine import (
     RecommendationResult,
 )
 from aidss.recommendations.rendering import render_translation
+from aidss.reporting.notifications import NotificationEvent, NotificationService
+
+logger = logging.getLogger("aidss.analysis")
 
 
 @dataclass(slots=True)
@@ -197,7 +201,60 @@ class AnalysisEngine:
                 # and whatever rendering succeeded.
                 self._update_snapshot(run, context)
 
+        if persist and user_id is not None:
+            self._announce(user_id, asset, run)
+
         return run
+
+    def _announce(self, user_id: uuid.UUID, asset: Asset, run: AnalysisRun) -> None:
+        """Tell the user the analysis finished. Never raises.
+
+        Last, so it describes what was actually produced rather than what was
+        about to be. And guarded, because a notification failing is not a
+        reason to lose an analysis that succeeded - the run is already stored
+        by this point and throwing here would report failure for work that is
+        sitting in the database.
+        """
+        try:
+            NotificationService(self._session).notify(
+                user_id,
+                NotificationEvent.ANALYSIS_READY,
+                # A statement of fact. The stance goes in `context` as data,
+                # for the same reason it does on alerts: a line read in
+                # seconds, stripped of confidence and counter-evidence, must
+                # not read as a call to act.
+                f"Analysis for {asset.ticker} finished with "
+                f"{len(run.runs)} agent(s) reporting.",
+                context={
+                    "ticker": asset.ticker,
+                    "timeframe": run.timeframe.value,
+                    # Here as a number rather than only inside the sentence, so
+                    # a reader in another language gets the same fact composed
+                    # in theirs. The stored prose is the fallback, not the
+                    # source of truth for display.
+                    "agents": len(run.runs),
+                    "analysis_result_id": (
+                        str(run.analysis_result_id) if run.analysis_result_id else None
+                    ),
+                    "stance": (
+                        run.recommendation.output.label.value
+                        if run.recommendation
+                        else None
+                    ),
+                    "confidence": (
+                        run.recommendation.calibration.confidence
+                        if run.recommendation
+                        else None
+                    ),
+                    "skipped": [s.agent for s in run.skipped],
+                    "failed": [f.agent for f in run.failed],
+                },
+            )
+        except Exception:  # noqa: BLE001 - announcing must not fail the run
+            logger.warning(
+                "analysis stored but not announced",
+                extra={"ticker": asset.ticker, "user_id": str(user_id)},
+            )
 
     def _render_other_language(self, run: AnalysisRun) -> None:
         recommendation_id = (

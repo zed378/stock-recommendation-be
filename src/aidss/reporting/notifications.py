@@ -17,9 +17,9 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss.db.models import Notification, User
@@ -34,6 +34,11 @@ class NotificationEvent(StrEnum):
 
     ANALYSIS_READY = "analysis_ready"
     RECOMMENDATION_UPDATED = "recommendation_updated"
+    #: Monitoring observed one of the conditions someone asked to be told
+    #: about. Named for the observation, not for what to do about it - the
+    #: alerts screen carries the detail and links back to the analysis, where
+    #: the confidence and the counter-evidence are.
+    MONITORING_ALERT = "monitoring_alert"
     NEWS_INGESTED = "news_ingested"
     SCHEDULE_NEEDS_ATTENTION = "schedule_needs_attention"
     INGESTION_FAILED = "ingestion_failed"
@@ -46,6 +51,7 @@ class NotificationEvent(StrEnum):
 SUBJECTS: dict[NotificationEvent, str] = {
     NotificationEvent.ANALYSIS_READY: "New analysis available",
     NotificationEvent.RECOMMENDATION_UPDATED: "Recommendation updated",
+    NotificationEvent.MONITORING_ALERT: "Monitoring raised an alert",
     NotificationEvent.NEWS_INGESTED: "New coverage collected",
     NotificationEvent.SCHEDULE_NEEDS_ATTENTION: "A news schedule needs attention",
     NotificationEvent.INGESTION_FAILED: "Data ingestion failed",
@@ -97,6 +103,7 @@ class NotificationService:
         message: str,
         *,
         channel: str | None = None,
+        context: dict[str, Any] | None = None,
     ) -> list[DeliveryResult]:
         """Record and deliver one notification.
 
@@ -121,6 +128,8 @@ class NotificationService:
                 subject=subject,
                 message=message,
                 status="pending",
+                event=event.value,
+                context=context or None,
             )
             self._session.add(row)
             self._session.flush()
@@ -135,13 +144,41 @@ class NotificationService:
         return results
 
     def unread(self, user_id: uuid.UUID, *, limit: int = 50) -> list[Notification]:
+        return self.recent(user_id, limit=limit, include_read=False)
+
+    def recent(
+        self, user_id: uuid.UUID, *, limit: int = 50, include_read: bool = False
+    ) -> list[Notification]:
+        """The user's notifications, unread first by default.
+
+        `include_read` exists because marking one read used to remove it from
+        the only endpoint that returned it - so a notification you glanced at
+        was gone, and there was no way to answer "what was that alert about an
+        hour ago?".
+        """
+        stmt = select(Notification).where(Notification.user_id == user_id)
+        if not include_read:
+            stmt = stmt.where(Notification.status == "delivered")
+        else:
+            # `pending` means the row was written and delivery never completed.
+            # Excluded from history because it was never shown to anyone.
+            stmt = stmt.where(Notification.status.in_(("delivered", "read")))
         return list(
             self._session.scalars(
-                select(Notification)
-                .where(Notification.user_id == user_id, Notification.status == "delivered")
-                .order_by(Notification.created_at.desc())
-                .limit(limit)
+                stmt.order_by(Notification.created_at.desc()).limit(limit)
             ).all()
+        )
+
+    def unread_count(self, user_id: uuid.UUID) -> int:
+        """For the indicator, which needs a number rather than the rows."""
+        return int(
+            self._session.scalar(
+                select(func.count(Notification.id)).where(
+                    Notification.user_id == user_id,
+                    Notification.status == "delivered",
+                )
+            )
+            or 0
         )
 
     def mark_read(self, user_id: uuid.UUID, notification_id: uuid.UUID) -> bool:

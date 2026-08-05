@@ -382,3 +382,79 @@ def test_the_stored_snapshot_includes_the_recommendation(session, asset, user) -
     run = AnalysisEngine(session, make_gateway()).analyze(asset, Timeframe.D1, user_id=user.id)
     stored = session.get(AnalysisResult, run.analysis_result_id)
     assert stored.context_snapshot["result"]["recommendation"]["label"]
+
+
+# --- Announcing a finished analysis ----------------------------------------
+#
+# An analysis is worth several seconds of model time and then sits in the
+# database unread. These cover the notification that says it is there - and
+# that producing it can never cost the analysis itself.
+
+
+def _notes(session, user_id):
+    from aidss.db.models import Notification
+
+    return list(
+        session.scalars(select(Notification).where(Notification.user_id == user_id)).all()
+    )
+
+
+def test_a_finished_analysis_notifies_the_person_who_asked(session, asset, user) -> None:
+    run = AnalysisEngine(session, make_gateway()).analyze(asset, Timeframe.D1, user_id=user.id)
+
+    [note] = _notes(session, user.id)
+    assert note.event == "analysis_ready"
+    assert "BBCA" in note.message
+    assert note.context["ticker"] == "BBCA"
+    assert note.context["timeframe"] == Timeframe.D1.value
+    assert note.context["analysis_result_id"] == str(run.analysis_result_id)
+    # Carried as a number, not only inside the sentence: the interface composes
+    # the line in the reader's language, and a stored English string cannot
+    # follow a language switch made after it was written.
+    assert note.context["agents"] == len(run.runs)
+
+
+def test_the_stance_travels_as_data_not_as_prose(session, asset, user) -> None:
+    """Same rule as alerts. The message is read in two seconds, stripped of the
+    confidence and the counter-evidence that surround it on the analysis screen,
+    so nothing in it may read as a call to transact."""
+    import re
+
+    AnalysisEngine(session, make_gateway()).analyze(asset, Timeframe.D1, user_id=user.id)
+
+    [note] = _notes(session, user.id)
+    text = f"{note.subject} {note.message}".lower()
+    for word in ("buy", "sell", "order", "execute", "trade", "beli", "jual"):
+        assert not re.search(rf"\b{word}\b", text), f"{word!r} in {text!r}"
+
+    # ...but it is still available to the interface, which renders it beside
+    # the link back to where the reasoning is.
+    assert note.context["stance"] in {label.value for label in RecommendationLabel}
+    assert 0 <= note.context["confidence"] <= 100
+
+
+def test_an_analysis_nobody_asked_for_notifies_nobody(session, asset) -> None:
+    """A scheduled backfill has no user to tell, and inventing one would send a
+    notification to somebody who never requested the analysis."""
+    from aidss.db.models import Notification
+
+    AnalysisEngine(session, make_gateway()).analyze(asset, Timeframe.D1)
+    assert session.scalar(select(Notification)) is None
+
+
+def test_a_broken_notifier_does_not_lose_the_analysis(session, asset, user, monkeypatch) -> None:
+    """The analysis is already stored by the time this runs. Throwing here would
+    report failure for work sitting in the database."""
+    from aidss.agents import engine as engine_module
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("notification backend is down")
+
+    monkeypatch.setattr(engine_module.NotificationService, "notify", explode)
+
+    run = AnalysisEngine(session, make_gateway()).analyze(
+        asset, Timeframe.D1, user_id=user.id
+    )
+
+    assert run.analysis_result_id is not None
+    assert session.scalar(select(Recommendation)) is not None

@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/auth/context";
 import { useI18n } from "@/i18n/context";
 import type { Locale } from "@/i18n/context";
+import { NotificationBell } from "@/components/Notifications";
 
 /**
  * The application shell.
@@ -57,6 +58,7 @@ export function Layout() {
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
+            {user && <NotificationBell />}
             <LocaleSwitch locale={locale} onChange={setLocale} label={t("nav.language")} />
             {user && (
               <>

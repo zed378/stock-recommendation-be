@@ -481,3 +481,132 @@ def test_alerts_are_scoped_to_their_owner(session, stored) -> None:
     rows = session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert rows
     assert all(a.user_id == user.id for a in rows)
+
+
+# --- announcing what monitoring observed -----------------------------------
+#
+# The alerts screen only helps someone already looking at it. These cover the
+# notification that tells them there is something to look at - and, more
+# importantly, that it cannot cost them the alerts if it goes wrong.
+
+
+def _notifications(session, user_id):
+    from sqlalchemy import select
+
+    from aidss.db.models import Notification
+
+    return list(
+        session.scalars(
+            select(Notification).where(Notification.user_id == user_id)
+        ).all()
+    )
+
+
+def test_raising_an_alert_notifies_its_owner(session, watched) -> None:
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, _ = watched
+    report = poll_watched_assets(session, StubProvider(Decimal(12000), Decimal(10000)), now=NOW)
+    assert report.alerts_raised >= 1
+
+    [note] = _notifications(session, user.id)
+    assert note.event == "monitoring_alert"
+    assert "BBCA" in note.message
+    assert note.context["tickers"] == ["BBCA"]
+    assert note.context["count"] == report.alerts_raised
+
+
+def test_a_quiet_pass_notifies_nobody(session, watched) -> None:
+    """An unremarkable session must not produce a notification saying so, or
+    the feature trains people to ignore it."""
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, _ = watched
+    report = poll_watched_assets(session, StubProvider(Decimal(10000), Decimal(10000)), now=NOW)
+    assert report.alerts_raised == 0
+    assert _notifications(session, user.id) == []
+
+
+def test_many_alerts_in_one_pass_arrive_as_one_notification(session, watched) -> None:
+    """A pass covering a whole watchlist on a day the market moves raises one
+    alert per asset. Sending one notification each means a dozen arriving within
+    a second of one another, which is how a feature gets muted."""
+    from sqlalchemy import select
+
+    from aidss.db.models import Watchlist, WatchlistItem
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, _ = watched
+    watchlist = session.scalars(
+        select(Watchlist).where(Watchlist.user_id == user.id)
+    ).one()
+    for ticker in ("BBRI", "TLKM", "ASII"):
+        extra = Asset(ticker=ticker, exchange="IDX")
+        session.add(extra)
+        session.flush()
+        session.add(WatchlistItem(watchlist_id=watchlist.id, asset_id=extra.id))
+    session.flush()
+
+    report = poll_watched_assets(session, StubProvider(Decimal(12000), Decimal(10000)), now=NOW)
+    assert report.alerts_raised == 4, "one per followed asset"
+
+    [note] = _notifications(session, user.id)
+    assert note.context["count"] == 4
+    assert sorted(note.context["tickers"]) == ["ASII", "BBCA", "BBRI", "TLKM"]
+
+
+def test_two_followers_are_each_notified_separately(session, watched) -> None:
+    from aidss.db.models import User, Watchlist, WatchlistItem
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, asset = watched
+    other = User(
+        email="fourth@example.com", password_hash=hash_password("correct-horse-battery")
+    )
+    session.add(other)
+    session.flush()
+    watchlist = Watchlist(user_id=other.id, name="Default")
+    session.add(watchlist)
+    session.flush()
+    session.add(WatchlistItem(watchlist_id=watchlist.id, asset_id=asset.id))
+    session.flush()
+
+    poll_watched_assets(session, StubProvider(Decimal(12000), Decimal(10000)), now=NOW)
+
+    assert len(_notifications(session, user.id)) == 1
+    assert len(_notifications(session, other.id)) == 1
+
+
+def test_an_alert_notification_does_not_read_as_an_instruction(session, watched) -> None:
+    """Same rule as the alerts themselves. A line read in two seconds, stripped
+    of confidence and counter-evidence, must not tell anyone to transact."""
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, _ = watched
+    poll_watched_assets(session, StubProvider(Decimal(12000), Decimal(10000)), now=NOW)
+
+    [note] = _notifications(session, user.id)
+    text = f"{note.subject} {note.message}".lower()
+    for word in ("buy", "sell", "order", "execute", "trade", "beli", "jual"):
+        assert not re.search(rf"\b{word}\b", text), f"{word!r} in {text!r}"
+
+
+def test_a_broken_notifier_does_not_cost_the_alerts(session, watched, monkeypatch) -> None:
+    """The alerts are already stored by the time this runs. Throwing here would
+    discard a completed pass over an announcement."""
+    from sqlalchemy import select
+
+    from aidss.monitoring import poller
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("notification backend is down")
+
+    monkeypatch.setattr(poller.NotificationService, "notify", explode)
+
+    user, _ = watched
+    report = poller.poll_watched_assets(
+        session, StubProvider(Decimal(12000), Decimal(10000)), now=NOW
+    )
+
+    assert report.alerts_raised >= 1
+    assert session.scalars(select(Alert).where(Alert.user_id == user.id)).all()

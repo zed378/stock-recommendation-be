@@ -450,6 +450,45 @@ export const id = {
   "admin.audit.empty": "Belum ada catatan audit.",
   "admin.audit.changes": "Perubahan",
 
+  // --- notifications -----------------------------------------------------
+  // The subject and body come from the server already written. What lives here
+  // is the chrome around them, plus a label per event so the panel can group
+  // without parsing the sentence.
+  // The body is composed here, not read from the server's `message`. A stored
+  // sentence is written once in one language and cannot follow a switch the
+  // reader makes afterwards; `context` carries the facts, so both languages
+  // describe the same stored event. `message` remains the fallback for an
+  // event this build does not recognise.
+  "notif.body.analysis_ready": "Analisis {ticker} selesai — {agents} agen melapor.",
+  "notif.body.monitoring_alert": "Pantauan menemukan {count} hal pada {tickers}.",
+
+  "notif.title": "Notifikasi",
+  "notif.open": "Buka notifikasi",
+  "notif.unread": "{count} belum dibaca",
+  "notif.empty": "Belum ada notifikasi.",
+  "notif.emptyHint":
+    "Notifikasi muncul saat sebuah analisis selesai atau pantauan menemukan sesuatu.",
+  "notif.markRead": "Tandai sudah dibaca",
+  "notif.markAllRead": "Tandai semua",
+  "notif.showRead": "Tampilkan yang sudah dibaca",
+  "notif.viewAll": "Lihat semua",
+  "notif.openAnalysis": "Buka analisis",
+  "notif.openAlerts": "Buka pantauan",
+  // Rendered from `context`, never from the message text - the stance travels
+  // as data, and the panel shows it beside a link to where the reasoning is.
+  "notif.stance": "Sikap",
+  "notif.confidence": "Keyakinan",
+
+  "notif.event.analysis_ready": "Analisis",
+  "notif.event.monitoring_alert": "Pantauan",
+  "notif.event.recommendation_updated": "Rekomendasi",
+  "notif.event.news_ingested": "Berita",
+  "notif.event.schedule_needs_attention": "Jadwal",
+  "notif.event.ingestion_failed": "Pengambilan data",
+  "notif.event.budget_threshold_reached": "Anggaran AI",
+  "notif.event.report_ready": "Laporan",
+  "notif.event.unknown": "Sistem",
+
   // --- generic -----------------------------------------------------------
   "common.loading": "Memuat…",
   "common.error": "Terjadi kesalahan.",
@@ -882,6 +921,34 @@ export const en: Record<MessageKey, string> = {
   "admin.audit.filterEntity": "Filter entity",
   "admin.audit.empty": "No audit entries yet.",
   "admin.audit.changes": "Changes",
+
+  "notif.body.analysis_ready": "Analysis for {ticker} finished — {agents} agent(s) reporting.",
+  "notif.body.monitoring_alert": "Monitoring observed {count} thing(s) on {tickers}.",
+
+  "notif.title": "Notifications",
+  "notif.open": "Open notifications",
+  "notif.unread": "{count} unread",
+  "notif.empty": "No notifications yet.",
+  "notif.emptyHint":
+    "They appear when an analysis finishes or monitoring observes something.",
+  "notif.markRead": "Mark as read",
+  "notif.markAllRead": "Mark all",
+  "notif.showRead": "Show read",
+  "notif.viewAll": "See all",
+  "notif.openAnalysis": "Open analysis",
+  "notif.openAlerts": "Open monitoring",
+  "notif.stance": "Stance",
+  "notif.confidence": "Confidence",
+
+  "notif.event.analysis_ready": "Analysis",
+  "notif.event.monitoring_alert": "Monitoring",
+  "notif.event.recommendation_updated": "Recommendation",
+  "notif.event.news_ingested": "News",
+  "notif.event.schedule_needs_attention": "Schedule",
+  "notif.event.ingestion_failed": "Ingestion",
+  "notif.event.budget_threshold_reached": "AI budget",
+  "notif.event.report_ready": "Report",
+  "notif.event.unknown": "System",
 
   "common.loading": "Loading…",
   "common.error": "Something went wrong.",
