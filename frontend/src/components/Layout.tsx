@@ -3,6 +3,7 @@ import { useAuth } from "@/auth/context";
 import { useI18n } from "@/i18n/context";
 import type { Locale } from "@/i18n/context";
 import { NotificationBell } from "@/components/Notifications";
+import { useEvents } from "@/realtime/useEvents";
 
 /**
  * The application shell.
@@ -14,6 +15,12 @@ import { NotificationBell } from "@/components/Notifications";
 export function Layout() {
   const { t, locale, setLocale } = useI18n();
   const { user, signOut } = useAuth();
+
+  // One socket for the session, opened here because this shell wraps every
+  // authenticated screen and unmounts on sign-out. Events invalidate the
+  // cached queries they concern; the slower polls elsewhere stay as the floor
+  // under it, for the case where a proxy refuses the upgrade.
+  useEvents(Boolean(user));
 
   const links = [
     { to: "/watchlist", label: t("nav.watchlist") },

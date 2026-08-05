@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
@@ -335,9 +335,26 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
     },
   });
 
-  const run = useMutation({
+  /**
+   * Queued, not run on the request.
+   *
+   * A full multi-agent run is a dozen model calls and now several translations
+   * on top; holding an HTTP connection open for all of it makes whatever sits
+   * in front of the server the real limit on how thorough an analysis can be.
+   * Behind Cloudflare that limit is a fixed 100 seconds and the reader gets a
+   * 524 error page - the work carries on and its result is thrown away.
+   *
+   * So the request returns in milliseconds with a job id and this polls it.
+   * Nothing in the path can time out, because nothing in the path is slow. The
+   * notification that already exists announces the finish, so the reader does
+   * not have to sit here either.
+   */
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobError, setJobError] = useState<string | null>(null);
+
+  const start = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.POST("/assets/{ticker}/analysis", {
+      const { data, error } = await api.POST("/assets/{ticker}/analysis/background", {
         params: { path: { ticker } },
         body: { timeframe, exchange: "IDX", include_recommendation: true },
       });
@@ -345,11 +362,46 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
       return data;
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(["analysis", ticker], data);
+      setJobError(null);
+      setJobId(String(data.job_id));
     },
   });
 
-  const result = run.data ?? existing.data;
+  const job = useQuery({
+    queryKey: ["analysis-job", jobId],
+    enabled: jobId !== null,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/jobs/{job_id}", {
+        params: { path: { job_id: jobId as string } },
+      });
+      if (error) throw new Error(errorMessage(error, t("common.error")));
+      return data;
+    },
+    // Stops polling once the job reaches a state it cannot leave. Left running,
+    // this would keep asking about a finished job for as long as the tab is open.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && ["succeeded", "failed", "dead"].includes(status) ? false : 4000;
+    },
+  });
+
+  useEffect(() => {
+    const status = job.data?.status;
+    if (!status) return;
+
+    if (status === "succeeded") {
+      queryClient.invalidateQueries({ queryKey: ["analysis", ticker] });
+      setJobId(null);
+    } else if (status === "failed" || status === "dead") {
+      // `dead` means the retries are exhausted. Either way the reason is on
+      // the job, and showing it beats a generic failure the reader cannot act on.
+      setJobError(job.data?.last_error || t("analysis.failed"));
+      setJobId(null);
+    }
+  }, [job.data?.status, job.data?.last_error, queryClient, ticker, t]);
+
+  const running = start.isPending || jobId !== null;
+  const result = existing.data;
 
   // One hook for the whole tab, driven by the recommendation because that is
   // the payload with a fetch fallback for analyses stored before renderings
@@ -363,8 +415,8 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   );
 
   const runButton = (
-    <Button busy={run.isPending} onClick={() => run.mutate()}>
-      {run.isPending ? t("analysis.running") : t("analysis.run")}
+    <Button busy={running} onClick={() => start.mutate()}>
+      {running ? t("analysis.running") : t("analysis.run")}
     </Button>
   );
 
@@ -379,7 +431,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
               reading a single analysis in the other language meant finding and
               flipping each of them - which also let the agents and the
               conclusion sit in different languages at the same time. */}
-          {result && !run.isPending && (
+          {result && !running && (
             <LanguageSwitch
               showing={translation.showing}
               isPending={translation.isPending}
@@ -393,7 +445,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
         </div>
       </div>
 
-      {run.isPending && (
+      {running && (
         <Card>
           <div className="flex flex-col items-center gap-2 py-8 text-center">
             <Loading label={t("analysis.running")} />
@@ -402,15 +454,16 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
         </Card>
       )}
 
-      {run.isError && <ErrorNote message={(run.error as Error).message} />}
+      {start.isError && <ErrorNote message={(start.error as Error).message} />}
+      {jobError && <ErrorNote message={jobError} onRetry={() => setJobError(null)} />}
 
-      {!run.isPending && !result && (
+      {!running && !result && (
         <Card>
           <Empty message={t("analysis.empty")} action={runButton} />
         </Card>
       )}
 
-      {result && !run.isPending && (
+      {result && !running && (
         <>
           <AgentRoster result={result} />
           <AgentReports agents={result.agents} showing={translation.showing} />

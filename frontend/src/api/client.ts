@@ -68,8 +68,26 @@ api.use({
  * checking. The fallback names the status rather than saying "something went
  * wrong", which tells the reader nothing they did not already know.
  */
+/**
+ * A response body that is not this API's JSON error shape.
+ *
+ * When something between the browser and the server answers instead - a proxy
+ * timing out, a gateway with no upstream - the body is an HTML page, and
+ * `openapi-fetch` hands it over as a plain string. Rendered as-is it filled the
+ * analysis panel with a thousand characters of Cloudflare markup, which tells
+ * the reader nothing and hides the one sentence that would have.
+ */
+function looksLikeMarkup(value: string): boolean {
+  const head = value.trimStart().slice(0, 200).toLowerCase();
+  return head.startsWith("<") || head.includes("<!doctype") || head.includes("<html");
+}
+
 export function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error === "string") return error;
+  if (typeof error === "string") {
+    // Length matters as well as markup: a body this long is a document, and a
+    // document is never the message.
+    return looksLikeMarkup(error) || error.length > 400 ? fallback : error;
+  }
   if (!error || typeof error !== "object") return fallback;
 
   const detail = (error as { detail?: unknown }).detail;

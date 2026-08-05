@@ -8,6 +8,8 @@ by ``tests/test_architecture_constraints.py`` rather than left to convention.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -21,6 +23,7 @@ from aidss.api.routes import (
     analysis,
     assets,
     auth,
+    events,
     jobs,
     journal,
     knowledge,
@@ -39,6 +42,7 @@ from aidss.llm.errors import (
     NoEligibleProviderError,
 )
 from aidss.observability.logging import configure_logging
+from aidss.realtime.hub import EventHub, dsn_from_sqlalchemy_url
 
 DESCRIPTION = """
 Decision-support platform for investment analysis.
@@ -53,7 +57,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, json_output=settings.json_logs)
 
+    @asynccontextmanager
+    async def lifespan(instance: FastAPI):  # pragma: no cover - process lifecycle
+        """Start the event listener with the process, not on first subscriber.
+
+        A listener that only exists once somebody connects misses whatever
+        happened while nobody was looking, and its failures would show up as a
+        feature that works for some users and not others.
+        """
+        await instance.state.event_hub.start()
+        try:
+            yield
+        finally:
+            await instance.state.event_hub.stop()
+
     app = FastAPI(
+        lifespan=lifespan,
         title=settings.app_name,
         description=DESCRIPTION,
         version="0.1.0",
@@ -83,6 +102,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs.router)
     app.include_router(market.router)
     app.include_router(admin.router)
+    app.include_router(events.router)
+
+    # One LISTEN connection per process, feeding every socket this process
+    # holds. Started with the app rather than lazily on first connection: a
+    # listener that only exists once somebody subscribes misses whatever
+    # happened while nobody was looking, and its failures would surface as a
+    # feature that works for some users and not others.
+    app.state.event_hub = EventHub(dsn_from_sqlalchemy_url(settings.database_url))
+
     _install_gateway_error_handler(app)
     return app
 

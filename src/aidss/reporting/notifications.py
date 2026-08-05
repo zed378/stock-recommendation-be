@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss.db.models import Notification, User
+from aidss.realtime.events import publish
 
 
 class NotificationEvent(StrEnum):
@@ -139,6 +140,26 @@ class NotificationService:
             results.append(
                 DeliveryResult(notification_id=row.id, channel=target.name, delivered=delivered)
             )
+
+            if delivered:
+                # Announced on the event channel as well as stored. This is the
+                # one place that already knows something worth telling somebody
+                # about has just happened, which makes it the right place to
+                # push it - rather than teaching every producer of work to
+                # publish separately and forget one.
+                #
+                # A pointer, not the content: the client refetches through the
+                # ordinary authenticated endpoints, so the socket never becomes
+                # a second way to read what REST would have refused.
+                publish(
+                    self._session,
+                    user_id=user_id,
+                    event=event.value,
+                    data={
+                        "notification_id": str(row.id),
+                        **(context or {}),
+                    },
+                )
 
         self._session.flush()
         return results
