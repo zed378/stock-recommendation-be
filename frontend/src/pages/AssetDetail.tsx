@@ -511,6 +511,21 @@ function AgentReports({
 
   return (
     <Card title={t("analysis.agentFindings")}>
+      {/* At the top, not the bottom. This card is thousands of pixels tall, and
+          an explanation for why the switch appeared to do nothing is useless
+          below the content it failed to change - the reader is looking here,
+          at the control they just pressed.
+
+          Only while they are asking for the other language: saying it unprompted
+          would be a warning about something that has not happened. */}
+      {showing && !available && (
+        <div className="mb-4 rounded-md border border-watch/30 bg-watch/5 px-3 py-2">
+          <p className="text-xs leading-relaxed text-watch">
+            {t("analysis.noAgentTranslation")}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-5">
         {entries.map(([name, payload]) => (
           <AgentReport
@@ -521,9 +536,6 @@ function AgentReports({
           />
         ))}
       </div>
-      {/* Only while the reader is asking for the other language. Saying it
-          unprompted would be a warning about something that has not happened. */}
-      {showing && !available && <Caveat>{t("analysis.noAgentTranslation")}</Caveat>}
     </Card>
   );
 }

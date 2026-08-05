@@ -210,9 +210,13 @@ export const id = {
   "analysis.signals": "Sinyal",
   "analysis.watchItems": "Yang perlu diperhatikan",
   "analysis.disagreements": "Perbedaan antar-agen",
+  // Names the section it applies to. The recommendation below often *can*
+  // switch on the same analysis, so "this is in one language only" without
+  // saying which part reads as a contradiction of what the reader can see.
   "analysis.noAgentTranslation":
-    "Analisis ini dijalankan sebelum terjemahan per-agen disimpan, jadi hanya tersedia " +
-    "dalam bahasa aslinya. Jalankan ulang analisis untuk mendapat keduanya.",
+    "Temuan agen di bawah ini hanya tersedia dalam bahasa aslinya — analisis ini " +
+    "dijalankan sebelum terjemahan per-agen disimpan. Jalankan ulang analisis untuk " +
+    "mendapat keduanya. (Rekomendasi di bawahnya tetap mengikuti sakelar ini.)",
   "analysis.skipped": "Dilewati",
   "analysis.agentFailed": "Gagal",
   "analysis.skippedNote":
@@ -860,8 +864,9 @@ export const en: Record<MessageKey, string> = {
   "analysis.watchItems": "Watch items",
   "analysis.disagreements": "Where the agents disagreed",
   "analysis.noAgentTranslation":
-    "This analysis ran before per-agent translations were stored, so it exists only in " +
-    "its original language. Run the analysis again to get both.",
+    "The agent findings below exist only in their original language - this analysis ran " +
+    "before per-agent translations were stored. Run the analysis again to get both. " +
+    "(The recommendation further down still follows this switch.)",
   "analysis.skipped": "Skipped",
   "analysis.agentFailed": "Failed",
   "analysis.skippedNote":
