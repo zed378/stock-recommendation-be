@@ -413,11 +413,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
       {result && !run.isPending && (
         <>
           <AgentRoster result={result} />
-          <AgentReports
-            agents={result.agents}
-            showing={translation.showing}
-            target={translation.target}
-          />
+          <AgentReports agents={result.agents} showing={translation.showing} />
           {result.recommendation && (
             <RecommendationPanel
               rec={result.recommendation}
@@ -491,12 +487,11 @@ type AgentPayload = {
 function AgentReports({
   agents,
   showing,
-  target,
 }: {
   agents: unknown;
-  /** Driven by the one control at the top of the tab. */
+  /** Whether the reader has asked for the other language. The control at the
+   *  top of the tab says *whether*; which language that is, is resolved here. */
   showing: boolean;
-  target: string;
 }) {
   const { t } = useI18n();
 
@@ -507,6 +502,14 @@ function AgentReports({
 
   if (!entries.length) return null;
 
+  // Resolved against what these agents say they are, not against what the
+  // recommendation says. The two normally agree - one run writes both - but an
+  // analysis stored while the output language was changing has agents in
+  // English and a recommendation labelled Indonesian, and taking the target
+  // from the recommendation then looked for a rendering that was never made
+  // while the one that *was* made sat unreachable.
+  const source = entries[0][1]?.language ?? "en";
+  const target = source === "id" ? "en" : "id";
   const available = entries.some((entry) => entry[1]?.translations?.[target]?.fields);
 
   return (
