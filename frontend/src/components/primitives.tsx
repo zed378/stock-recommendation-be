@@ -1,7 +1,153 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "@/i18n/context";
 
 /** Small shared pieces, kept in one file so the pages stay about their subject. */
+
+/**
+ * A dialog rendered by the application rather than by the browser.
+ *
+ * `confirm()` and `prompt()` were doing this job and doing it badly: they
+ * announce the *domain name* rather than the product, they cannot be styled so
+ * they arrive as a bright system panel over a dark interface, some browsers let
+ * a user suppress them permanently - which silently turns "delete" into a
+ * no-op - and `prompt()` can only ever return free text, so "move to which
+ * category?" asked people to retype a name the app already knew.
+ *
+ * Rendered through a portal so an ancestor's `overflow: hidden` or stacking
+ * context cannot clip it - the group cards this is opened from have both.
+ */
+export function Modal({
+  title,
+  onClose,
+  children,
+  footer,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      // Keep focus inside while it is open. Without this, tabbing walks into
+      // the page behind - which is still there, still clickable-looking, and
+      // now the keyboard is somewhere the user cannot see.
+      const focusable = panel.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    // The page behind must not scroll under the dialog: a scrollbar that still
+    // works reads as though the dialog is optional.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      // Only a click that both starts and ends on the backdrop closes it.
+      // Otherwise a drag that begins on the text and releases outside - which
+      // is how anyone selects to the end of a line - dismisses the dialog.
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-full max-w-md overflow-hidden rounded-lg border border-line bg-raised shadow-xl"
+      >
+        <header className="border-b border-line px-4 py-3">
+          <h2 className="text-sm font-medium text-ink">{title}</h2>
+        </header>
+        <div className="px-4 py-4 text-sm text-muted">{children}</div>
+        {footer && (
+          <footer className="flex justify-end gap-2 border-t border-line px-4 py-3">
+            {footer}
+          </footer>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * The two-button case: state what will happen, then let it happen or not.
+ *
+ * `destructive` picks the danger styling. Focus lands on cancel either way.
+ */
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  destructive = false,
+  busy = false,
+}: {
+  title: string;
+  message: ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  destructive?: boolean;
+  busy?: boolean;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <Modal
+      title={title}
+      onClose={onCancel}
+      footer={
+        <>
+          {/* Cancel takes focus, not confirm. A dialog that deletes on Enter
+              turns a stray keystroke into data loss. */}
+          <Button variant="ghost" onClick={onCancel} disabled={busy} autoFocus>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant={destructive ? "danger" : "primary"}
+            onClick={onConfirm}
+            busy={busy}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <p className="leading-relaxed">{message}</p>
+    </Modal>
+  );
+}
 
 export function Card({
   title,

@@ -71,7 +71,11 @@ export const id = {
   "watchlist.categoryEmpty": "Kelompok ini kosong.",
   "watchlist.allCategories": "Semua kelompok",
   "watchlist.move": "Pindah",
-  "watchlist.moveTo": "Pindahkan {ticker} ke kelompok mana?",
+  "watchlist.moveTitle": "Pindahkan {ticker}",
+  "watchlist.currentCategory": "sekarang",
+  "watchlist.moveHint":
+    "Satu emiten hanya berada di satu kelompok. Memindahkannya tidak menghapus catatan.",
+  "watchlist.categoryExists": "Kelompok {name} sudah ada.",
   "watchlist.sameTickerNote":
     "Satu emiten boleh berada di lebih dari satu kelompok — bank yang membagi dividen " +
     "masuk ke keduanya.",
@@ -80,7 +84,7 @@ export const id = {
   "watchlist.newCategory": "+ Buat kelompok baru",
   "watchlist.newCategoryName": "Nama kelompok baru",
   "watchlist.rename": "Ganti nama",
-  "watchlist.renamePrompt": "Ganti nama kelompok {name} menjadi:",
+  "watchlist.renameTitle": "Ganti nama kelompok {name}",
   "watchlist.deleteCategory": "Hapus kelompok",
   "watchlist.confirmDeleteCategory":
     "Hapus kelompok {name}? {count} emiten di dalamnya akan dipindahkan ke Default, " +
@@ -557,7 +561,11 @@ export const en: Record<MessageKey, string> = {
   "watchlist.categoryEmpty": "This category is empty.",
   "watchlist.allCategories": "All categories",
   "watchlist.move": "Move",
-  "watchlist.moveTo": "Move {ticker} to which category?",
+  "watchlist.moveTitle": "Move {ticker}",
+  "watchlist.currentCategory": "current",
+  "watchlist.moveHint":
+    "A ticker sits in one category at a time. Moving it keeps your note.",
+  "watchlist.categoryExists": "A category named {name} already exists.",
   "watchlist.sameTickerNote":
     "One ticker may sit in several categories — a bank that pays dividends belongs in both.",
   "watchlist.expandAll": "Expand all",
@@ -565,7 +573,7 @@ export const en: Record<MessageKey, string> = {
   "watchlist.newCategory": "+ New category",
   "watchlist.newCategoryName": "New category name",
   "watchlist.rename": "Rename",
-  "watchlist.renamePrompt": "Rename {name} to:",
+  "watchlist.renameTitle": "Rename {name}",
   "watchlist.deleteCategory": "Delete category",
   "watchlist.confirmDeleteCategory":
     "Delete {name}? Its {count} tickers move to Default rather than being removed.",
