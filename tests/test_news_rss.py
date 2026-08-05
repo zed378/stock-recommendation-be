@@ -144,7 +144,7 @@ def _serve(monkeypatch, payload: bytes | Exception) -> list[str]:
             raise payload
         return parse_feed(payload)
 
-    monkeypatch.setattr(RssNewsProvider, "_fetch", fake_fetch)
+    monkeypatch.setattr(RssNewsProvider, "fetch", fake_fetch)
     return asked
 
 
@@ -291,7 +291,7 @@ def test_a_feed_is_fetched_once_across_many_tickers(session, monkeypatch) -> Non
     session.flush()
 
     calls: list[str] = []
-    real_fetch = RssNewsProvider._fetch
+    real_fetch = RssNewsProvider.fetch
 
     def counting_fetch(self, url: str):  # noqa: ANN001, ANN202
         calls.append(url)
@@ -300,7 +300,7 @@ def test_a_feed_is_fetched_once_across_many_tickers(session, monkeypatch) -> Non
     def fake_get(self, url, **kwargs):  # noqa: ANN001, ANN202, ARG001
         raise AssertionError("should have been served from cache")
 
-    monkeypatch.setattr(RssNewsProvider, "_fetch", counting_fetch)
+    monkeypatch.setattr(RssNewsProvider, "fetch", counting_fetch)
     monkeypatch.setattr(
         httpx.Client,
         "stream",

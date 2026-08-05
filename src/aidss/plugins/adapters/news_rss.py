@@ -116,7 +116,10 @@ class RssNewsProvider(NewsProvider):
 
     # --- fetching --------------------------------------------------------
 
-    def _fetch(self, url: str) -> list[FeedEntry]:
+    def fetch(self, url: str) -> list[FeedEntry]:
+        """Read and parse one feed. Public because the admin Test button is a
+        legitimate caller - reaching into a private method to run a probe would
+        be the same code with worse manners."""
         cached = _CACHE.get(url)
         if cached is not None and time.monotonic() - cached.fetched_at < CACHE_TTL_SECONDS:
             return cached.entries
@@ -142,8 +145,22 @@ class RssNewsProvider(NewsProvider):
         _CACHE[url] = _CacheEntry(fetched_at=time.monotonic(), entries=entries)
         return entries
 
-    def _record(self, source: NewsSource, *, count: int | None, error: str | None) -> None:
-        """Write what happened to this feed onto the feed itself."""
+    def record(
+        self,
+        source: NewsSource,
+        *,
+        count: int | None,
+        error: str | None,
+        count_failure: bool = True,
+    ) -> None:
+        """Write what happened to this feed onto the feed itself.
+
+        `count_failure` is false when an administrator pressed Test. The
+        outcome is still recorded - that is the point of testing, and the
+        "failing" filter has to be able to find it - but a probe must not push
+        a feed towards being switched off. Debugging a URL twenty times would
+        otherwise disable it.
+        """
         assert self._session is not None
         source.last_fetched_at = datetime.now(UTC)
         if error is None:
@@ -156,9 +173,10 @@ class RssNewsProvider(NewsProvider):
             # Truncated: some servers answer with an entire HTML error page,
             # and the column is for reading, not for archiving their markup.
             source.last_error = error[:500]
-            source.consecutive_failures += 1
-            if source.consecutive_failures >= FAILURE_DEACTIVATE_THRESHOLD:
-                source.is_active = False
+            if count_failure:
+                source.consecutive_failures += 1
+                if source.consecutive_failures >= FAILURE_DEACTIVATE_THRESHOLD:
+                    source.is_active = False
         self._session.flush()
 
     # --- the contract -----------------------------------------------------
@@ -191,16 +209,16 @@ class RssNewsProvider(NewsProvider):
         for source in sources:
             url = source.feed_url.replace("{ticker}", ticker.upper())
             try:
-                entries = self._fetch(url)
+                entries = self.fetch(url)
             except (httpx.HTTPError, FeedParseError) as exc:
                 failures.append(f"{source.name}: {exc}")
-                self._record(source, count=None, error=f"{type(exc).__name__}: {exc}")
+                self.record(source, count=None, error=f"{type(exc).__name__}: {exc}")
                 logger.warning(
                     "news feed unavailable", extra={"source": source.name, "url": url}
                 )
                 continue
 
-            self._record(source, count=len(entries), error=None)
+            self.record(source, count=len(entries), error=None)
 
             # A templated URL asked the publisher for this ticker, and a
             # feed bound to one asset is about that asset. Neither needs the

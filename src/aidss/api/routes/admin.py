@@ -479,10 +479,16 @@ def test_news_source(
 
     provider = RssNewsProvider(session)
     try:
-        entries = provider._fetch(url)  # noqa: SLF001 - the test *is* the fetch
+        entries = provider.fetch(url)
     except (httpx.HTTPError, FeedParseError) as exc:
-        return NewsSourceTestResponse(ok=False, entries=0, error=f"{type(exc).__name__}: {exc}")
+        detail = f"{type(exc).__name__}: {exc}"
+        # Recorded, so the "failing" filter can find it - that is what testing
+        # is for. Not counted towards the failure streak, though: debugging one
+        # URL twenty times would otherwise switch the source off.
+        provider.record(source, count=None, error=detail, count_failure=False)
+        return NewsSourceTestResponse(ok=False, entries=0, error=detail)
 
+    provider.record(source, count=len(entries), error=None)
     newest = max((e.published_at for e in entries), default=None)
     return NewsSourceTestResponse(
         ok=True,
