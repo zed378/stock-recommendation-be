@@ -1025,6 +1025,26 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 ---
 
+## 22c. Event Realtime & Pekerjaan Panjang
+
+**Analisis penuh tidak boleh ditahan di atas satu request HTTP.** Satu run multi-agen adalah belasan panggilan model ditambah beberapa terjemahan. Ditahan di request, apa pun yang berada di depan server menjadi batas sebenarnya atas seberapa teliti sebuah analisis boleh dilakukan — dan di balik Cloudflare batas itu **100 detik yang tidak bisa dinaikkan dari sisi origin**. Yang diterima pembaca adalah halaman galat 524, sementara pekerjaannya jalan terus lalu hasilnya dibuang. Endpoint antrean sudah ada sejak job queue dibangun; tombolnya saja yang tidak memakainya.
+
+**Antrean mengembalikan id dalam milidetik.** Tidak ada yang bisa timeout di jalur itu karena tidak ada yang lambat di jalur itu.
+
+**Event dibawa PostgreSQL `LISTEN/NOTIFY`,** dengan alasan yang sama seperti job queue dan leader lease: platform ini sudah bergantung mutlak pada Postgres, dan menambah broker berarti satu sistem lagi untuk dijalankan, dipantau, dan dijelaskan. `NOTIFY` juga transaksional — ia menyala saat transaksinya commit dan tidak sebelum itu. Event yang mengumumkan analisis yang kemudian di-rollback akan menyuruh antarmuka mengambil sesuatu yang tidak ada.
+
+**Payload-nya penunjuk, bukan datanya.** `NOTIFY` berbatas 8000 byte dan satu analisis jauh melewatinya, jadi event hanya menyebut apa yang berubah dan klien mengambilnya lewat endpoint terautentikasi biasa. Itu juga menjaga otorisasi tetap di satu tempat: socket tidak pernah menjadi pintu kedua untuk membaca data yang akan ditolak lapisan REST.
+
+**Autentikasi lewat frame pertama, bukan URL.** Peramban tidak bisa menyetel header pada handshake WebSocket, dan alternatif lazimnya menaruh token di query string — tempat ia mendarat di setiap log akses dan log proksi sepanjang jalur.
+
+**Polling di bawahnya tetap dipertahankan.** Socket yang diam-diam berhenti mengirim terlihat persis seperti sistem yang tidak punya kabar, dan bedanya baru muncul sebagai pengguna yang menatap spinner yang tidak akan bergerak. Interval yang ada cukup lambat untuk hampir tidak berbiaya dan cukup pendek untuk menjadi lantai: saat socket bekerja ia tidak pernah berguna, saat proksi menolak upgrade produknya tetap jalan, hanya kurang segera.
+
+**Satu koneksi LISTEN per proses API,** difan-out ke socket yang dipegang proses itu. Satu koneksi per tab berarti satu backend PostgreSQL per tab terbuka, dan itu sumber daya yang tetap dan sedikit.
+
+**Antrean per socket berbatas.** Klien yang berhenti membaca — laptop tersuspend, tab macet — tidak boleh menumbuhkan antrean tanpa batas. Melewati batas, event terlamanya dibuang: semuanya hanya petunjuk untuk mengambil ulang, jadi yang terbaru menggantikan yang di belakangnya.
+
+---
+
 ## 22b. Kelompok Watchlist
 
 **Kelompok bukan konsep baru yang ditempelkan.** `watchlists` sudah membawa `name` dengan batasan unik per pengguna sejak skema awal, dan `watchlist_items` menggantung padanya. Setiap endpoint dulu menuliskan "Default" secara keras, sehingga seorang pengguna hanya bisa punya satu daftar tanpa nama. Sebuah kelompok *adalah* nama itu.
