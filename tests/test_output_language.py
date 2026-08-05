@@ -167,15 +167,31 @@ def test_every_agent_stores_its_own_rendering(session, monkeypatch) -> None:
     stored = run.as_payload()["agents"]
     assert stored, "the run produced no agents to translate"
 
-    translated = [
-        name
-        for name, payload in stored.items()
-        if payload["translations"].get(target.value, {}).get("fields")
-    ]
-    assert translated, "no agent carried a rendering"
-    for name in translated:
+    # Every agent, not merely one of them. Asserting that *some* agent carried
+    # a rendering passed for weeks while the summary agent's lists and every
+    # analyzer's notes went untranslated - the paragraph changed language and
+    # the lists under it did not.
+    from aidss.prompts.translation import translatable_fields
+
+    missing = []
+    for name, payload in stored.items():
+        if not translatable_fields(payload):
+            # Nothing but labels and numbers; a call here would spend tokens to
+            # return what it was given.
+            continue
+        rendered = payload["translations"].get(target.value, {}).get("fields")
+        if not rendered:
+            missing.append(name)
+            continue
+
         assert stored[name]["language"] == run.language
         assert stored[name]["translations"][target.value]["is_machine_translation"] is True
+        # And the rendering covers the same fields the original had prose in,
+        # not a subset - a card showing three of five translated sections is
+        # the failure this is here to prevent.
+        assert set(rendered) == set(translatable_fields(payload)), name
+
+    assert not missing, f"these agents carried no rendering at all: {sorted(missing)}"
 
 
 def test_a_failed_agent_translation_does_not_lose_the_analysis(session, monkeypatch) -> None:
@@ -241,3 +257,54 @@ def test_the_stored_row_records_the_language_the_prompt_asked_for(session) -> No
     row = session.scalar(select(Recommendation))
     assert row is not None
     assert row.language == run.language
+
+
+def test_translation_covers_every_prose_field() -> None:
+    """The list of translatable keys was written when only the recommendation
+    was rendered, and it covered that payload exactly. Once every agent's own
+    write-up started being translated it covered barely a third of what a
+    reader sees - the summary agent's `watch_items` and `disagreements`, every
+    analyzer's notes - so a card came back with its paragraph in one language
+    and its lists in the other.
+
+    Holding the list to the schemas is what turns the next added field into a
+    failing test rather than another half-translated section.
+    """
+    from aidss.prompts.schemas import OUTPUT_MODELS
+    from aidss.prompts.translation import NOT_TRANSLATED, TRANSLATABLE_KEYS
+
+    known = TRANSLATABLE_KEYS | NOT_TRANSLATED
+    unclassified: dict[str, set[str]] = {}
+
+    for agent, model in OUTPUT_MODELS.items():
+        for name, field in model.model_fields.items():
+            # Only free text. Numbers, enums, and booleans are carried through
+            # unchanged - a translated stance label is a value the enum does
+            # not contain, and a translated price is nonsense.
+            if field.annotation not in (str, list[str], str | None):
+                continue
+            if name not in known:
+                unclassified.setdefault(name, set()).add(agent)
+
+    assert not unclassified, (
+        "these prose fields are neither translated nor explicitly excluded, so "
+        "they would stay in the source language while the text around them "
+        f"changed: { {k: sorted(v) for k, v in sorted(unclassified.items())} }"
+    )
+
+
+def test_nothing_is_both_translated_and_excluded() -> None:
+    """Two lists that disagree would make the behaviour depend on which one a
+    reader happened to check."""
+    from aidss.prompts.translation import NOT_TRANSLATED, TRANSLATABLE_KEYS
+
+    assert not (TRANSLATABLE_KEYS & NOT_TRANSLATED)
+
+
+def test_the_summary_agents_lists_are_translated() -> None:
+    """Named explicitly because this is the card the gap was noticed on: its
+    paragraph changed language and its three lists did not."""
+    from aidss.prompts.translation import TRANSLATABLE_KEYS
+
+    for field in ("summary", "agreements", "disagreements", "watch_items", "risk_factors"):
+        assert field in TRANSLATABLE_KEYS, field

@@ -31,8 +31,19 @@ from aidss.prompts.language import OutputLanguage, find_execution_language
 #: labels, numbers, model names, prompt versions - is carried through
 #: unchanged. Translating a stance label would produce a value the enum does
 #: not contain, and translating a price would be nonsense.
+#: This list was written when only the recommendation was rendered, and it
+#: covered that payload exactly. Once every agent's own write-up started being
+#: translated it covered barely a third of what a reader sees: the summary
+#: agent's `watch_items` and `disagreements`, the technical analyzer's signals,
+#: every analyzer's notes - all of them stayed in the source language while the
+#: paragraph above them changed, producing a card half in each.
+#:
+#: `test_translation_covers_every_prose_field` holds this to the schemas, so a
+#: field added later is a failing test rather than a silently untranslated
+#: section.
 TRANSLATABLE_KEYS: frozenset[str] = frozenset(
     {
+        # --- the recommendation ------------------------------------------
         "reasoning",
         "summary",
         "bullish_scenario",
@@ -40,13 +51,59 @@ TRANSLATABLE_KEYS: frozenset[str] = frozenset(
         "supporting_factors",
         "conflicting_factors",
         "risk_factors",
+        "rationale",
+        "conditions",
+        "invalidated_if",
+        # --- market analyzer ----------------------------------------------
+        "regime",
+        "key_drivers",
+        "sector_note",
+        # --- technical analyzer ---------------------------------------------
+        "level_commentary",
+        "supporting_signals",
+        "conflicting_signals",
+        # --- fundamental analyzer -------------------------------------------
+        "valuation_note",
+        "growth_note",
+        "balance_sheet_note",
+        "concerns",
+        # --- news analyzer ----------------------------------------------------
+        "key_themes",
+        "notable_events",
+        # --- summary agent ------------------------------------------------------
+        "agreements",
+        "disagreements",
+        "watch_items",
+        # --- portfolio and risk ---------------------------------------------------
+        "observations",
+        "considerations",
+        "concentration_reading",
+        "diversification_note",
+        "correlation_note",
+        "risk_reading",
+        "volatility_note",
+        "drawdown_note",
+        "concentration_risks",
+        "limitations",
+        # --- journal, chat, knowledge -------------------------------------------------
         "patterns",
         "insufficient_evidence_for",
         "questions_to_consider",
         "answer",
-        "rationale",
-        "conditions",
-        "invalidated_if",
+        "follow_up_questions",
+    }
+)
+
+#: Prose-shaped fields that must survive untouched, and why.
+#:
+#: Kept as an explicit set rather than simply omitted from the list above: the
+#: test pairs the two, so leaving a field out of both fails rather than passing
+#: quietly as an oversight.
+NOT_TRANSLATED: frozenset[str] = frozenset(
+    {
+        # References back to the retrieved passages an answer drew on.
+        # Translating a citation breaks the link to the thing being cited.
+        "sources_used",
     }
 )
 

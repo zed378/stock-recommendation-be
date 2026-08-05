@@ -24,6 +24,16 @@ import { isMuted, playChime, setMuted, unlockAudio } from "@/audio/chime";
 
 const POLL_INTERVAL = 45_000;
 
+/**
+ * The tab title without any count on it.
+ *
+ * Captured once at module load rather than read inside the effect. Reading it
+ * there would eventually read a title this code had already prefixed, and the
+ * next update would produce "(3) (2) AIDSS" - each render stacking another
+ * count onto the last one.
+ */
+const BASE_TITLE = document.title;
+
 type Notification = {
   id: string;
   subject: string | null;
@@ -76,6 +86,20 @@ export function NotificationBell() {
     // Only a rise. Falling means the reader marked something read, and
     // acknowledging their own action back at them is noise.
     if (before !== null && count > before) playChime();
+  }, [unread.data]);
+
+  // The count in the browser tab, so it is visible from a tab that is not the
+  // one being looked at - which is the whole situation a notification is for.
+  //
+  // Cleared, not left behind: this component unmounts on sign-out, and a tab
+  // still claiming three unread after somebody signed out is stale in a way
+  // nobody would think to question.
+  useEffect(() => {
+    const count = unread.data ?? 0;
+    document.title = count > 0 ? `(${count > 99 ? "99+" : count}) ${BASE_TITLE}` : BASE_TITLE;
+    return () => {
+      document.title = BASE_TITLE;
+    };
   }, [unread.data]);
 
   // The autoplay policy keeps audio suspended until the page has been
