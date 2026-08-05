@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
-import { useI18n } from "@/i18n/context";
+import { useI18n, type MessageKey } from "@/i18n/context";
 import {
   Button,
   Card,
@@ -18,6 +18,38 @@ import type { components } from "@/api/schema";
 
 type Source = components["schemas"]["NewsSourceResponse"];
 type TestResult = components["schemas"]["NewsSourceTestResponse"];
+
+/**
+ * `failing` earns its place here.
+ *
+ * The whole reason this panel exists is that a feed which started answering 404
+ * was indistinguishable from a feed with no news. Being able to ask "which ones
+ * are broken" in one click is the difference between that being visible and
+ * being technically recorded.
+ */
+type Filter = "all" | "active" | "off" | "failing";
+
+const FILTERS: { id: Filter; label: MessageKey }[] = [
+  { id: "all", label: "admin.news.filter.all" },
+  { id: "active", label: "admin.news.filter.active" },
+  { id: "off", label: "admin.news.filter.off" },
+  { id: "failing", label: "admin.news.filter.failing" },
+];
+
+function matches(source: Source, query: string, filter: Filter): boolean {
+  if (filter === "active" && !source.is_active) return false;
+  if (filter === "off" && source.is_active) return false;
+  if (filter === "failing" && source.last_status !== "failed") return false;
+
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  // The URL is searched too: an admin looking for a feed usually remembers the
+  // publisher's domain rather than the label somebody typed months ago.
+  return [source.name, source.feed_url, source.ticker ?? ""]
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
 
 /**
  * Starting points, offered rather than inserted.
@@ -63,6 +95,8 @@ export function NewsSourcesPanel() {
   const [deleting, setDeleting] = useState<Source | null>(null);
   const [tested, setTested] = useState<{ source: Source; result: TestResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
 
   const sources = useQuery({
     queryKey: ["news-sources"],
@@ -148,6 +182,11 @@ export function NewsSourcesPanel() {
     onError: (caught: Error) => setError(caught.message),
   });
 
+  const visible = useMemo(
+    () => (sources.data ?? []).filter((source) => matches(source, query, filter)),
+    [sources.data, query, filter],
+  );
+
   return (
     <Card
       title={t("admin.news.title")}
@@ -160,6 +199,44 @@ export function NewsSourcesPanel() {
       {error && (
         <div className="mb-3">
           <ErrorNote message={error} onRetry={() => setError(null)} />
+        </div>
+      )}
+
+      {/* Filtered here rather than on the server. The whole list arrives in one
+          request and an admin has tens of these, not thousands - a round trip
+          per keystroke would make it slower, not faster. */}
+      {(sources.data?.length ?? 0) > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <input
+            className={`${inputClass} min-w-48 flex-1`}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("admin.news.searchPlaceholder")}
+            aria-label={t("common.search")}
+            type="search"
+          />
+          <div role="group" aria-label={t("admin.news.filter")} className="flex gap-1">
+            {FILTERS.map((option) => {
+              const count = (sources.data ?? []).filter((source) =>
+                matches(source, "", option.id),
+              ).length;
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => setFilter(option.id)}
+                  aria-pressed={filter === option.id}
+                  className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                    filter === option.id
+                      ? "border-rise/40 bg-rise/10 text-rise"
+                      : "border-line text-muted hover:text-ink"
+                  }`}
+                >
+                  {t(option.label)}
+                  <span className="ml-1 text-faint">{count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -180,9 +257,28 @@ export function NewsSourcesPanel() {
             </Button>
           }
         />
+      ) : !visible.length ? (
+        // Distinct from having no sources at all: one is a filter to clear,
+        // the other is a feed to add, and offering the wrong action is worse
+        // than offering none.
+        <Empty
+          message={t("admin.news.noMatches")}
+          action={
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setQuery("");
+                setFilter("all");
+              }}
+            >
+              {t("admin.news.clearFilters")}
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-2">
-          {sources.data.map((source) => (
+          {visible.map((source) => (
             <div
               key={source.id}
               className="rounded-md border border-line p-3 text-sm"
