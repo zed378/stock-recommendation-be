@@ -24,6 +24,13 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    // NOT the default "assets": the application has a client-side route at
+    // /assets/:ticker, and nginx's rule for immutable bundle files was
+    // matching it first and answering 404. Any refresh on an asset page died.
+    // Renaming the build output removes the collision at its source rather
+    // than papering over it with a regex that has to stay in sync with
+    // whatever hash format Vite emits next.
+    assetsDir: "static",
     // Charts and the query client are large and change rarely; splitting them
     // out keeps a routine deploy from invalidating them in every browser cache.
     rollupOptions: {

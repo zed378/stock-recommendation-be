@@ -294,6 +294,180 @@ def test_a_stored_alert_keeps_what_it_was_measured_against(session, stored) -> N
     assert alert.reference_price == Decimal(10500)
 
 
+# --- the orchestration, against a real database ----------------------------
+#
+# The pure rules above were well covered and a wrong column name still reached
+# production: `AnalysisResult.created_at` does not exist, and nothing that only
+# exercised `evaluate` could have known. These tests run the part that touches
+# the database.
+
+
+class StubProvider:
+    """A market data provider that answers from memory."""
+
+    name = "stub"
+
+    def __init__(self, price: Decimal, previous_close: Decimal, *, realtime: bool = False):
+        self._price = price
+        self._previous_close = previous_close
+        self._realtime = realtime
+        self.asked: list[str] = []
+
+    def get_quote(self, ticker: str):
+        from aidss.domain.types import Quote
+
+        self.asked.append(ticker)
+        return Quote(
+            ticker=ticker,
+            price=self._price,
+            timestamp=NOW,
+            previous_close=self._previous_close,
+        )
+
+    def get_historical_candles(self, *args, **kwargs):  # pragma: no cover - unused
+        return []
+
+    def supports_realtime(self) -> bool:
+        return self._realtime
+
+
+class FailingProvider(StubProvider):
+    def get_quote(self, ticker: str):
+        from aidss.plugins.errors import ProviderUnavailableError
+
+        raise ProviderUnavailableError("stub", "symbol not found", retryable=False)
+
+
+@pytest.fixture
+def watched(session, stored):
+    """One user following one asset, through a real watchlist row."""
+    from aidss.db.models import Watchlist, WatchlistItem
+
+    user, asset = stored
+    watchlist = Watchlist(user_id=user.id, name="Default")
+    session.add(watchlist)
+    session.flush()
+    session.add(WatchlistItem(watchlist_id=watchlist.id, asset_id=asset.id))
+    session.flush()
+    return user, asset
+
+
+def test_a_pass_stores_an_observation(session, watched) -> None:
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, asset = watched
+    provider = StubProvider(Decimal(10000), Decimal(9800))
+    report = poll_watched_assets(session, provider, now=NOW)
+
+    assert provider.asked == ["BBCA"]
+    assert report.polled == 1
+    assert report.quoted == 1
+
+
+def test_a_pass_reads_the_latest_recommendation_without_exploding(session, watched) -> None:
+    """The regression that reached production: the orchestration joined a
+    column that does not exist, and only a database-touching test could see it."""
+    from aidss.db.models import AnalysisResult, InvestmentHorizon, Recommendation
+    from aidss.domain.types import RecommendationLabel
+    from aidss.monitoring.poller import poll_watched_assets
+
+    user, asset = watched
+    result = AnalysisResult(asset_id=asset.id, analysis_type="technical")
+    session.add(result)
+    session.flush()
+    session.add(
+        Recommendation(
+            analysis_result_id=result.id,
+            label=RecommendationLabel.BUY,
+            confidence=70.0,
+            reasoning="x",
+            bullish_scenario="x",
+            bearish_scenario="x",
+            horizon=InvestmentHorizon.MEDIUM,
+            suggested_stop=Decimal(9000),
+        )
+    )
+    session.flush()
+
+    report = poll_watched_assets(session, StubProvider(Decimal(8900), Decimal(9800)), now=NOW)
+    assert report.quoted == 1
+    # The stored stop was reached, so the pass must have read it.
+    assert report.alerts_raised >= 1
+
+
+def test_an_unreachable_ticker_does_not_end_the_pass(session, watched) -> None:
+    """A delisted symbol would otherwise silently stop monitoring for
+    everything after it."""
+    from aidss.monitoring.poller import poll_watched_assets
+
+    report = poll_watched_assets(session, FailingProvider(Decimal(1), Decimal(1)), now=NOW)
+    assert report.polled == 1
+    assert report.quoted == 0
+    assert report.unavailable
+
+
+def test_the_delay_of_the_source_is_recorded(session, watched) -> None:
+    """An interface presenting a delayed price as current invites decisions on
+    numbers that have already moved."""
+    from sqlalchemy import select
+
+    from aidss.db.models import QuoteSnapshot
+    from aidss.monitoring.poller import poll_watched_assets
+
+    poll_watched_assets(session, StubProvider(Decimal(10000), Decimal(9800)), now=NOW)
+    snapshot = session.scalar(select(QuoteSnapshot))
+    assert snapshot is not None
+    assert snapshot.is_delayed is True
+    assert snapshot.source == "stub"
+
+
+def test_a_realtime_provider_is_recorded_as_such(session, watched) -> None:
+    from sqlalchemy import select
+
+    from aidss.db.models import QuoteSnapshot
+    from aidss.monitoring.poller import poll_watched_assets
+
+    poll_watched_assets(
+        session, StubProvider(Decimal(10000), Decimal(9800), realtime=True), now=NOW
+    )
+    assert session.scalar(select(QuoteSnapshot)).is_delayed is False
+
+
+def test_one_provider_call_serves_every_follower(session, watched) -> None:
+    """Two people watching BBCA should cost one call, not two."""
+    from aidss.db.models import User, Watchlist, WatchlistItem
+    from aidss.monitoring.poller import poll_watched_assets
+
+    _, asset = watched
+    other = User(
+        email="third@example.com", password_hash=hash_password("correct-horse-battery")
+    )
+    session.add(other)
+    session.flush()
+    watchlist = Watchlist(user_id=other.id, name="Default")
+    session.add(watchlist)
+    session.flush()
+    session.add(WatchlistItem(watchlist_id=watchlist.id, asset_id=asset.id))
+    session.flush()
+
+    provider = StubProvider(Decimal(12000), Decimal(10000))
+    report = poll_watched_assets(session, provider, now=NOW)
+
+    assert provider.asked == ["BBCA"], "the asset was quoted once"
+    # ...and each follower was alerted separately.
+    assert report.alerts_raised == 2
+
+
+def test_an_asset_nobody_follows_is_not_polled(session, stored) -> None:
+    """Provider quota spent on assets nobody asked about is quota wasted."""
+    from aidss.monitoring.poller import poll_watched_assets
+
+    provider = StubProvider(Decimal(10000), Decimal(9800))
+    report = poll_watched_assets(session, provider, now=NOW)
+    assert report.polled == 0
+    assert provider.asked == []
+
+
 def test_alerts_are_scoped_to_their_owner(session, stored) -> None:
     from sqlalchemy import select
 

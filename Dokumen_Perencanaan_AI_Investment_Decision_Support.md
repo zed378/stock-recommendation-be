@@ -654,6 +654,15 @@ erDiagram
 | `/assets/{ticker}/news` | GET | Ambil berita & sentimen tersimpan untuk suatu emiten |
 | `/providers` | GET/PUT | Kelola konfigurasi AI/data provider aktif (admin) |
 | `/audit-logs` | GET | Ekspor audit trail |
+| `/assets/{ticker}/strategy` | GET | Pembacaan sikap tersimpan dari dua sisi posisi (Section 20) |
+| `/stock-picks` | GET | Penyaringan emiten per horizon, termasuk kandidat dekat-ARA (Section 21) |
+| `/monitoring/quotes` | GET | Observasi harga terakhir untuk emiten yang dipantau (Section 22) |
+| `/monitoring/poll` | POST | Observasi manual di luar interval worker |
+| `/alerts` | GET | Alert yang terbentuk untuk pengguna |
+| `/alerts/{id}/acknowledge` | POST | Tandai alert sudah dibaca |
+| `/watchlist/categories` | GET | Daftar kelompok watchlist beserta jumlah anggotanya |
+| `/watchlist/categories/{name}` | PATCH/DELETE | Ganti nama / hapus kelompok (anggota pindah ke `Default`) |
+| `/translate` | POST | Render prosa analisis tersimpan ke bahasa lain (Section 23) |
 
 > **Catatan desain API:** Tidak ada endpoint `/orders`, `/execute`, atau sejenisnya di seluruh permukaan API — konsisten dengan hard constraint arsitektur di Section 3–4.
 
@@ -924,3 +933,96 @@ Total estimasi kasar: **~30–35 minggu efektif** dengan tim inti 4–6 orang.
 3. Prioritaskan **Output Validator (skema + bahasa anti-instruksi-eksekusi)** sejak Phase 5 sebagai bagian inti, bukan tambahan di akhir — ini komponen yang paling menentukan apakah produk konsisten dengan positioning "decision-support, bukan trading bot".
 4. Siapkan draft **disclaimer & tinjauan posisi produk** (Section 13) secara paralel dengan development, sebelum platform dipakai lebih luas dari personal use.
 5. Jika dibutuhkan, saya bisa bantu perdalam: skema JSON penuh untuk `recommendations`, spesifikasi test-case Output Validator (termasuk contoh kalimat yang harus ditolak), atau breakdown sprint 2-mingguan detail per phase — tinggal beri tahu prioritasnya.
+
+---
+
+## 20. Position-Aware Strategy (Sudah Punya vs Belum Punya)
+
+**Masalah yang diselesaikan.** Satu label menjawab dua pertanyaan berbeda. `hold` pada emiten yang Anda miliki berarti *pertahankan*; `hold` pada emiten yang tidak Anda miliki berarti *tidak ada alasan untuk mulai*. Kata yang sama, dua situasi. Itulah sebabnya orang membaca rekomendasi dan tetap bertanya "jadi saya harus apa?".
+
+**Keputusan desain.** Kedua pembacaan **selalu ditampilkan berdampingan**, bukan hanya yang sesuai posisi pembaca. Melihat sisi yang bukan situasi Anda adalah yang membuat asimetrinya terlihat: emiten yang layak dipertahankan tetapi tidak layak dibeli hari ini adalah situasi nyata dan umum, dan layar yang menampilkan satu sisi saja akan menyembunyikannya.
+
+**Diturunkan, tidak ditanyakan ulang.** Strategi adalah proyeksi deterministik dari rekomendasi tersimpan ke dua situasi. Panggilan model kedua bisa bertentangan dengan yang pertama — mengatakan `buy` lalu menyarankan keluar — dan tidak ada cara menentukan mana yang salah. Semuanya mengikuti dari label, level, dan confidence yang sudah tervalidasi dan tersimpan.
+
+| Label | Belum punya | Sudah punya |
+|---|---|---|
+| `strong_buy` | Kandidat masuk | Kandidat tambah |
+| `buy` | Kandidat masuk (≥55 confidence) / Tunggu level | Pertahankan |
+| `watchlist` | Tunggu level | Pertahankan |
+| `hold` | **Tidak ada dasar masuk** | **Pertahankan** |
+| `reduce` | Hindari | Kandidat kurangi |
+| `sell` | Hindari | Kandidat keluar |
+
+**Aturan penamaan.** `entry_candidate`, bukan "beli"; `exit_candidate`, bukan "jual". Section 5.4 menempatkan label rekomendasi di bawah aturan sikap-bukan-perintah, dan teks turunan mewarisinya. Setiap sikap wajib menyatakan **apa yang membatalkannya** — sikap tanpa kondisi pembatalan tidak akan pernah bisa dibuktikan keliru, dan justru itulah yang paling lama dipegang orang.
+
+**Confidence menggerbangi masuk, bukan bertahan.** `buy` di bawah 55 confidence menjadi "tunggu level" bagi yang belum punya, tetapi tetap "pertahankan" bagi yang sudah punya. Confidence rendah adalah alasan untuk tidak memulai, bukan alasan untuk keluar; menyamakan keduanya akan mengaduk posisi atas pandangan yang tidak berubah.
+
+---
+
+## 21. Stock Pick & Penyaringan Dekat-ARA
+
+**Ini penyaringan, bukan ramalan.** Perbedaan itu adalah keseluruhan desainnya. Setiap kriteria adalah aturan bernama dan dapat diperiksa atas snapshot indikator yang sudah dihitung mesin. Tidak ada yang meramalkan harga, tidak ada yang melekatkan probabilitas, dan skor adalah **hitungan kondisi yang terpenuhi**, bukan peluang naik.
+
+**Horizon menyebut jendela pembacaan, bukan lama kejadian.** `7d` berarti "kondisi yang lazim dibaca dalam jendela sepekan", bukan "akan naik dalam tujuh hari". Tanpa dinyatakan, angka itu terbaca sebagai yang kedua.
+
+| Horizon | Kondisi yang dibaca |
+|---|---|
+| 1 hari | Bar naik pada volume di atas rata-rata, menekan resistance, stokastik berbalik, breakout berjalan |
+| 7 hari | Histogram MACD positif, RSI pulih di 40–65, SMA20 di atas SMA50, volume mendukung |
+| 14 hari | ADX menunjukkan kekuatan tren, +DI di atas −DI, harga di atas SMA50, belum terlalu regang |
+| 30 hari | Harga di atas SMA200, SMA50 di atas SMA200, pulih dari drawdown, return 60-bar positif |
+
+**Setiap hasil menyebut alasannya** dalam kosakata pembaca — "MACD histogram positif", bukan "skor 0,72" — beserta kondisi yang **tidak** terpenuhi, karena "kenapa emiten ini tidak muncul" sama seringnya ditanyakan.
+
+**Aturan ARA/ARB adalah konfigurasi, bukan konstanta.** IDX beberapa kali merevisinya. Default: Rp 50–200 → 35%, Rp 200–5.000 → 25%, di atas Rp 5.000 → 20%. Yang dapat dihitung adalah **berapa banyak band sesi hari ini yang sudah terpakai** — itu observasi. Menyebutnya "berpotensi ARA" akan melekatkan klaim yang tidak didukung apa pun di sini.
+
+**Riwayat tidak cukup disebut, bukan dinilai.** Emiten dengan kurang dari 60 bar dilaporkan sebagai tidak cukup riwayat, bukan diperingkat atas data seadanya — memeringkat listing dua minggu berdampingan dengan yang lima tahun adalah membandingkan dua pengukuran berbeda.
+
+---
+
+## 22. Monitoring Mendekati Realtime & Alert
+
+**"Mendekati realtime" adalah nama yang jujur.** Sumber gratis tertunda sekitar 15 menit, dan memoll lebih cepat tidak membuat datanya baru — hanya menanyakan angka basi yang sama lebih sering. Setiap observasi menyimpan apakah penyedia mengaku live, sehingga antarmuka menyatakannya alih-alih menyiratkan kesegaran yang tidak dimiliki siapa pun.
+
+**Alert adalah permukaan paling berbahaya di platform ini.** Ia datang tanpa diminta, dibaca dalam hitungan detik, dan sudah terlepas dari segala hal yang mengelilingi sikap di layar analisis — faktor penyeimbang, confidence terkalibrasi, disclaimer. Notifikasi berbunyi "JUAL BBCA" adalah sinyal trading, apa pun yang dikatakan sisa produk tentang dirinya.
+
+Maka aturannya sempit dan mutlak: **alert menyatakan apa yang terjadi, dan sikapnya berjalan sebagai data.** `AlertKind` adalah enum tertutup berisi observasi. Pesannya kalimat fakta. Ketika sikap relevan, ia masuk ke `context` sebagai field, yang dirender antarmuka di sebelah tautan kembali ke analisis lengkap.
+
+| Jenis | Terpicu saat |
+|---|---|
+| `level_approached` / `level_crossed` | Harga mendekati atau menembus support/resistance tersimpan |
+| `stance_changed` | Analisis terbaru mencapai sikap berbeda dari sebelumnya |
+| `limit_proximity` | Harga menghabiskan sebagian besar band ARA sesi |
+| `suggested_stop_reached` | Harga mencapai level yang disarankan analisis sebagai stop |
+| `unusual_move` | Pergerakan besar **relatif terhadap volatilitas emiten itu sendiri** |
+
+**Deduplikasi per pengguna, per kejadian.** Kondisi yang benar tetap benar, jadi aturan yang dievaluasi tiap beberapa menit akan menyala tiap beberapa menit. Kunci dedup memuat apa yang membuat kejadiannya berbeda — level, sesi, sikap — sehingga penembusan baru tidak ikut terbungkam. Per pengguna, karena kunci bersama berarti siapa pun yang memoll kedua tidak pernah diberi tahu sama sekali.
+
+**Satu panggilan penyedia melayani semua pengikut.** Dua orang memantau BBCA berbiaya satu panggilan, bukan dua.
+
+---
+
+## 23. Terjemahan Analisis (Dwibahasa)
+
+**Desain yang tampak wajar dan salah:** menghasilkan analisis dua kali, satu per bahasa. Dua jalur independen atas bukti yang sama bisa mencapai sikap berbeda. Pembaca yang melihat "beli" di satu kolom dan "tahan" di kolom lain tidak punya cara menyelesaikannya, dan platform telah menerbitkan dua analisis yang bertentangan atas emiten yang sama dengan otoritas setara.
+
+**Maka: satu analisis, terjemahan adalah render darinya.** Aslinya tetap otoritatif, setiap terjemahan menyatakan berasal dari analisis mana, dan terjemahan yang gagal meninggalkan aslinya utuh alih-alih menghasilkan campuran separuh jadi.
+
+- **Hanya prosa yang diterjemahkan.** Label sikap yang diterjemahkan akan menjadi nilai yang tidak ada di enum; harga yang diterjemahkan tidak bermakna. Label, harga, confidence, model, dan versi prompt dibawa apa adanya.
+- **Hasil separuh ditolak.** Terjemahan yang menjatuhkan `conflicting_factors` akan tampil sebagai analisis utuh yang kebetulan kehilangan bagian yang membantahnya.
+- **Penjaga bahasa-eksekusi berlaku pada keluarannya.** Sumber yang lolos dalam Bahasa Indonesia bisa kembali sebagai "buy now" dalam Bahasa Inggris; aturan yang hanya ditegakkan pada aslinya akan berlubang selebar fitur ini.
+- **Refleksi jurnal melewati jalur sensitif**, karena catatan pribadi tidak boleh sampai ke penyedia yang analisisnya sendiri akan ditolak ke sana.
+
+---
+
+## 24. Catatan Implementasi yang Menyimpang dari Rencana Awal
+
+Beberapa hal ditemukan saat membangun dan berbeda dari asumsi dokumen ini. Dicatat agar pembaca berikutnya tidak mengulang jalannya.
+
+- **Yahoo `quoteSummary` menolak (401).** Endpoint `chart` untuk harga tetap terbuka. Workaround tidak diimplementasikan: memakai endpoint tak berdokumen yang terbuka adalah satu hal, menembus kontrol akses yang ditambahkan penyedia adalah hal lain.
+- **Alpha Vantage tidak meliput fundamental IDX.** Diuji dengan kunci sungguhan: `BBCA.JKT`, `BBCA.JK`, `BBRI.JKT` semua kosong. Tepat untuk ekuitas AS, keliru untuk pasar ini.
+- **Fundamental IDX diambil dari API statistik bursa sendiri**, melalui klien yang menyajikan sidik jari TLS peramban karena endpoint-nya di balik Cloudflare. Tidak ada akun, kredensial, atau paywall di sana — yang dilewati adalah manajemen bot. Yang **tidak** dilewati adalah syarat IDX yang melarang redistribusi komersial; ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (Section 13).
+- **Satuan IDX tidak berdokumen.** Uang dalam miliar rupiah; `roa` dan `roe` dalam persen sementara penyedia lain memakai pecahan. Keduanya ditetapkan dengan membandingkan emiten lintas tiga orde besaran, dan salah menanganinya adalah galat seratus atau semiliar kali lipat yang tidak tertangkap pemeriksaan tipe apa pun.
+- **Basis periode `ytd` ditambahkan** ke kosakata `period_type`. IDX melaporkan kumulatif berjalan: laporan bertanggal 30 September memuat sembilan bulan pendapatan. Menyebutnya tahunan melebihkan sepertiga, kuartalan mengurangi tiga kali lipat, dan `ttm` jendela yang sama sekali berbeda.
+- **Promosi peran admin adalah perintah shell, bukan endpoint.** Rute yang membagikan peran admin adalah permukaan eskalasi hak akses, dan pendaftaran hanya membuat `investor` — sehingga dengan promosi lewat API, admin pertama tidak akan pernah bisa ada tanpa pintu belakang yang ikut terkirim dalam kode.
+- **Retrieval berjalan tanpa model embedding.** Banyak gateway swakelola hanya melayani model chat dan menjawab `/embeddings` dengan 404. Pencarian token eksak — kode emiten, nama metrik, rasio — tidak terpengaruh; yang hilang adalah pencocokan parafrasa.

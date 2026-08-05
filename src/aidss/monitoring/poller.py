@@ -88,7 +88,7 @@ def watched_assets(session: Session) -> dict[uuid.UUID, list[uuid.UUID]]:
 def _latest_recommendation(session: Session, asset_id: uuid.UUID, now: datetime):
     """The most recent stored recommendation for an asset, if it is still fresh."""
     row = session.execute(
-        select(Recommendation, AnalysisResult.created_at)
+        select(Recommendation, AnalysisResult.generated_at)
         .join(AnalysisResult, AnalysisResult.id == Recommendation.analysis_result_id)
         .where(AnalysisResult.asset_id == asset_id)
         .order_by(Recommendation.created_at.desc())
@@ -96,8 +96,8 @@ def _latest_recommendation(session: Session, asset_id: uuid.UUID, now: datetime)
     ).first()
     if row is None:
         return None
-    recommendation, created_at = row
-    if created_at is not None and now - created_at > RECOMMENDATION_MAX_AGE:
+    recommendation, generated_at = row
+    if generated_at is not None and now - generated_at > RECOMMENDATION_MAX_AGE:
         return None
     return recommendation
 

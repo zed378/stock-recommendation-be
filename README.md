@@ -251,7 +251,7 @@ reasoning.
 ## Tests
 
 ```bash
-python -m pytest              # 890 hermetic tests, SQLite only, no network
+python -m pytest              # 1028 hermetic tests, SQLite only, no network
 python -m ruff check .
 ```
 
@@ -507,6 +507,93 @@ app on every edit to either file, because Fast Refresh replaced the module and t
 identity changed underneath every consumer. The hooks now live in `context.ts` beside their
 providers; verified by editing both files against a running server and getting two clean
 HMR updates.
+
+### One stance, read from both sides of a position
+
+`hold` on something you own and `hold` on something you do not are the same word describing
+two different situations. That is why people read a recommendation and still ask "so what do
+I do?". Both readings are now produced — **always both**, not the one matching the reader's
+position, because an asset worth keeping but not worth buying today is a real and common
+case that only shows up when both columns are visible.
+
+Derived, never asked again: a second model call could say `buy` and then advise an exit,
+with no way to tell which was wrong. Every stance carries what would invalidate it, because
+a stance with no stated invalidation can never be shown to have been mistaken — and those
+are the ones people hold on to longest.
+
+### Stock picks are a screen, not a forecast
+
+Each horizon is a set of named, inspectable conditions over the indicator snapshot. A result
+says *why* an asset appeared in the reader's own vocabulary — "MACD histogram is positive" —
+and which conditions it failed, because "why is this one *not* here" is asked as often as
+the reverse. The score counts conditions met; it is not a probability and the caveat saying
+so sits **above** the results, not in a footer.
+
+The horizon names the window each condition is conventionally read over, not how long
+anything will take to happen. Without stating that, `7d` reads as "will rise within seven
+days".
+
+IDX auto-rejection bands are configuration, not constants — the exchange has revised them
+several times. What is computable is how much of today's band a price has consumed. Calling
+that "will hit ARA" would attach a claim nothing here supports.
+
+A test found a real bug in this: several criteria used `(value or 0) < threshold`, which is
+`True` for an asset with no data at all, so the screen ranked assets it had never measured.
+
+### Alerts state what happened; the stance travels as data
+
+An alert is the most dangerous surface here — it arrives unbidden, is read in seconds, and
+is stripped of the counter-evidence, the calibrated confidence, and the disclaimer that
+surround a stance on the analysis screen. "SELL BBCA" in a notification is a trading signal
+whatever the rest of the product says about itself.
+
+So `AlertKind` is a closed enum of observations, messages are factual sentences, and where a
+stance is relevant it goes into `context` as a field rendered next to a link back to the
+analysis. A test asserts no message matches `\bbuy\b`, `\bsell\b`, `\btrade\b` — word
+boundaries, so "BBCA **traded** above a level" passes and a bare imperative does not.
+
+"Near real time" is the honest name: the free sources are ~15 minutes delayed, and every
+snapshot records whether the provider claimed to be live.
+
+### Translation is a rendering, not a second analysis
+
+Generating the analysis twice — once per language — could produce two different stances for
+one asset with equal authority, and a reader seeing "beli" beside "hold" would have no way
+to resolve it. One analysis stays authoritative; the switch shows a translation of it,
+labelled as one. Only prose is translated: a translated stance label would be a value the
+enum does not contain. A partial result is refused, because half an analysis reads as a
+whole one that happens to be missing its counter-evidence. And the execution-language guard
+runs on the *output* — a rule enforced only on the original would have a hole exactly the
+width of this feature.
+
+### A namespace collision that 404'd every refresh
+
+Refreshing on an asset page returned nginx's 404. Vite's default build output is `assets/`,
+the application has a route at `/assets/:ticker`, and the nginx rule for immutable bundle
+files — `try_files $uri =404` — matched the route before the SPA fallback could. Everything
+else was green: type check, lint, the whole Python suite, and the first-load path, because
+the router handles in-app navigation without touching the server.
+
+Fixed at the source rather than with a regex that would have to track Vite's hash format:
+the build now writes to `static/`. [test_frontend_routing.py](tests/test_frontend_routing.py)
+is the link between the three files that have to agree — `vite.config.ts`, `App.tsx`, and
+`nginx.conf` — because nothing else connects them. Reverting `assetsDir` to `"assets"` fails
+it, which was checked rather than assumed.
+
+### A configuration hole that made three features unreachable
+
+Asking for a journal reflection returned "Internal Server Error". The reflection agent
+handles personal financial data, and the router refuses to send that to a provider not
+marked self-hosted — correct behaviour. But a URL says nothing about who owns the machine
+behind it: a self-hosted model published at a public domain looks exactly like a third-party
+API, and the hostname heuristic got it backwards in the dangerous direction. There was no
+way for the operator to say otherwise, so portfolio analysis, risk assessment, and journal
+reflection were unreachable for anyone whose inference was not literally on localhost.
+
+`AIDSS_AI_SELF_HOSTED` is that assertion, defaulting to false. The refusal now names the
+setting that fixes it, and `GatewayError` is handled application-wide: a budget reached is
+429, an open breaker is 503 with `Retry-After`, a routing refusal is 503 with its reason.
+None of them is a 500, because none of them is a bug in the server.
 
 ---
 
