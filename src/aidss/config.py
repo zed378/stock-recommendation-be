@@ -55,6 +55,19 @@ class Settings(BaseSettings):
     news_provider: str = "fixture"
     #: How long any outbound feed or API request may take.
     http_timeout_seconds: float = 15.0
+
+    #: How long one model call may take. Separate from `http_timeout_seconds`
+    #: because the two are not the same kind of wait: a feed that has not
+    #: answered in fifteen seconds is broken, while a self-hosted gateway
+    #: generating several hundred tokens of structured JSON legitimately takes
+    #: minutes on modest hardware.
+    #:
+    #: Generous by default, because the failure it prevents is expensive and
+    #: silent-looking: every analyzer fails at once with "the read operation
+    #: timed out", which reads as a broken gateway rather than as this side
+    #: hanging up too early. A model that is genuinely stuck is caught by the
+    #: circuit breaker instead, which is the mechanism that belongs to it.
+    ai_timeout_seconds: float = 300.0
     ai_provider: str = "openai_compatible"
     storage_provider: str = "local"
 

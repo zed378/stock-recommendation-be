@@ -171,3 +171,35 @@ def test_finnhub_adapter_requires_a_key() -> None:
     settings = Settings(market_data_provider="finnhub", finnhub_api_key=None)
     with pytest.raises(ValueError, match="FINNHUB"):
         registry.get_market_data_provider(settings)
+
+
+def test_the_ai_adapter_uses_the_configured_timeout() -> None:
+    """The constructor took a timeout and `from_settings` did not pass it, so
+    every deployment ran on the 60-second default whatever it configured.
+
+    The symptom was three analyzers failing at once with "the read operation
+    timed out" against a self-hosted gateway that needs minutes for an analyzer
+    prompt - which reads as a broken gateway rather than as this side hanging
+    up early. A setting that exists and is ignored is worse than none: it looks
+    like the knob was turned.
+    """
+    from aidss.config import Settings
+    from aidss.plugins.adapters.ai_openai_compatible import OpenAICompatibleProvider
+
+    settings = Settings(
+        jwt_secret="test-secret-not-for-production-0123456789abcdef",
+        ai_timeout_seconds=123.0,
+    )
+    provider = OpenAICompatibleProvider.from_settings(settings)
+
+    assert provider._client.timeout.read == 123.0  # noqa: SLF001
+
+
+def test_the_model_timeout_is_separate_from_the_http_one() -> None:
+    """A feed that has not answered in fifteen seconds is broken; a gateway
+    generating structured JSON has barely started. One setting for both would
+    have to be wrong for one of them."""
+    from aidss.config import Settings
+
+    settings = Settings(jwt_secret="test-secret-not-for-production-0123456789abcdef")
+    assert settings.ai_timeout_seconds > settings.http_timeout_seconds

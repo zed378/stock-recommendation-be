@@ -65,6 +65,13 @@ x-aidss-env: &aidss-env
   AIDSS_AI_API_KEY: ${AIDSS_AI_API_KEY:-}
   AIDSS_AI_CHAT_MODEL: ${AIDSS_AI_CHAT_MODEL:-gpt-4o-mini}
 
+  # How long one model call may take. Not the same wait as an HTTP feed: a
+  # self-hosted gateway generating several hundred tokens of structured JSON
+  # legitimately takes minutes on modest hardware, and hanging up early makes
+  # every analyzer fail at once with "the read operation timed out" - which
+  # reads as a broken gateway rather than as this side giving up.
+  AIDSS_AI_TIMEOUT_SECONDS: ${AIDSS_AI_TIMEOUT_SECONDS:-300}
+
   # Whether that endpoint runs on hardware you control. An assertion by the
   # operator, because a URL cannot answer it: a self-hosted model published at
   # a public domain looks exactly like a third-party API.

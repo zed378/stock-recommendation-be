@@ -50,6 +50,14 @@ class OpenAICompatibleProvider(AIProvider):
             api_key=settings.ai_api_key,
             chat_model=settings.ai_chat_model,
             embedding_model=settings.ai_embedding_model,
+            # Passed through, which it was not: the constructor took a timeout
+            # and this ignored it, so every deployment ran on the 60-second
+            # default no matter what it configured. A self-hosted gateway on
+            # modest hardware needs minutes for an analyzer prompt, and the
+            # symptom was three analyzers failing at once with "the read
+            # operation timed out" - which reads like the gateway is broken
+            # rather than like we hung up on it.
+            timeout=settings.ai_timeout_seconds,
         )
 
     # --- internals ------------------------------------------------------
