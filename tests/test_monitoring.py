@@ -385,6 +385,7 @@ def test_a_pass_reads_the_latest_recommendation_without_exploding(session, watch
             bearish_scenario="x",
             horizon=InvestmentHorizon.MEDIUM,
             suggested_stop=Decimal(9000),
+            language="en",
         )
     )
     session.flush()

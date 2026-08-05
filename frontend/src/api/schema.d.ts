@@ -2146,6 +2146,8 @@ export interface components {
             feed_url?: string | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Ticker */
+            ticker?: string | null;
         };
         /** NotificationResponse */
         NotificationResponse: {

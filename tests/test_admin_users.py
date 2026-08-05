@@ -7,6 +7,7 @@ click on a button that looks like every other button.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -308,3 +309,127 @@ def test_a_deletion_is_audited_with_the_email_before_the_row_goes(
     )
     assert entry is not None
     assert entry.after["email"] == "victim@example.com"
+
+
+# --- editing a source ------------------------------------------------------
+
+
+@pytest.fixture
+def source(client: TestClient, admin_headers) -> dict:
+    return client.post(
+        "/admin/news-sources",
+        json={"name": "Pasar Modal", "feed_url": "https://example.com/a.xml"},
+        headers=admin_headers,
+    ).json()
+
+
+def test_a_source_can_be_renamed_and_repointed(
+    client: TestClient, admin_headers, source
+) -> None:
+    """Editing used to be impossible: a typo in a URL meant deleting the row and
+    losing its fetch history to recreate it one character different."""
+    response = client.patch(
+        f"/admin/news-sources/{source['id']}",
+        json={"name": "Bisnis", "feed_url": "https://example.com/b.xml"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Bisnis"
+    assert response.json()["feed_url"] == "https://example.com/b.xml"
+
+
+def test_repointing_onto_another_source_url_is_refused(
+    client: TestClient, admin_headers, source
+) -> None:
+    """Left to the unique constraint this would be a 500 with a database
+    message in it."""
+    other = client.post(
+        "/admin/news-sources",
+        json={"name": "Kontan", "feed_url": "https://example.com/b.xml"},
+        headers=admin_headers,
+    ).json()
+
+    response = client.patch(
+        f"/admin/news-sources/{other['id']}",
+        json={"feed_url": source["feed_url"]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 409
+
+
+def test_keeping_the_same_url_is_not_a_clash_with_itself(
+    client: TestClient, admin_headers, source
+) -> None:
+    response = client.patch(
+        f"/admin/news-sources/{source['id']}",
+        json={"name": "Renamed", "feed_url": source["feed_url"]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+
+
+def test_a_binding_can_be_added_and_removed(
+    client: TestClient, admin_headers, source, session
+) -> None:
+    """Null and absent mean different things here: one unbinds, the other
+    leaves the binding alone. A plain optional field cannot say both."""
+    from aidss.db.models import Asset
+
+    session.add(Asset(ticker="BBCA", exchange="IDX"))
+    session.commit()
+
+    bound = client.patch(
+        f"/admin/news-sources/{source['id']}", json={"ticker": "BBCA"}, headers=admin_headers
+    )
+    assert bound.json()["ticker"] == "BBCA"
+
+    # Omitting the key leaves it alone...
+    untouched = client.patch(
+        f"/admin/news-sources/{source['id']}", json={"name": "Still bound"}, headers=admin_headers
+    )
+    assert untouched.json()["ticker"] == "BBCA"
+
+    # ...sending it as null removes it.
+    unbound = client.patch(
+        f"/admin/news-sources/{source['id']}", json={"ticker": None}, headers=admin_headers
+    )
+    assert unbound.json()["ticker"] is None
+
+
+def test_binding_to_an_unknown_ticker_is_refused(
+    client: TestClient, admin_headers, source
+) -> None:
+    response = client.patch(
+        f"/admin/news-sources/{source['id']}", json={"ticker": "NOPE"}, headers=admin_headers
+    )
+    assert response.status_code == 404
+
+
+def test_re_enabling_clears_the_failure_count(
+    client: TestClient, admin_headers, source, session
+) -> None:
+    """A feed switched back on should not be one failure away from switching
+    off again."""
+    from aidss.db.models import NewsSource
+
+    row = session.get(NewsSource, uuid.UUID(source["id"]))
+    row.consecutive_failures = 19
+    row.is_active = False
+    session.commit()
+
+    response = client.patch(
+        f"/admin/news-sources/{source['id']}", json={"is_active": True}, headers=admin_headers
+    )
+    assert response.json()["is_active"] is True
+    assert response.json()["consecutive_failures"] == 0
+
+
+def test_a_feed_url_must_be_http(client: TestClient, admin_headers, source) -> None:
+    """An admin is trusted, but `file://` here would turn a configuration field
+    into a way to read the container's filesystem through the feed parser."""
+    response = client.patch(
+        f"/admin/news-sources/{source['id']}",
+        json={"feed_url": "file:///etc/passwd"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 422

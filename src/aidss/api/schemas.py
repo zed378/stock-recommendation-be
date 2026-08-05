@@ -316,6 +316,10 @@ class NewsSourceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     feed_url: str | None = Field(default=None, min_length=8, max_length=1000)
     is_active: bool | None = None
+    #: Null is ambiguous here - it means both "leave it alone" and "unbind this
+    #: from its issuer". The route distinguishes them with `model_fields_set`,
+    #: so sending `{"ticker": null}` unbinds and omitting the key does not.
+    ticker: str | None = None
 
 
 class NewsSourceResponse(BaseModel):

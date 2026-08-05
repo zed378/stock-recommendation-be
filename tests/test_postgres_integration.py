@@ -332,6 +332,7 @@ def test_constraints_are_actually_enforced(pg) -> None:
             bullish_scenario="x",
             bearish_scenario="x",
             horizon=InvestmentHorizon.MEDIUM,
+            language="en",
         )
     )
     with pytest.raises(DBAPIError):

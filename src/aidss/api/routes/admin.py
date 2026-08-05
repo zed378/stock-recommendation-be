@@ -387,8 +387,39 @@ def update_news_source(
 
     if payload.name is not None:
         source.name = payload.name.strip()
+
     if payload.feed_url is not None:
-        source.feed_url = _require_http(payload.feed_url)
+        url = _require_http(payload.feed_url)
+        if url != source.feed_url:
+            clash = session.scalar(
+                select(NewsSource).where(
+                    NewsSource.feed_url == url, NewsSource.id != source.id
+                )
+            )
+            if clash is not None:
+                # Checked rather than left to the unique constraint, which would
+                # surface as a 500 with a database message in it.
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="That feed URL is already configured",
+                )
+        source.feed_url = url
+
+    # Present in the body at all, even as null, means the binding is being
+    # changed. Omitted means it is not - a distinction `None` alone cannot make.
+    if "ticker" in payload.model_fields_set:
+        if payload.ticker:
+            ticker = normalize_ticker(payload.ticker)
+            asset = session.scalar(select(Asset).where(Asset.ticker == ticker))
+            if asset is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No asset {ticker}; add it to a watchlist first",
+                )
+            source.asset_id = asset.id
+        else:
+            source.asset_id = None
+
     if payload.is_active is not None:
         source.is_active = payload.is_active
         if payload.is_active:

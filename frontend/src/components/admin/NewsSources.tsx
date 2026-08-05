@@ -56,7 +56,10 @@ export function NewsSourcesPanel() {
   const { t, dateTime } = useI18n();
   const queryClient = useQueryClient();
 
-  const [creating, setCreating] = useState(false);
+  // `null` is not editing; a Source is editing that one; `"new"` is adding.
+  // One value rather than two booleans, because "adding and editing at once"
+  // has no meaning and would otherwise have to be prevented by hand.
+  const [editing, setEditing] = useState<Source | "new" | null>(null);
   const [deleting, setDeleting] = useState<Source | null>(null);
   const [tested, setTested] = useState<{ source: Source; result: TestResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,20 +75,27 @@ export function NewsSourcesPanel() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["news-sources"] });
 
-  const create = useMutation({
-    mutationFn: async (input: { name: string; feed_url: string; ticker: string | null }) => {
+  type Draft = { name: string; feed_url: string; ticker: string | null };
+
+  const save = useMutation({
+    mutationFn: async (input: { draft: Draft; id?: string }) => {
+      if (input.id) {
+        const { error: failed } = await api.PATCH("/admin/news-sources/{source_id}", {
+          params: { path: { source_id: input.id } },
+          // `ticker` sent explicitly even when null: the route reads the
+          // presence of the key to tell "unbind this" from "leave it alone".
+          body: input.draft,
+        });
+        if (failed) throw new Error(errorMessage(failed, t("common.error")));
+        return;
+      }
       const { error: failed } = await api.POST("/admin/news-sources", {
-        body: {
-          name: input.name,
-          feed_url: input.feed_url,
-          ticker: input.ticker,
-          is_active: true,
-        },
+        body: { ...input.draft, is_active: true },
       });
       if (failed) throw new Error(errorMessage(failed, t("common.error")));
     },
     onSuccess: () => {
-      setCreating(false);
+      setEditing(null);
       setError(null);
       invalidate();
     },
@@ -142,7 +152,7 @@ export function NewsSourcesPanel() {
     <Card
       title={t("admin.news.title")}
       action={
-        <Button size="sm" variant="ghost" onClick={() => setCreating(true)}>
+        <Button size="sm" variant="ghost" onClick={() => setEditing("new")}>
           {t("admin.news.add")}
         </Button>
       }
@@ -165,7 +175,7 @@ export function NewsSourcesPanel() {
           message={t("admin.news.empty")}
           hint={t("admin.news.emptyHint")}
           action={
-            <Button size="sm" onClick={() => setCreating(true)}>
+            <Button size="sm" onClick={() => setEditing("new")}>
               {t("admin.news.add")}
             </Button>
           }
@@ -211,6 +221,9 @@ export function NewsSourcesPanel() {
                   >
                     {t("admin.news.test")}
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(source)}>
+                    {t("admin.news.edit")}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -234,12 +247,13 @@ export function NewsSourcesPanel() {
 
       <Caveat>{t("admin.news.caveat")}</Caveat>
 
-      {creating && (
-        <CreateDialog
-          busy={create.isPending}
-          onCancel={() => setCreating(false)}
-          onConfirm={(name, url, ticker) =>
-            create.mutate({ name, feed_url: url, ticker })
+      {editing && (
+        <SourceDialog
+          source={editing === "new" ? null : editing}
+          busy={save.isPending}
+          onCancel={() => setEditing(null)}
+          onConfirm={(draft) =>
+            save.mutate({ draft, id: editing === "new" ? undefined : editing.id })
           }
         />
       )}
@@ -298,40 +312,55 @@ function LastRun({
   );
 }
 
-function CreateDialog({
+/**
+ * Add a source, or change one.
+ *
+ * One component for both. They are the same act - name it, point it at a feed,
+ * optionally bind it to an issuer - and `source` being null is the only
+ * difference. Editing used to be impossible: a typo in a URL meant deleting the
+ * row and losing its fetch history to recreate it one character different.
+ */
+function SourceDialog({
+  source,
   busy,
   onCancel,
   onConfirm,
 }: {
+  source: Source | null;
   busy: boolean;
   onCancel: () => void;
-  onConfirm: (name: string, url: string, ticker: string | null) => void;
+  onConfirm: (draft: { name: string; feed_url: string; ticker: string | null }) => void;
 }) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [ticker, setTicker] = useState("");
+  const [name, setName] = useState(source?.name ?? "");
+  const [url, setUrl] = useState(source?.feed_url ?? "");
+  const [ticker, setTicker] = useState(source?.ticker ?? "");
 
   const trimmedUrl = url.trim();
   const valid =
     name.trim().length > 0 && /^https?:\/\//i.test(trimmedUrl) && trimmedUrl.length > 8;
   const templated = trimmedUrl.includes("{ticker}");
 
+  const submit = () =>
+    onConfirm({
+      name: name.trim(),
+      feed_url: trimmedUrl,
+      // A templated URL is already per-asset, so any binding it carried is
+      // dropped rather than left to contradict the URL.
+      ticker: templated ? null : ticker.trim() || null,
+    });
+
   return (
     <Modal
-      title={t("admin.news.addTitle")}
+      title={source ? t("admin.news.editTitle", { name: source.name }) : t("admin.news.addTitle")}
       onClose={onCancel}
       footer={
         <>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
             {t("common.cancel")}
           </Button>
-          <Button
-            onClick={() => onConfirm(name.trim(), trimmedUrl, ticker.trim() || null)}
-            disabled={!valid}
-            busy={busy}
-          >
-            {t("admin.news.add")}
+          <Button onClick={submit} disabled={!valid} busy={busy}>
+            {source ? t("common.save") : t("admin.news.add")}
           </Button>
         </>
       }

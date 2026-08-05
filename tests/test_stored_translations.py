@@ -82,6 +82,10 @@ def stored(session):
         bullish_scenario="Menembus resistance.",
         bearish_scenario="Jatuh di bawah support.",
         horizon=InvestmentHorizon.MEDIUM,
+        # Stated, not inherited. The column has no default any more,
+        # precisely so a writer that forgets fails here rather than
+        # storing a row nobody can tell apart from a correct one.
+        language="id",
     )
     session.add(row)
     session.flush()

@@ -494,6 +494,8 @@ export const id = {
   "admin.news.title": "Sumber berita (RSS/Atom)",
   "admin.news.add": "+ Tambah sumber",
   "admin.news.addTitle": "Tambah sumber berita",
+  "admin.news.edit": "Ubah",
+  "admin.news.editTitle": "Ubah {name}",
   "admin.news.empty": "Belum ada sumber berita.",
   "admin.news.emptyHint":
     "Tanpa sumber, pengambilan berita tidak punya tempat untuk mencari dan jadwal " +
@@ -1121,6 +1123,8 @@ export const en: Record<MessageKey, string> = {
   "admin.news.title": "News sources (RSS/Atom)",
   "admin.news.add": "+ Add source",
   "admin.news.addTitle": "Add a news source",
+  "admin.news.edit": "Edit",
+  "admin.news.editTitle": "Edit {name}",
   "admin.news.empty": "No news sources yet.",
   "admin.news.emptyHint":
     "With none configured, news ingestion has nowhere to look and schedules report failure.",
