@@ -47,7 +47,14 @@ class Settings(BaseSettings):
 
     # --- Active provider selection (Section 7) ---
     market_data_provider: str = "fixture"
+    #: `rss` reads feeds an administrator configures in the database. The
+    #: default stays `fixture` so tests and a fresh checkout are deterministic,
+    #: but a deployment that leaves it there gets invented headlines - which is
+    #: precisely how news ingestion ran green for weeks while storing nothing
+    #: anybody wrote. docker-compose sets `rss`.
     news_provider: str = "fixture"
+    #: How long any outbound feed or API request may take.
+    http_timeout_seconds: float = 15.0
     ai_provider: str = "openai_compatible"
     storage_provider: str = "local"
 
@@ -132,9 +139,17 @@ class Settings(BaseSettings):
     #: default nobody had checked. Producing two languages is what exposed it:
     #: the "translation" came back identical to the "original".
     #:
-    #: Indonesian by default because this is an IDX product read by Indonesian
-    #: investors. The other language is rendered from it during the same run.
-    analysis_language: str = "id"
+    #: English is the authoritative one. The models available here reason more
+    #: reliably in it, and every rule the output is checked against - the
+    #: execution-language guard above all - was written and tested against
+    #: English text. Indonesian is rendered from it during the same run and
+    #: stored beside it, so an Indonesian reader waits for nothing.
+    #:
+    #: Changing this flips which language is the original and which is the
+    #: rendering. Rows written under the previous setting keep saying what they
+    #: are - `language` is read off each row, never assumed - so a mixed
+    #: history displays correctly rather than being relabelled.
+    analysis_language: str = "en"
 
     #: Vector width of the embedding model. A property of the model, not of the
     #: schema: text-embedding-3-small is 1536, -3-large is 3072, nomic-embed-text

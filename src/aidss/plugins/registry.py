@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from aidss.config import Settings, get_settings
 from aidss.plugins.errors import PluginNotFoundError, PluginRegistrationError
@@ -106,10 +106,22 @@ def get_market_data_provider(settings: Settings | None = None) -> MarketDataProv
     return provider
 
 
-def get_news_provider(settings: Settings | None = None) -> NewsProvider:
+def get_news_provider(
+    settings: Settings | None = None, *, session: Any = None
+) -> NewsProvider:
+    """The configured news adapter, offered a session if one is available.
+
+    Offered unconditionally rather than only to the adapters known to want it:
+    `bind_session` is a no-op on the base class, so a caller never has to know
+    which adapter is configured in order to wire it correctly.
+    """
     settings = settings or get_settings()
     provider = _build("news", settings.news_provider, settings)
     assert isinstance(provider, NewsProvider)
+    if session is not None:
+        bound = provider.bind_session(session)
+        assert isinstance(bound, NewsProvider)
+        return bound
     return provider
 
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
@@ -386,6 +386,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
       {result && !run.isPending && (
         <>
           <AgentRoster result={result} />
+          <AgentReports agents={result.agents} />
           {result.recommendation && (
             <TranslatedRecommendation rec={result.recommendation} />
           )}
@@ -434,6 +435,132 @@ function TranslatedRecommendation({
   );
 }
 
+type AgentPayload = {
+  language?: string;
+  translations?: Record<string, { fields?: Record<string, unknown> }>;
+  [key: string]: unknown;
+};
+
+/**
+ * What each agent actually found, in either language.
+ *
+ * The roster above says *which* agents ran; this is what they said. It was
+ * never shown - the reasoning behind a stance sat in the database and nothing
+ * rendered it.
+ *
+ * One switch for the whole set rather than one per agent. Flipping six
+ * controls to read one analysis is hostile, and every agent in a run is
+ * written in the same language anyway.
+ *
+ * Reads only what the analysis stored. Older runs have no per-agent rendering,
+ * and the switch says so instead of quietly fetching six translations - which
+ * is the cost this was moved into the analysis to avoid.
+ */
+function AgentReports({ agents }: { agents: unknown }) {
+  const { t } = useI18n();
+  const [showing, setShowing] = useState(false);
+
+  const entries = useMemo(() => {
+    if (!agents || typeof agents !== "object") return [];
+    return Object.entries(agents as Record<string, AgentPayload>);
+  }, [agents]);
+
+  if (!entries.length) return null;
+
+  const source = entries[0][1]?.language ?? "en";
+  const target = source === "id" ? "en" : "id";
+  const available = entries.some((entry) => entry[1]?.translations?.[target]?.fields);
+
+  return (
+    <Card
+      title={t("analysis.agentFindings")}
+      action={
+        available ? (
+          <LanguageSwitch
+            showing={showing}
+            isPending={false}
+            source={source}
+            target={target}
+            onOriginal={() => setShowing(false)}
+            onTranslate={() => setShowing(true)}
+          />
+        ) : undefined
+      }
+    >
+      <div className="space-y-5">
+        {entries.map(([name, payload]) => (
+          <AgentReport
+            key={name}
+            name={name}
+            payload={payload}
+            translated={showing ? payload?.translations?.[target]?.fields : undefined}
+          />
+        ))}
+      </div>
+      {!available && <Caveat>{t("analysis.noAgentTranslation")}</Caveat>}
+      {showing && <Caveat>{t("translate.machineNote")}</Caveat>}
+    </Card>
+  );
+}
+
+/** One agent's write-up: its prose, and the lists it produced. */
+function AgentReport({
+  name,
+  payload,
+  translated,
+}: {
+  name: string;
+  payload: AgentPayload;
+  translated: Record<string, unknown> | undefined;
+}) {
+  const { t } = useI18n();
+  const fields = { ...payload, ...(translated ?? {}) };
+
+  const prose = ["summary", "reasoning"]
+    .map((key) => fields[key])
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+
+  const lists = (
+    [
+      ["signals", "analysis.signals"],
+      ["supporting_factors", "rec.supporting"],
+      ["conflicting_factors", "rec.conflicting"],
+      ["risk_factors", "rec.risks"],
+      ["watch_items", "analysis.watchItems"],
+      ["disagreements", "analysis.disagreements"],
+    ] as const
+  )
+    .map(([key, label]) => [label, fields[key]] as const)
+    .filter(([, value]) => Array.isArray(value) && value.length > 0);
+
+  if (!prose.length && !lists.length) return null;
+
+  return (
+    <section>
+      <h3 className="mb-1.5 font-mono text-xs uppercase tracking-wide text-muted">
+        {name.replace(/_/g, " ")}
+      </h3>
+      {prose.map((text) => (
+        <p key={text.slice(0, 40)} className="text-sm leading-relaxed text-ink/90">
+          {text}
+        </p>
+      ))}
+      {lists.map(([label, value]) => (
+        <div key={label} className="mt-2">
+          <p className="text-xs text-faint">{t(label)}</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {(value as unknown[]).map((item, index) => (
+              <li key={index} className="text-xs leading-relaxed text-muted">
+                — {typeof item === "string" ? item : JSON.stringify(item)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /**
  * Which agents ran, and which did not.
  *
@@ -448,7 +575,13 @@ function AgentRoster({
 }) {
   const { t } = useI18n();
 
-  const agents = Array.isArray(result.agents) ? result.agents : [];
+  // The API returns `agents` keyed by name, not as a list. This used to test
+  // `Array.isArray` and fall back to `[]`, so the roster rendered nothing at
+  // all - the panel had been silently empty for as long as it had existed.
+  const agents =
+    result.agents && typeof result.agents === "object"
+      ? Object.keys(result.agents as Record<string, unknown>)
+      : [];
   const skipped = Array.isArray(result.skipped) ? result.skipped : [];
   const failed = Array.isArray(result.failed) ? result.failed : [];
 

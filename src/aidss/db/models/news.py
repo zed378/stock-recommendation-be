@@ -24,6 +24,56 @@ class ScheduleStatus(StrEnum):
     NEEDS_ATTENTION = "needs_attention"
 
 
+class NewsSource(Base):
+    """An RSS or Atom feed the platform reads news from.
+
+    Until this existed there was no real source at all: the only ``NewsProvider``
+    in the tree was a fixture that manufactured plausible headlines for tests,
+    and it was also the configured default - so the whole pipeline ran, reported
+    success, and stored nothing anybody wrote.
+
+    Two shapes of feed, distinguished by the URL rather than by a flag:
+
+      * **Templated** - the URL contains ``{ticker}``. It is substituted per
+        asset and the feed itself does the searching, so every entry counts.
+      * **Plain** - a general headline feed. Every entry is fetched once and
+        matched against the ticker and the company name, because a market-wide
+        feed is mostly about other companies.
+
+    ``asset_id`` narrows a plain feed to one issuer - an investor-relations feed,
+    say - where matching would only throw away entries that all qualify.
+    """
+
+    __tablename__ = "news_sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    name: Mapped[str] = mapped_column(String(120))
+    #: Unique, so the same feed cannot be added twice and then fetched twice.
+    feed_url: Mapped[str] = mapped_column(String(1000), unique=True)
+    #: Restricts this feed to one issuer. Null means it is read for every asset.
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), default=None, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    #: Fetch bookkeeping. Without it a feed that started returning 404 looks
+    #: exactly like a feed with no news, which is the failure this whole
+    #: subsystem was already in when nobody noticed for weeks.
+    last_fetched_at: Mapped[datetime | None] = mapped_column(default=None)
+    last_status: Mapped[str | None] = mapped_column(String(20), default=None)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    #: Entries returned by the last successful fetch, before ticker matching.
+    last_entry_count: Mapped[int] = mapped_column(default=0)
+    consecutive_failures: Mapped[int] = mapped_column(default=0)
+
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+    @property
+    def is_templated(self) -> bool:
+        return "{ticker}" in self.feed_url
+
+
 class TickerNewsSchedule(Base):
     __tablename__ = "ticker_news_schedules"
 

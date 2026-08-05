@@ -64,8 +64,13 @@ def login(
     )
     if user is None or not verify_password(payload.password, user.password_hash):
         raise invalid
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
+    # Checked after the password, so this reveals nothing to someone who does
+    # not already hold the credentials. The reason is included on purpose: this
+    # is the account holder, and being locked out with no explanation leaves
+    # them with nothing to act on and support with nothing to answer.
+    blocked = user.sign_in_block()
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=blocked)
 
     token = create_access_token(user.id, user.role.value, settings)
     return TokenResponse(

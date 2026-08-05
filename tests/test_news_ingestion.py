@@ -415,3 +415,29 @@ def test_a_schedule_whose_asset_vanished_is_deactivated(session, asset) -> None:
     report = scheduler.run_schedule(row, now=NOW)
     assert not report.ok
     assert row.is_active is False
+
+
+def test_a_score_labelled_reason_is_still_accepted(session, asset) -> None:
+    """The bug this exists to prevent recurring.
+
+    The prompt asked for "a short reason" and never named the field; the schema
+    required `rationale` and forbade extras. The model did exactly as it was
+    told, so every batch failed validation on every article and sentiment
+    scoring never once produced a row - reported only as a warning inside an
+    otherwise successful ingestion.
+
+    The existing test could not have caught it: it scripted the model's answer
+    using our own field name, so it exercised the schema against itself rather
+    than against anything a model would say.
+    """
+    provider = StubNewsProvider([article("BBCA up", "https://wire.invalid/1")])
+    runner = sentiment_runner([{"index": 0, "score": 0.5, "reason": "Profit growth."}])
+
+    report = NewsCollector(session, provider, runner=runner).ingest(
+        asset, since=NOW - timedelta(days=1), until=NOW
+    )
+
+    assert report.scored == 1
+    assert report.warnings == []
+    [score] = session.scalars(select(SentimentScore)).all()
+    assert score.rationale == "Profit growth."

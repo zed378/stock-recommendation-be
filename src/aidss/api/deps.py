@@ -50,10 +50,17 @@ def get_current_user(
         ) from exc
 
     user = session.get(User, payload.user_id)
-    if user is None or not user.is_active:
+    if user is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deactivated"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
         )
+    # Re-checked on every request rather than only at sign-in. A token issued
+    # before a suspension stays cryptographically valid for its whole hour, so
+    # a ban that only guarded the login page would not take effect until the
+    # banned user happened to sign out.
+    blocked = user.sign_in_block()
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=blocked)
     return user
 
 

@@ -18,6 +18,7 @@ from aidss.plugins.adapters import (  # noqa: F401
     market_idx,
     market_yahoo,
     news_fixture,
+    news_rss,
     storage_local,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "market_idx",
     "market_yahoo",
     "news_fixture",
+    "news_rss",
     "storage_local",
 ]

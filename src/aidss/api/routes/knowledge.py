@@ -285,7 +285,7 @@ def run_schedule_now(
         ) from exc
 
     collector = NewsCollector(
-        session, get_news_provider(), runner=runner, rag=_rag(session)
+        session, get_news_provider(session=session), runner=runner, rag=_rag(session)
     )
     report = NewsScheduler(session, collector).run_schedule(schedule, now=datetime.now(UTC))
 

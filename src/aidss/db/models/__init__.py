@@ -38,6 +38,7 @@ from aidss.db.models.monitoring import (
 from aidss.db.models.news import (
     NewsEmbedding,
     NewsItem,
+    NewsSource,
     ScheduleStatus,
     SentimentScore,
     TickerNewsSchedule,
@@ -62,6 +63,7 @@ from aidss.db.models.user import (
     User,
     UserPreference,
     UserRole,
+    UserStatus,
     Watchlist,
     WatchlistItem,
 )
@@ -87,6 +89,7 @@ __all__ = [
     "LeaderLease",
     "NewsEmbedding",
     "NewsItem",
+    "NewsSource",
     "Notification",
     "Portfolio",
     "PortfolioAnalysis",
@@ -110,6 +113,7 @@ __all__ = [
     "User",
     "UserPreference",
     "UserRole",
+    "UserStatus",
     "Watchlist",
     "WatchlistItem",
 ]

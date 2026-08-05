@@ -17,6 +17,7 @@ from aidss.api.middleware import (
     SecurityHeadersMiddleware,
 )
 from aidss.api.routes import (
+    admin,
     analysis,
     assets,
     auth,
@@ -81,6 +82,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(journal.router)
     app.include_router(jobs.router)
     app.include_router(market.router)
+    app.include_router(admin.router)
     _install_gateway_error_handler(app)
     return app
 

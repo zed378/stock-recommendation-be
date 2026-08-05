@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from aidss.domain.types import (
     Candle,
@@ -39,6 +39,20 @@ class ProviderPlugin(ABC):
     def health_check(self) -> bool:
         """Used by the Plugin Manager and the /health endpoint."""
         return True
+
+    def bind_session(self, session: Any) -> ProviderPlugin:
+        """Offer this adapter the platform's own database session.
+
+        Almost no adapter wants it - an external API needs a key, not a
+        session - so the default ignores it and returns self. The RSS news
+        adapter is the exception: the feeds it reads are configured by
+        administrators at runtime, not baked into settings, and that list lives
+        in the database like every other thing an administrator manages.
+
+        On the base class rather than special-cased at the call site, so
+        callers can offer it unconditionally and adapters decide.
+        """
+        return self
 
 
 class MarketDataProvider(ProviderPlugin, ABC):

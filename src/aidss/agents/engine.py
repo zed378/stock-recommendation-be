@@ -40,13 +40,14 @@ from aidss.domain.types import Timeframe
 from aidss.llm.errors import GatewayError
 from aidss.llm.gateway import LLMGateway
 from aidss.prompts.manager import PromptComposer
+from aidss.prompts.translation import translatable_fields, translate
 from aidss.prompts.validator import ValidationFailure
 from aidss.recommendations.engine import (
     RecommendationEngine,
     RecommendationRejected,
     RecommendationResult,
 )
-from aidss.recommendations.rendering import render_translation
+from aidss.recommendations.rendering import other_language, render_translation
 from aidss.reporting.notifications import NotificationEvent, NotificationService
 
 logger = logging.getLogger("aidss.analysis")
@@ -81,6 +82,15 @@ class AnalysisRun:
     #: path rather than a missing feature - and reporting it is what lets the
     #: interface tell those two apart.
     translated: bool = False
+    #: Which language the agents wrote in. Recorded rather than assumed, so a
+    #: deployment that changes `analysis_language` leaves its older rows saying
+    #: truthfully what they are instead of being relabelled by the new setting.
+    language: str = "en"
+    #: Per-agent renderings, keyed by agent name then by language. Produced in
+    #: the same run as the analysis so switching language costs no request and
+    #: no tokens - the reader is already waiting once, and paying for a
+    #: rendering every time somebody flips a switch was the alternative.
+    agent_translations: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def synthesis(self) -> AgentRun | None:
@@ -110,6 +120,11 @@ class AnalysisRun:
                     "provider": run.usage.provider,
                     "attempts": run.attempts,
                     "fallbacks_used": list(run.fallbacks_used),
+                    # Same shape the recommendation carries, so one hook in the
+                    # interface reads both: `language` says what the prose above
+                    # is, `translations` holds the rendering of it.
+                    "language": self.language,
+                    "translations": self.agent_translations.get(run.agent, {}),
                 }
                 for run in self.runs
             },
@@ -151,7 +166,15 @@ class AnalysisEngine:
         translate_output: bool = True,
     ) -> AnalysisRun:
         context = self._context_builder.build(asset, timeframe, user_id=user_id)
-        run = AnalysisRun(asset_ticker=asset.ticker, timeframe=timeframe)
+        run = AnalysisRun(
+            asset_ticker=asset.ticker,
+            timeframe=timeframe,
+            # Taken from the composer, which is what actually told the model
+            # which language to answer in. Reading the setting again here would
+            # be a second source for one fact, and the two could disagree the
+            # moment a caller passes its own composer.
+            language=self._composer.language.value,
+        )
 
         conversation: AIConversation | None = None
         recorder: ConversationRecorder | None = None
@@ -257,6 +280,19 @@ class AnalysisEngine:
             )
 
     def _render_other_language(self, run: AnalysisRun) -> None:
+        """Produce the other language for everything a reader will look at.
+
+        Both the recommendation and each agent's own write-up, because the
+        analysis tab shows the agents and a switch that translated only the
+        conclusion would leave the evidence beneath it in a language the reader
+        did not ask for.
+
+        Done here, once, rather than on demand: the reader is already waiting
+        for the analysis, and the alternative was paying a model call every
+        time somebody flipped a switch on text that cannot change.
+        """
+        self._translate_agents(run)
+
         recommendation_id = (
             run.recommendation.recommendation_id if run.recommendation else None
         )
@@ -274,6 +310,46 @@ class AnalysisEngine:
             if row is not None:
                 run.recommendation.language = row.language
                 run.recommendation.translations = dict(row.translations or {})
+
+    def _translate_agents(self, run: AnalysisRun) -> None:
+        """Render each agent's prose in the other language. Never raises.
+
+        One call per agent rather than one call for all of them. Batching would
+        be cheaper, but `translate` refuses a response that dropped a key - and
+        with every agent in one payload, a single omission would discard the
+        whole set. Per agent, a failure costs that agent's rendering and
+        nothing else.
+        """
+        target = other_language(run.language)
+        for agent_run in run.runs:
+            payload = agent_run.output.model_dump(mode="json")
+            if not translatable_fields(payload):
+                # Nothing but labels and numbers. A call here would spend
+                # tokens to return what it was given.
+                continue
+            try:
+                rendered = translate(
+                    self._gateway, payload, target, agent=f"translate:{agent_run.agent}"
+                )
+            except (GatewayError, ValueError) as exc:
+                # The analysis is the product; this is a convenience. Losing a
+                # completed multi-agent run to a rendering step would be a bad
+                # trade in every direction.
+                logger.warning(
+                    "agent output stored without its translation",
+                    extra={
+                        "agent": agent_run.agent,
+                        "language": target.value,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                )
+                continue
+
+            run.agent_translations.setdefault(agent_run.agent, {})[target.value] = {
+                "fields": rendered.fields,
+                "model": rendered.model,
+                "is_machine_translation": True,
+            }
 
     def _recommend(
         self,

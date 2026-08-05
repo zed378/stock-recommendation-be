@@ -25,7 +25,9 @@ export function Layout() {
     // Shown only to admins. Not a security measure - the route and the API
     // both stand on their own - just an absence of a link to somewhere the
     // reader cannot use.
-    ...(user?.role === "admin" ? [{ to: "/admin", label: t("nav.admin") }] : []),
+    ...(user?.role === "admin"
+      ? [{ to: "/admin", label: t("nav.admin") }]
+      : []),
   ];
 
   return (
@@ -36,7 +38,7 @@ export function Layout() {
             <span className="text-sm font-semibold tracking-tight text-ink">
               {t("app.shortName")}
             </span>
-            <span className="hidden text-xs text-faint sm:inline">{t("app.tagline")}</span>
+            {/* <span className="hidden text-xs text-faint sm:inline">{t("app.tagline")}</span> */}
           </NavLink>
 
           <nav className="flex items-center gap-1">
@@ -59,10 +61,16 @@ export function Layout() {
 
           <div className="ml-auto flex items-center gap-3">
             {user && <NotificationBell />}
-            <LocaleSwitch locale={locale} onChange={setLocale} label={t("nav.language")} />
+            <LocaleSwitch
+              locale={locale}
+              onChange={setLocale}
+              label={t("nav.language")}
+            />
             {user && (
               <>
-                <span className="hidden text-xs text-faint md:inline">{user.email}</span>
+                <span className="hidden text-xs text-faint md:inline">
+                  {user.email}
+                </span>
                 <button
                   onClick={signOut}
                   className="rounded-md px-2.5 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-ink"
@@ -81,7 +89,9 @@ export function Layout() {
 
       <footer className="border-t border-line px-4 py-4">
         <p className="mx-auto max-w-7xl text-xs leading-relaxed text-faint">
-          <span className="font-medium text-muted">{t("disclaimer.title")}. </span>
+          <span className="font-medium text-muted">
+            {t("disclaimer.title")}.{" "}
+          </span>
           {t("disclaimer.long")}
         </p>
       </footer>
@@ -110,7 +120,9 @@ function LocaleSwitch({
           onClick={() => onChange(option)}
           aria-pressed={locale === option}
           className={`px-2 py-1 text-xs uppercase transition-colors ${
-            locale === option ? "bg-hover text-ink" : "text-faint hover:text-muted"
+            locale === option
+              ? "bg-hover text-ink"
+              : "text-faint hover:text-muted"
           }`}
         >
           {option}

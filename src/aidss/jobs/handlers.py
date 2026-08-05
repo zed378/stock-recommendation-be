@@ -205,7 +205,7 @@ def run_news_schedule(session: Session, payload: dict[str, Any]) -> dict[str, An
 
     collector = NewsCollector(
         session,
-        get_news_provider(),
+        get_news_provider(session=session),
         runner=_runner(session),
         rag=build_rag(session),
     )

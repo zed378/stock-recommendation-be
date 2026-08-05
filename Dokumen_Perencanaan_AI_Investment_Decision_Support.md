@@ -1056,6 +1056,32 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 ---
 
+## 23a. Sumber Berita & Administrasi Akun
+
+**Pipeline berita berjalan hijau selama berminggu-minggu tanpa menyimpan apa pun yang ditulis manusia.** Satu-satunya `NewsProvider` di pohon kode adalah fixture yang mengarang judul berita untuk keperluan tes — dan fixture itu juga yang menjadi provider default. Jadwal berjalan, handler sukses, laporan hijau, `news_items` kosong. Tiga sebab menumpuk: tidak ada adapter sungguhan, konfigurasinya menunjuk fixture, dan nol jadwal pernah dibuat sehingga adapter yang bekerja pun tak akan pernah dipanggil.
+
+**Sumber feed hidup di basis data, bukan di setelan.** Orang yang memutuskan publikasi mana yang diikuti bukan orang yang men-deploy ulang stack.
+
+**Dua bentuk feed, dibedakan oleh URL-nya sendiri, bukan oleh flag.** URL yang memuat `{ticker}` disubstitusi per emiten dan penerbitnya yang mencari — hasilnya tidak disaring lagi. URL biasa adalah feed umum: diambil sekali, lalu setiap entri dicocokkan dengan kode emiten dan nama perusahaan. Pencocokan memakai batas kata, sebab kode IDX empat huruf dan pencocokan substring akan memasukkan setiap artikel yang memuat "banks" ke BANK. Bentuk korporat (`PT`, `Tbk`, `Persero`) dibuang lebih dulu karena muncul di setiap nama perusahaan Indonesia dan tidak membawa sinyal apa pun.
+
+**Nol sumber adalah galat, bukan hasil kosong.** Mengembalikan nol artikel akan memberi tahu jadwal bahwa tidak ada berita, dan ia akan terus mengatakan itu selamanya — persis keadaan subsistem ini sebelumnya.
+
+**Halaman error HTML adalah XML yang sah.** Server yang menjawab 404 dengan halaman bergaya akan terparsir bersih dan menghasilkan nol entri, yang terbaca di hilir sebagai "tidak ada berita hari ini" dan bertahan begitu selamanya. Elemen akar yang memisahkan feed dari dokumen yang kebetulan terparsir, sehingga hanya `rss`, `feed`, dan `rdf` yang diterima.
+
+**Setiap feed membawa hasil pembacaan terakhirnya** — status, galat, dan hitungan kegagalan berturut-turut. Tanpa itu, feed yang mulai menjawab 404 tidak bisa dibedakan dari feed yang memang sepi. Tombol uji mengambil feed saat itu juga dan menampilkan beberapa judul teratas: hitungan menjawab "apakah sesuatu terparsir", hanya judulnya yang menjawab "apakah ini feed yang Anda maksud".
+
+**`is_active` boolean pada akun diganti `status`.** Boolean bisa menyatakan akun mati tapi tidak bisa menyatakan itu suspend dua hari atau ban permanen, sehingga alasannya harus disimpan di tempat lain — dan penanda yang bisa bertentangan dengan alasan di sebelahnya adalah persis cara akun yang diban tetap bisa masuk. Satu fungsi, `sign_in_block()`, dipakai gerbang login, setiap request terautentikasi, dan daftar admin — sehingga status yang dibaca admin secara konstruksi adalah status yang ditegakkan platform.
+
+**Suspend berakhir sendiri; tidak ada job yang mencabutnya.** Suspend yang hidup melampaui tenggatnya karena worker sedang mati adalah hukuman yang tidak dipilih siapa pun.
+
+**Ban dicek ulang di setiap request, bukan hanya saat login.** Token tetap valid secara kriptografis sepanjang satu jam; ban yang hanya menjaga halaman login tidak akan berlaku sampai orang yang diban kebetulan keluar sendiri.
+
+**Admin terakhir tidak bisa mundur.** Tidak ada endpoint yang memberikan peran admin — promosi adalah perintah shell, justru agar sebuah rute tidak menjadi permukaan eskalasi. Konsekuensinya: organisasi yang menurunkan admin tunggalnya tidak bisa pulih dari dalam produk sama sekali. Sebaliknya, mundur saat masih ada admin lain **diizinkan** — melarangnya sekaligus membuat penjaga admin-terakhir tidak pernah tercapai, dan penjaga yang tak pernah menyala bukan penjaga, melainkan komentar.
+
+**Aksi batch memakai endpoint per akun yang sama.** Tidak ada endpoint massal, disengaja: ia harus menuliskan ulang penjaga "bukan diri sendiri" dan "bukan admin terakhir", lalu memutuskan arti batch yang setengah diterapkan. Batch dijalankan berurutan, setiap akun tetap dicoba meski ada yang gagal, dan hasilnya dilaporkan per akun. Batch yang diam-diam melaporkan sukses untuk yang berhasil saja adalah cara seorang admin percaya empat puluh akun tersuspend padahal tiga puluh delapan.
+
+---
+
 ## 24. Catatan Implementasi yang Menyimpang dari Rencana Awal
 
 Beberapa hal ditemukan saat membangun dan berbeda dari asumsi dokumen ini. Dicatat agar pembaca berikutnya tidak mengulang jalannya.

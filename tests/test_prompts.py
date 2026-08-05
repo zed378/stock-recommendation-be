@@ -320,3 +320,31 @@ def test_seeding_does_not_overwrite_an_operator_edit(session) -> None:
     manager.seed_catalog()
     reread = session.scalar(select(Row).where(Row.name == "synthesis"))
     assert reread.template_text == "Operator's tuned prompt"
+
+
+def test_the_sentiment_prompt_names_the_fields_its_schema_requires() -> None:
+    """A prompt that asks for one word while the schema demands another is a
+    silent, total failure: every response is rejected, the retry corrects
+    nothing because the wording is unchanged, and the caller records a warning
+    rather than an error.
+
+    That happened here - the prompt said "a short reason", the schema required
+    `rationale` and forbade extras, and sentiment scoring produced no rows at
+    all for as long as it had existed.
+    """
+    from aidss.prompts.catalog import SENTIMENT_SCORING
+    from aidss.prompts.schemas import ArticleSentiment
+
+    text = f"{SENTIMENT_SCORING.system}\n{SENTIMENT_SCORING.user}"
+    required = [
+        name
+        for name, field in ArticleSentiment.model_fields.items()
+        if field.is_required()
+    ]
+    assert required, "the schema must have required fields for this to mean anything"
+
+    missing = [name for name in required if name not in text]
+    assert not missing, (
+        f"the sentiment prompt never names {missing}, so the model has to guess "
+        f"what to call them"
+    )

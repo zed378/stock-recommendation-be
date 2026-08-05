@@ -8,7 +8,7 @@ decision journal. Portfolio positions are **always** user-entered
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -30,6 +30,25 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class UserStatus(StrEnum):
+    """Whether an account may be used, and why not.
+
+    Replaces the earlier boolean ``is_active``. A boolean could say that an
+    account was off but not whether that was a two-day suspension or a
+    permanent ban, so the two had to be tracked somewhere else - and a flag
+    that can disagree with the reason beside it is exactly how a banned
+    account ends up able to sign in.
+    """
+
+    ACTIVE = "active"
+    #: Time-boxed and reversible. Expires on its own; no job lifts it, because
+    #: a suspension that outlives its own deadline because a worker was down is
+    #: a punishment nobody chose.
+    SUSPENDED = "suspended"
+    #: Indefinite. An admin can still lift it, but the clock never will.
+    BANNED = "banned"
+
+
 class HoldingInputMethod(StrEnum):
     """Where a position came from. There is deliberately no ``broker_sync``."""
 
@@ -46,8 +65,50 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(200), default=None)
     role: Mapped[UserRole] = mapped_column(enum_column(UserRole), default=UserRole.INVESTOR)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    status: Mapped[UserStatus] = mapped_column(
+        enum_column(UserStatus), default=UserStatus.ACTIVE, index=True
+    )
+    #: When a suspension lifts itself. Null for an indefinite one and for a ban.
+    suspended_until: Mapped[datetime | None] = mapped_column(default=None)
+    #: What the admin gave as the reason. Shown to the account holder at sign-in:
+    #: being locked out with no explanation is worse than the explanation.
+    status_reason: Mapped[str | None] = mapped_column(Text, default=None)
+    status_changed_at: Mapped[datetime | None] = mapped_column(default=None)
+
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    def sign_in_block(self, now: datetime | None = None) -> str | None:
+        """Why this account cannot be used right now, or ``None`` if it can.
+
+        One function, used by the login check, by every authenticated request,
+        and by the admin listing - so what an admin sees as an account's state
+        is by construction the state the auth gate enforces. An expired
+        suspension is computed, not swept up by a job: the deadline passing is
+        the whole mechanism.
+        """
+        if self.status is UserStatus.BANNED:
+            return self.status_reason or "This account has been banned."
+        if self.status is UserStatus.SUSPENDED:
+            now = now or datetime.now(UTC)
+            until = self.suspended_until
+            if until is not None:
+                # Naive timestamps come back from SQLite, which has no tz type.
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=UTC)
+                if until <= now:
+                    return None
+            return self.status_reason or "This account is suspended."
+        return None
+
+    @property
+    def is_active(self) -> bool:
+        """Kept as a read-only view for callers that only need the boolean.
+
+        Derived rather than stored, so it cannot drift out of step with
+        ``status`` the way a second column would.
+        """
+        return self.sign_in_block() is None
 
     watchlists: Mapped[list[Watchlist]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

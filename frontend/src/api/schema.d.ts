@@ -1260,6 +1260,185 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_admin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change Role
+         * @description Promote or demote. Both directions, and stepping down is one of them.
+         */
+        patch: operations["change_role_admin_users__user_id__role_patch"];
+        trace?: never;
+    };
+    "/admin/users/{user_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend User */
+        post: operations["suspend_user_admin_users__user_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}/ban": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ban User
+         * @description Indefinite, and never lifted by the clock. Still reversible by an admin.
+         *
+         *     Distinct from delete on purpose: a ban keeps the account and its history,
+         *     which is what an investigation needs and what an appeal needs.
+         */
+        post: operations["ban_user_admin_users__user_id__ban_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reinstate User */
+        post: operations["reinstate_user_admin_users__user_id__reinstate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete User
+         * @description Remove an account and everything personal hanging off it.
+         *
+         *     Watchlists, portfolios, and journal entries cascade. That is what deletion
+         *     means here, and it is not recoverable - which is the reason ban exists
+         *     beside it rather than instead of it.
+         */
+        delete: operations["delete_user_admin_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/news-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List News Sources */
+        get: operations["list_news_sources_admin_news_sources_get"];
+        put?: never;
+        /** Create News Source */
+        post: operations["create_news_source_admin_news_sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/news-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete News Source */
+        delete: operations["delete_news_source_admin_news_sources__source_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update News Source */
+        patch: operations["update_news_source_admin_news_sources__source_id__patch"];
+        trace?: never;
+    };
+    "/admin/news-sources/{source_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test News Source
+         * @description Fetch this feed now and report what came back.
+         *
+         *     Without it, adding a source means waiting for a schedule and then guessing
+         *     from an empty result whether the URL was wrong, the feed was empty, or
+         *     nothing in it mentioned the ticker. The sample headlines answer the
+         *     question the count cannot: is this the feed you meant?
+         */
+        post: operations["test_news_source_admin_news_sources__source_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1269,6 +1448,35 @@ export interface components {
          * @enum {string}
          */
         ActorType: "user" | "ai" | "system";
+        /** AdminUserResponse */
+        AdminUserResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /** Effective Status */
+            effective_status: string;
+            /** Suspended Until */
+            suspended_until: string | null;
+            /** Status Reason */
+            status_reason: string | null;
+            /** Status Changed At */
+            status_changed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** AgentSkipResponse */
         AgentSkipResponse: {
             /** Agent */
@@ -1426,6 +1634,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** BanRequest */
+        BanRequest: {
+            /** Reason */
+            reason?: string | null;
         };
         /** BudgetStatusResponse */
         BudgetStatusResponse: {
@@ -1858,6 +2071,82 @@ export interface components {
             /** Next Run At */
             next_run_at: string | null;
         };
+        /** NewsSourceCreate */
+        NewsSourceCreate: {
+            /** Name */
+            name: string;
+            /** Feed Url */
+            feed_url: string;
+            /** Ticker */
+            ticker?: string | null;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+        };
+        /** NewsSourceResponse */
+        NewsSourceResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Feed Url */
+            feed_url: string;
+            /** Ticker */
+            ticker: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Templated */
+            is_templated: boolean;
+            /** Last Fetched At */
+            last_fetched_at: string | null;
+            /** Last Status */
+            last_status: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Entry Count */
+            last_entry_count: number;
+            /** Consecutive Failures */
+            consecutive_failures: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * NewsSourceTestResponse
+         * @description What a feed actually returned, right now.
+         *
+         *     Exists because the alternative was adding a source, waiting for a schedule,
+         *     and inferring from an empty list whether the URL was wrong, the feed was
+         *     empty, or nothing mentioned the ticker.
+         */
+        NewsSourceTestResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Entries */
+            entries: number;
+            /** Error */
+            error?: string | null;
+            /** Sample */
+            sample?: string[];
+            /** Newest Published At */
+            newest_published_at?: string | null;
+        };
+        /** NewsSourceUpdate */
+        NewsSourceUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Feed Url */
+            feed_url?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
         /** NotificationResponse */
         NotificationResponse: {
             /**
@@ -2129,6 +2418,10 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** RoleChangeRequest */
+        RoleChangeRequest: {
+            role: components["schemas"]["UserRole"];
+        };
         /** ScheduleRunResponse */
         ScheduleRunResponse: {
             /** Ticker */
@@ -2225,6 +2518,13 @@ export interface components {
             holding: components["schemas"]["GuidanceResponse"];
             /** Disclaimer */
             disclaimer: string;
+        };
+        /** SuspendRequest */
+        SuspendRequest: {
+            /** Until */
+            until?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * Timeframe
@@ -4358,6 +4658,356 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_admin_users_get: {
+        parameters: {
+            query?: {
+                /** @description Match on email or name */
+                q?: string | null;
+                role?: components["schemas"]["UserRole"] | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_role_admin_users__user_id__role_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspend_user_admin_users__user_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuspendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ban_user_admin_users__user_id__ban_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reinstate_user_admin_users__user_id__reinstate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_admin_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_news_sources_admin_news_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsSourceResponse"][];
+                };
+            };
+        };
+    };
+    create_news_source_admin_news_sources_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewsSourceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_news_source_admin_news_sources__source_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_news_source_admin_news_sources__source_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewsSourceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_news_source_admin_news_sources__source_id__test_post: {
+        parameters: {
+            query?: {
+                /** @description Substituted into a templated URL */
+                ticker?: string | null;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsSourceTestResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

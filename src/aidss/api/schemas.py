@@ -268,6 +268,88 @@ class WatchlistCategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
+# --- Administration (users and news sources) -------------------------------
+
+
+class AdminUserResponse(BaseModel):
+    id: uuid.UUID
+    email: str
+    full_name: str | None
+    role: str
+    status: str
+    #: What the status *does* right now. A suspension whose deadline has passed
+    #: is still recorded as suspended, and showing only the stored value would
+    #: have an admin chasing a lock that no longer exists.
+    effective_status: str
+    suspended_until: datetime | None
+    status_reason: str | None
+    status_changed_at: datetime | None
+    created_at: datetime
+
+
+class RoleChangeRequest(BaseModel):
+    role: UserRole
+
+
+class SuspendRequest(BaseModel):
+    #: Null means indefinite - still a suspension rather than a ban, because
+    #: the two mean different things to the person on the other end.
+    until: datetime | None = None
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class BanRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class NewsSourceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    #: May contain ``{ticker}``, in which case it is substituted per asset and
+    #: the publisher does the searching.
+    feed_url: str = Field(min_length=8, max_length=1000)
+    #: Restrict to one issuer. Null means the feed is read for every asset.
+    ticker: str | None = None
+    is_active: bool = True
+
+
+class NewsSourceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    feed_url: str | None = Field(default=None, min_length=8, max_length=1000)
+    is_active: bool | None = None
+
+
+class NewsSourceResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    feed_url: str
+    ticker: str | None
+    is_active: bool
+    is_templated: bool
+    last_fetched_at: datetime | None
+    last_status: str | None
+    last_error: str | None
+    last_entry_count: int
+    consecutive_failures: int
+    created_at: datetime
+
+
+class NewsSourceTestResponse(BaseModel):
+    """What a feed actually returned, right now.
+
+    Exists because the alternative was adding a source, waiting for a schedule,
+    and inferring from an empty list whether the URL was wrong, the feed was
+    empty, or nothing mentioned the ticker.
+    """
+
+    ok: bool
+    entries: int
+    error: str | None = None
+    #: The newest few headlines, so the admin can see it is the right feed
+    #: rather than only that something parsed.
+    sample: list[str] = Field(default_factory=list)
+    newest_published_at: datetime | None = None
+
+
 # --- Screening, strategy, monitoring ---------------------------------------
 
 

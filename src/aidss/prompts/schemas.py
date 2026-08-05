@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from aidss.domain.types import InvestmentHorizon, RecommendationLabel
 
@@ -112,13 +112,24 @@ class SynthesisOutput(AgentOutput):
 class ArticleSentiment(BaseModel):
     """Sentiment for one article inside a batch."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     #: Position in the supplied list. An index rather than a URL, because a
     #: model reproducing a long URL is a model with one more chance to alter it.
     index: int = Field(ge=0)
     score: float = Field(ge=-1, le=1)
-    rationale: str = Field(min_length=1, max_length=1000)
+    #: `reason` is accepted as well as `rationale`. The prompt used to ask for
+    #: "a short reason" without naming the field, and the model did exactly as
+    #: it was told - so every batch of twenty failed validation on twenty
+    #: counts, sentiment scoring never once produced a row, and the ingestion
+    #: report called it a warning. The prompt now names the field; the alias is
+    #: here because "reason" is the word a model reaches for anyway, and
+    #: spending a retry to correct a synonym buys nothing.
+    rationale: str = Field(
+        min_length=1,
+        max_length=1000,
+        validation_alias=AliasChoices("rationale", "reason"),
+    )
 
 
 class BatchSentimentOutput(AgentOutput):

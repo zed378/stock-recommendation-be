@@ -51,6 +51,30 @@ export const id = {
   // exist, and would be wrong the moment the real one changed.
   "auth.passwordHint": "Minimal 10 karakter.",
 
+  "login.lede":
+    "Analisis multi-agen untuk emiten IDX, dengan alasannya ditulis lengkap — " +
+    "termasuk bukti yang membantahnya.",
+  "login.point1.title": "Setiap sikap membawa penyangkalnya",
+  "login.point1.body":
+    "Rekomendasi tanpa faktor yang membantahnya ditolak sebelum tersimpan. Yang Anda baca " +
+    "selalu memuat sisi lainnya.",
+  "login.point2.title": "Confidence dihitung, bukan diklaim",
+  "login.point2.body":
+    "Angkanya berasal dari cakupan bukti, kesepakatan antar-agen, dan keseimbangannya — " +
+    "bukan dari penilaian model atas dirinya sendiri.",
+  "login.point3.title": "Data tertunda dinyatakan tertunda",
+  "login.point3.body":
+    "Sumber gratis tertinggal sekitar 15 menit. Setiap observasi mencatat kesegarannya " +
+    "alih-alih menyiratkan yang tidak dimilikinya.",
+  "login.constraint":
+    "Platform ini tidak dapat menempatkan order, tidak terhubung ke broker mana pun, dan " +
+    "tidak mengeksekusi apa pun. Setiap keputusan dan risikonya ada pada Anda.",
+  "login.welcomeBack": "Selamat datang kembali",
+  "login.welcomeBackHint": "Masuk untuk melanjutkan.",
+  "login.createAccount": "Buat akun",
+  "login.createAccountHint": "Gratis, dan watchlist Anda hanya milik Anda.",
+
+
   // --- watchlist ---------------------------------------------------------
   "watchlist.title": "Watchlist",
   "watchlist.empty": "Watchlist Anda masih kosong.",
@@ -182,6 +206,13 @@ export const id = {
   "analysis.failed": "Analisis gagal.",
   "analysis.history": "Riwayat",
   "analysis.agentsRan": "Agen yang berjalan",
+  "analysis.agentFindings": "Temuan tiap agen",
+  "analysis.signals": "Sinyal",
+  "analysis.watchItems": "Yang perlu diperhatikan",
+  "analysis.disagreements": "Perbedaan antar-agen",
+  "analysis.noAgentTranslation":
+    "Analisis ini dijalankan sebelum terjemahan per-agen disimpan, jadi hanya tersedia " +
+    "dalam bahasa aslinya. Jalankan ulang analisis untuk mendapat keduanya.",
   "analysis.skipped": "Dilewati",
   "analysis.agentFailed": "Gagal",
   "analysis.skippedNote":
@@ -385,6 +416,123 @@ export const id = {
     "python -m aidss.cli grant-admin {email}",
 
   "admin.tab.overview": "Ringkasan",
+  "admin.tab.users": "Pengguna",
+  "admin.tab.news": "Sumber berita",
+
+  // --- account administration -------------------------------------------
+  "admin.users.title": "Kelola pengguna",
+  "admin.users.selectAll": "Pilih semua",
+  "admin.users.select": "Pilih {email}",
+  "admin.users.selected": "{count} akun dipilih",
+  "admin.users.clearSelection": "Batal pilih",
+  "admin.users.appliesTo": "Berlaku untuk:",
+  "admin.users.batchProgress": "Memproses {done} dari {total}...",
+  "admin.users.batchResult": "Hasil",
+  "admin.users.batchSummary": "{done} dari {total} akun berhasil diproses.",
+  "admin.users.batchFailed": "{count} gagal:",
+  "admin.users.suspendTitleMany": "Suspend {count} akun",
+  "admin.users.banTitleMany": "Ban {count} akun",
+  "admin.users.roleTitleMany": "Peran untuk {count} akun",
+  "admin.users.reasonNoteMany":
+    "Alasan yang sama ditampilkan kepada setiap pemilik akun saat ia mencoba masuk.",
+  "admin.users.deleteWarningMany":
+    "Hapus {count} akun? Watchlist, portofolio, dan jurnal masing-masing ikut terhapus. " +
+    "Tindakan ini tidak bisa dibatalkan.",
+  "admin.users.typeCount": "Ketik {count} untuk mengonfirmasi",
+
+  "admin.users.searchPlaceholder": "Cari email atau nama...",
+  "admin.users.empty": "Tidak ada akun yang cocok.",
+  "admin.users.account": "Akun",
+  "admin.users.role": "Peran",
+  "admin.users.status": "Status",
+  "admin.users.since": "Terdaftar",
+  "admin.users.you": "akun Anda",
+  "admin.users.changeRole": "Peran",
+  "admin.users.suspend": "Suspend",
+  "admin.users.ban": "Ban",
+  "admin.users.reinstate": "Pulihkan",
+  "admin.users.delete": "Hapus",
+  "admin.users.caveat":
+    "Suspend dan ban dapat dibatalkan; hapus tidak. Menghapus akun ikut menghapus " +
+    "watchlist, portofolio, dan jurnalnya.",
+
+  "admin.users.status.active": "Aktif",
+  "admin.users.status.suspended": "Disuspend",
+  "admin.users.status.banned": "Diban",
+  "admin.users.statusExpired": "Suspend berakhir",
+  "admin.users.until": "sampai {when}",
+
+  "admin.users.role.viewer": "Viewer \u2014 hanya membaca",
+  "admin.users.role.investor": "Investor \u2014 kelola data sendiri",
+  "admin.users.role.admin": "Admin \u2014 kelola sistem",
+  "admin.users.roleTitle": "Peran untuk {email}",
+  "admin.users.roleNote":
+    "Viewer hanya membaca. Investor mengelola data miliknya sendiri. Admin mengelola " +
+    "penyedia data, antrean, dan akun.",
+  "admin.users.stepDownWarning":
+    "Anda menurunkan peran akun Anda sendiri. Tidak ada endpoint yang bisa " +
+    "mengembalikannya \u2014 pemulihan hanya lewat perintah shell di server.",
+
+  "admin.users.suspendTitle": "Suspend {email}",
+  "admin.users.banTitle": "Ban {email}",
+  "admin.users.banNote":
+    "Ban berlaku tanpa batas waktu dan tidak pernah dicabut oleh waktu. Akun beserta " +
+    "riwayatnya tetap ada, dan admin masih bisa memulihkannya.",
+  "admin.users.duration": "Durasi",
+  "admin.users.days": "{count} hari",
+  "admin.users.indefinite": "Tanpa batas",
+  "admin.users.reason": "Alasan",
+  "admin.users.reasonPlaceholder": "mis. Sedang ditinjau",
+  "admin.users.reasonNote":
+    "Alasan ini ditampilkan kepada pemilik akun saat ia mencoba masuk.",
+  "admin.users.deleteTitle": "Hapus akun",
+  "admin.users.deleteWarning":
+    "Hapus {email}? Watchlist, portofolio, dan jurnalnya ikut terhapus. " +
+    "Tindakan ini tidak bisa dibatalkan \u2014 gunakan ban jika Anda ingin bisa memulihkannya.",
+
+  // --- news sources -------------------------------------------------------
+  "admin.news.title": "Sumber berita (RSS/Atom)",
+  "admin.news.add": "+ Tambah sumber",
+  "admin.news.addTitle": "Tambah sumber berita",
+  "admin.news.empty": "Belum ada sumber berita.",
+  "admin.news.emptyHint":
+    "Tanpa sumber, pengambilan berita tidak punya tempat untuk mencari dan jadwal " +
+    "akan melaporkan kegagalan.",
+  "admin.news.name": "Nama",
+  "admin.news.namePlaceholder": "mis. Google News \u2014 per emiten",
+  "admin.news.url": "URL feed",
+  "admin.news.urlHint":
+    "Pakai {ticker} di dalam URL agar disubstitusi per emiten \u2014 penerbitnya yang mencari.",
+  "admin.news.ticker": "Khusus emiten",
+  "admin.news.tickerHint":
+    "Kosongkan agar feed dibaca untuk semua emiten dan disaring per kode dan nama perusahaan.",
+  "admin.news.templated": "per emiten",
+  "admin.news.templatedNote":
+    "URL ini memuat {ticker}, jadi feed-nya sudah spesifik per emiten. Hasilnya tidak " +
+    "disaring lagi.",
+  "admin.news.suggestions": "Titik awal",
+  "admin.news.off": "nonaktif",
+  "admin.news.test": "Uji",
+  "admin.news.enable": "Aktifkan",
+  "admin.news.disable": "Nonaktifkan",
+  "admin.news.remove": "Hapus",
+  "admin.news.removeTitle": "Hapus sumber",
+  "admin.news.removeWarning":
+    "Hapus {name}? Berita yang sudah tersimpan tetap ada; hanya sumbernya yang berhenti dibaca.",
+  "admin.news.neverRead": "Belum pernah dibaca.",
+  "admin.news.lastOk": "{count} entri, terakhir dibaca {when}",
+  "admin.news.lastFailed": "Gagal dibaca {when}",
+  "admin.news.failureStreak": "{count} kegagalan berturut-turut",
+  "admin.news.testTitle": "Uji {name}",
+  "admin.news.testOk": "Feed terbaca \u2014 {count} entri.",
+  "admin.news.testNewest": "Terbaru: {when}",
+  "admin.news.testEmpty": "Feed valid tapi kosong. Periksa apakah URL-nya benar.",
+  "admin.news.testFailed": "Feed tidak bisa dibaca.",
+  "admin.news.caveat":
+    "Judul dan ringkasan diambil apa adanya dari penerbit. Feed umum disaring dengan " +
+    "mencocokkan kode emiten dan nama perusahaan, sehingga artikel yang hanya menyebut " +
+    "julukan bisa terlewat.",
+
   "admin.tab.queue": "Antrean",
   "admin.tab.providers": "Provider",
   "admin.tab.budget": "Biaya AI",
@@ -550,6 +698,30 @@ export const en: Record<MessageKey, string> = {
   "auth.sessionExpired": "Your session ended. Please sign in again.",
   "auth.passwordHint": "At least 10 characters.",
 
+  "login.lede":
+    "Multi-agent analysis of IDX issuers, with the reasoning written out in full - " +
+    "including the evidence against it.",
+  "login.point1.title": "Every stance carries its counter-argument",
+  "login.point1.body":
+    "A recommendation with no conflicting factors is rejected before it is stored. What " +
+    "you read always contains the other side.",
+  "login.point2.title": "Confidence is calculated, not claimed",
+  "login.point2.body":
+    "The figure comes from evidence coverage, agreement between agents, and how balanced " +
+    "they are - never from the model's opinion of itself.",
+  "login.point3.title": "Delayed data says it is delayed",
+  "login.point3.body":
+    "The free sources run about fifteen minutes behind. Every observation records its own " +
+    "freshness rather than implying one it does not have.",
+  "login.constraint":
+    "This platform cannot place orders, is not connected to any broker, and executes " +
+    "nothing. Every decision, and its risk, is yours.",
+  "login.welcomeBack": "Welcome back",
+  "login.welcomeBackHint": "Sign in to continue.",
+  "login.createAccount": "Create an account",
+  "login.createAccountHint": "Free, and your watchlist is yours alone.",
+
+
   "watchlist.title": "Watchlist",
   "watchlist.empty": "Your watchlist is empty.",
   "watchlist.emptyHint": "Add a ticker to start following it.",
@@ -672,6 +844,13 @@ export const en: Record<MessageKey, string> = {
   "analysis.failed": "The analysis failed.",
   "analysis.history": "History",
   "analysis.agentsRan": "Agents that ran",
+  "analysis.agentFindings": "What each agent found",
+  "analysis.signals": "Signals",
+  "analysis.watchItems": "Watch items",
+  "analysis.disagreements": "Where the agents disagreed",
+  "analysis.noAgentTranslation":
+    "This analysis ran before per-agent translations were stored, so it exists only in " +
+    "its original language. Run the analysis again to get both.",
   "analysis.skipped": "Skipped",
   "analysis.agentFailed": "Failed",
   "analysis.skippedNote":
@@ -867,6 +1046,119 @@ export const en: Record<MessageKey, string> = {
     "python -m aidss.cli grant-admin {email}",
 
   "admin.tab.overview": "Overview",
+  "admin.tab.users": "Users",
+  "admin.tab.news": "News sources",
+
+  "admin.users.title": "Manage users",
+  "admin.users.selectAll": "Select all",
+  "admin.users.select": "Select {email}",
+  "admin.users.selected": "{count} accounts selected",
+  "admin.users.clearSelection": "Clear",
+  "admin.users.appliesTo": "Applies to:",
+  "admin.users.batchProgress": "Processing {done} of {total}...",
+  "admin.users.batchResult": "Result",
+  "admin.users.batchSummary": "{done} of {total} accounts processed.",
+  "admin.users.batchFailed": "{count} failed:",
+  "admin.users.suspendTitleMany": "Suspend {count} accounts",
+  "admin.users.banTitleMany": "Ban {count} accounts",
+  "admin.users.roleTitleMany": "Role for {count} accounts",
+  "admin.users.reasonNoteMany":
+    "The same reason is shown to every one of these account holders when they sign in.",
+  "admin.users.deleteWarningMany":
+    "Delete {count} accounts? Each one's watchlists, portfolios, and journal go with it. " +
+    "This cannot be undone.",
+  "admin.users.typeCount": "Type {count} to confirm",
+
+  "admin.users.searchPlaceholder": "Search email or name...",
+  "admin.users.empty": "No accounts match.",
+  "admin.users.account": "Account",
+  "admin.users.role": "Role",
+  "admin.users.status": "Status",
+  "admin.users.since": "Registered",
+  "admin.users.you": "your account",
+  "admin.users.changeRole": "Role",
+  "admin.users.suspend": "Suspend",
+  "admin.users.ban": "Ban",
+  "admin.users.reinstate": "Reinstate",
+  "admin.users.delete": "Delete",
+  "admin.users.caveat":
+    "Suspend and ban can be undone; delete cannot. Deleting an account also deletes " +
+    "its watchlists, portfolios, and journal.",
+
+  "admin.users.status.active": "Active",
+  "admin.users.status.suspended": "Suspended",
+  "admin.users.status.banned": "Banned",
+  "admin.users.statusExpired": "Suspension expired",
+  "admin.users.until": "until {when}",
+
+  "admin.users.role.viewer": "Viewer \u2014 read only",
+  "admin.users.role.investor": "Investor \u2014 manages their own data",
+  "admin.users.role.admin": "Admin \u2014 manages the system",
+  "admin.users.roleTitle": "Role for {email}",
+  "admin.users.roleNote":
+    "Viewer reads. Investor manages their own data. Admin manages providers, the " +
+    "queue, and accounts.",
+  "admin.users.stepDownWarning":
+    "You are demoting your own account. No endpoint can restore it \u2014 recovery is a " +
+    "shell command on the server.",
+
+  "admin.users.suspendTitle": "Suspend {email}",
+  "admin.users.banTitle": "Ban {email}",
+  "admin.users.banNote":
+    "A ban is indefinite and is never lifted by the clock. The account and its history " +
+    "are kept, and an admin can still reinstate it.",
+  "admin.users.duration": "Duration",
+  "admin.users.days": "{count} days",
+  "admin.users.indefinite": "Indefinite",
+  "admin.users.reason": "Reason",
+  "admin.users.reasonPlaceholder": "e.g. Under review",
+  "admin.users.reasonNote": "This reason is shown to the account holder when they sign in.",
+  "admin.users.deleteTitle": "Delete account",
+  "admin.users.deleteWarning":
+    "Delete {email}? Their watchlists, portfolios, and journal go with it. This cannot " +
+    "be undone \u2014 use ban if you want to be able to reverse it.",
+
+  "admin.news.title": "News sources (RSS/Atom)",
+  "admin.news.add": "+ Add source",
+  "admin.news.addTitle": "Add a news source",
+  "admin.news.empty": "No news sources yet.",
+  "admin.news.emptyHint":
+    "With none configured, news ingestion has nowhere to look and schedules report failure.",
+  "admin.news.name": "Name",
+  "admin.news.namePlaceholder": "e.g. Google News \u2014 per ticker",
+  "admin.news.url": "Feed URL",
+  "admin.news.urlHint":
+    "Put {ticker} in the URL to have it substituted per asset \u2014 the publisher searches.",
+  "admin.news.ticker": "Bind to one ticker",
+  "admin.news.tickerHint":
+    "Leave empty to read this feed for every asset, filtered on the code and company name.",
+  "admin.news.templated": "per ticker",
+  "admin.news.templatedNote":
+    "This URL contains {ticker}, so the feed is already per-asset. Its entries are not " +
+    "filtered again.",
+  "admin.news.suggestions": "Starting points",
+  "admin.news.off": "off",
+  "admin.news.test": "Test",
+  "admin.news.enable": "Enable",
+  "admin.news.disable": "Disable",
+  "admin.news.remove": "Remove",
+  "admin.news.removeTitle": "Remove source",
+  "admin.news.removeWarning":
+    "Remove {name}? Articles already stored stay; only the source stops being read.",
+  "admin.news.neverRead": "Never read.",
+  "admin.news.lastOk": "{count} entries, last read {when}",
+  "admin.news.lastFailed": "Failed {when}",
+  "admin.news.failureStreak": "{count} consecutive failures",
+  "admin.news.testTitle": "Test {name}",
+  "admin.news.testOk": "Feed read \u2014 {count} entries.",
+  "admin.news.testNewest": "Newest: {when}",
+  "admin.news.testEmpty": "Valid feed, but empty. Check the URL is the one you meant.",
+  "admin.news.testFailed": "The feed could not be read.",
+  "admin.news.caveat":
+    "Headlines and summaries are taken from the publisher as written. General feeds are " +
+    "filtered by matching the ticker code and company name, so an article that only uses " +
+    "a nickname can be missed.",
+
   "admin.tab.queue": "Queue",
   "admin.tab.providers": "Providers",
   "admin.tab.budget": "AI spend",

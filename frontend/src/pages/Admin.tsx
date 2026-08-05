@@ -12,8 +12,10 @@ import {
   Loading,
   Stat,
 } from "@/components/primitives";
+import { UsersPanel } from "@/components/admin/Users";
+import { NewsSourcesPanel } from "@/components/admin/NewsSources";
 
-type Tab = "overview" | "queue" | "providers" | "budget" | "audit";
+type Tab = "overview" | "users" | "news" | "queue" | "providers" | "budget" | "audit";
 
 /**
  * The operations side of the platform.
@@ -42,6 +44,8 @@ export function Admin() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: t("admin.tab.overview") },
+    { id: "users", label: t("admin.tab.users") },
+    { id: "news", label: t("admin.tab.news") },
     { id: "queue", label: t("admin.tab.queue") },
     { id: "providers", label: t("admin.tab.providers") },
     { id: "budget", label: t("admin.tab.budget") },
@@ -69,6 +73,8 @@ export function Admin() {
       </nav>
 
       {tab === "overview" && <Overview />}
+      {tab === "users" && <UsersPanel />}
+      {tab === "news" && <NewsSourcesPanel />}
       {tab === "queue" && <Queue />}
       {tab === "providers" && <Providers />}
       {tab === "budget" && <Budget />}
