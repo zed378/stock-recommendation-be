@@ -103,6 +103,10 @@ class StrategyView:
     not_holding: Guidance
     holding: Guidance
     disclaimer: str
+    #: The same view in every other language, keyed by language code. Both are
+    #: written by hand rather than one being rendered from the other, so
+    #: neither is "the original" and the interface offers them symmetrically.
+    translations: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -111,6 +115,7 @@ class StrategyView:
             "not_holding": self.not_holding.as_dict(),
             "holding": self.holding.as_dict(),
             "disclaimer": self.disclaimer,
+            "translations": dict(self.translations),
         }
 
 
@@ -120,6 +125,276 @@ STRATEGY_DISCLAIMER = (
     "orders and is connected to no broker. Position sizing, timing, and the "
     "decision itself remain yours."
 )
+
+#: Every sentence this module produces, in both languages.
+#:
+#: Written here rather than translated at runtime. None of this is model output
+#: - it is product copy with a price interpolated into it - so paying an AI to
+#: render text we wrote ourselves would spend tokens to arrive back where we
+#: started, and would do it again on every view.
+#:
+#: Neither language is a translation of the other in any sense the interface
+#: needs to caveat. Both are originals, so the switch offers them symmetrically
+#: and no machine-translation notice appears.
+#:
+#: The numbers are interpolated on this side of the wire on purpose: formatting
+#: a price is already done here, and doing it again in the frontend would be a
+#: second place for it to be wrong.
+PHRASES: dict[str, dict[str, str]] = {
+    # --- shared ---------------------------------------------------------
+    "disclaimer": {
+        "en": STRATEGY_DISCLAIMER,
+        "id": (
+            "Hanya informasi dan bukan nasihat investasi. Ini adalah sikap beserta "
+            "syarat yang menyertainya, bukan instruksi: platform ini tidak "
+            "menempatkan order dan tidak terhubung ke broker mana pun. Ukuran "
+            "posisi, waktu, dan keputusannya sendiri tetap milik Anda."
+        ),
+    },
+    "invalid.support": {
+        "en": "price closes below support at {support}",
+        "id": "harga ditutup di bawah support pada {support}",
+    },
+    "invalid.level_gives_way": {
+        "en": "the level the thesis rests on gives way",
+        "id": "level yang menjadi dasar tesis ini jebol",
+    },
+    "invalid.stance_turns": {
+        "en": "the analysis turns, which would be a different stance entirely",
+        "id": "analisisnya berbalik, yang berarti sikap yang sama sekali berbeda",
+    },
+    "invalid.stop": {
+        "en": "price reaches the suggested stop at {stop}",
+        "id": "harga mencapai stop yang disarankan pada {stop}",
+    },
+
+    # --- not holding ----------------------------------------------------
+    "nh.thin.rationale": {
+        "en": (
+            "The stance is {label} but calibrated confidence is {confidence:.0f}, "
+            "below the {floor:.0f} this platform treats as enough evidence to "
+            "favour starting a position."
+        ),
+        "id": (
+            "Sikapnya {label}, tetapi confidence terkalibrasi hanya {confidence:.0f} "
+            "- di bawah {floor:.0f} yang diperlakukan platform ini sebagai bukti "
+            "cukup untuk mendukung membuka posisi."
+        ),
+    },
+    "nh.thin.more_agreement": {
+        "en": "more of the evidence sources agree, raising confidence",
+        "id": "lebih banyak sumber bukti sepakat, sehingga confidence naik",
+    },
+    "nh.thin.pullback": {
+        "en": "price pulls back towards support at {support}",
+        "id": "harga mundur ke arah support pada {support}",
+    },
+    "nh.thin.clearer_level": {
+        "en": "a clearer level to work against appears",
+        "id": "muncul level yang lebih jelas untuk dijadikan acuan",
+    },
+    "nh.candidate.rationale": {
+        "en": (
+            "A {label} stance at {confidence:.0f} confidence describes an asset the "
+            "evidence currently favours, which is what makes it a candidate to "
+            "consider rather than one to watch."
+        ),
+        "id": (
+            "Sikap {label} pada confidence {confidence:.0f} menggambarkan aset yang "
+            "saat ini didukung bukti - itulah yang membuatnya kandidat untuk "
+            "dipertimbangkan, bukan sekadar dipantau."
+        ),
+    },
+    "nh.candidate.level_support": {
+        "en": "a defined level to work against - support sits at {support}",
+        "id": "ada level acuan yang jelas - support berada di {support}",
+    },
+    "nh.candidate.level_plain": {
+        "en": "a defined level to work against",
+        "id": "ada level acuan yang jelas",
+    },
+    "nh.candidate.sizing": {
+        "en": (
+            "the position size fits your own concentration limits, which this "
+            "analysis knows nothing about"
+        ),
+        "id": (
+            "ukuran posisinya sesuai batas konsentrasi Anda sendiri, yang sama "
+            "sekali tidak diketahui analisis ini"
+        ),
+    },
+    "nh.watchlist.rationale": {
+        "en": (
+            "A watchlist stance means the case is not yet made either way - worth "
+            "following, without a basis to start today."
+        ),
+        "id": (
+            "Sikap watchlist berarti alasannya belum terbentuk ke arah mana pun - "
+            "layak diikuti, tanpa dasar untuk memulai hari ini."
+        ),
+    },
+    "nh.watchlist.clears": {
+        "en": "price clears resistance at {resistance} and holds",
+        "id": "harga menembus resistance pada {resistance} dan bertahan",
+    },
+    "nh.watchlist.resolves": {
+        "en": "the price structure resolves in one direction",
+        "id": "struktur harga terselesaikan ke satu arah",
+    },
+    "nh.watchlist.reaches": {
+        "en": "or price reaches support at {support} with the thesis intact",
+        "id": "atau harga mencapai support pada {support} dengan tesis masih utuh",
+    },
+    "nh.watchlist.clearer_entry": {
+        "en": "or a clearer entry level forms",
+        "id": "atau terbentuk level masuk yang lebih jelas",
+    },
+    "nh.watchlist.stops_applying": {
+        "en": "the reason for following it stops applying",
+        "id": "alasan untuk mengikutinya tidak lagi berlaku",
+    },
+    "nh.hold.rationale": {
+        "en": (
+            "A hold describes staying where you are. For someone with no position, "
+            "staying where you are means not starting one - the same stance reads "
+            "differently from the two sides."
+        ),
+        "id": (
+            "Hold menggambarkan tetap di posisi Anda sekarang. Bagi yang belum "
+            "punya posisi, tetap di tempat berarti tidak memulai - sikap yang sama "
+            "terbaca berbeda dari dua sisi."
+        ),
+    },
+    "nh.hold.directional": {
+        "en": "a directional case forms in either direction",
+        "id": "terbentuk alasan berarah, ke mana pun arahnya",
+    },
+    "nh.hold.off_neutral": {
+        "en": "the analysis moves off neutral",
+        "id": "analisisnya bergerak keluar dari netral",
+    },
+    "nh.avoid.rationale": {
+        "en": (
+            "A {label} stance describes evidence pointing down. There is no reading "
+            "of it that favours starting a position."
+        ),
+        "id": (
+            "Sikap {label} menggambarkan bukti yang mengarah turun. Tidak ada "
+            "pembacaan atasnya yang mendukung membuka posisi."
+        ),
+    },
+
+    # --- holding ---------------------------------------------------------
+    "h.accumulate.rationale": {
+        "en": (
+            "The evidence favours the asset at {confidence:.0f} confidence, so an "
+            "existing position has no case against it and adding is a candidate."
+        ),
+        "id": (
+            "Bukti mendukung aset ini pada confidence {confidence:.0f}, sehingga "
+            "posisi yang sudah ada tidak menghadapi alasan untuk dilepas dan "
+            "menambah menjadi salah satu kandidat."
+        ),
+    },
+    "h.accumulate.concentration": {
+        "en": "adding would not push this holding past your own concentration limit",
+        "id": (
+            "menambah tidak membuat kepemilikan ini melewati batas konsentrasi Anda "
+            "sendiri"
+        ),
+    },
+    "h.accumulate.pullback": {
+        "en": "a pullback towards support at {support} rather than into strength",
+        "id": "harga mundur ke arah support pada {support}, bukan mengejar penguatan",
+    },
+    "h.accumulate.average_level": {
+        "en": "an entry level you are willing to average at",
+        "id": "level masuk yang Anda bersedia pakai untuk merata-ratakan",
+    },
+    "h.buy.rationale": {
+        "en": (
+            "A buy stance at {confidence:.0f} confidence supports keeping the "
+            "position. It does not by itself argue for enlarging it."
+        ),
+        "id": (
+            "Sikap buy pada confidence {confidence:.0f} mendukung mempertahankan "
+            "posisi. Dengan sendirinya itu bukan alasan untuk memperbesarnya."
+        ),
+    },
+    "h.buy.target": {
+        "en": "the target at {target} remains the case being tested",
+        "id": "target di {target} tetap menjadi hipotesis yang sedang diuji",
+    },
+    "h.maintain.rationale": {
+        "en": (
+            "A {label} stance gives no reason to change an existing position in "
+            "either direction."
+        ),
+        "id": (
+            "Sikap {label} tidak memberi alasan untuk mengubah posisi yang ada, ke "
+            "arah mana pun."
+        ),
+    },
+    "h.maintain.nothing_turned": {
+        "en": "nothing in the evidence has turned",
+        "id": "tidak ada bukti yang berbalik",
+    },
+    "h.maintain.next_analysis": {
+        "en": "the next analysis reaches a different stance",
+        "id": "analisis berikutnya sampai pada sikap yang berbeda",
+    },
+    "h.reduce.rationale": {
+        "en": (
+            "The evidence has weakened without turning outright negative, which is "
+            "what a reduce stance describes: a smaller position, not none."
+        ),
+        "id": (
+            "Bukti melemah tanpa berbalik negatif sepenuhnya - itulah yang "
+            "digambarkan sikap reduce: posisi yang lebih kecil, bukan nol."
+        ),
+    },
+    "h.reduce.sizing": {
+        "en": (
+            "how much to trim is a position-sizing decision this analysis cannot "
+            "make for you"
+        ),
+        "id": (
+            "seberapa banyak dikurangi adalah keputusan ukuran posisi yang tidak "
+            "bisa diambil analisis ini untuk Anda"
+        ),
+    },
+    "h.reduce.recovers": {
+        "en": "the evidence recovers and the stance moves back up",
+        "id": "bukti pulih dan sikapnya bergerak naik kembali",
+    },
+    "h.exit.rationale": {
+        "en": (
+            "A sell stance at {confidence:.0f} confidence describes evidence "
+            "pointing down, which makes closing the position the candidate reading."
+        ),
+        "id": (
+            "Sikap sell pada confidence {confidence:.0f} menggambarkan bukti yang "
+            "mengarah turun, sehingga menutup posisi menjadi pembacaan kandidatnya."
+        ),
+    },
+    "h.exit.timing": {
+        "en": "timing and tax consequences are yours, and are not modelled here",
+        "id": "waktu dan konsekuensi pajak ada pada Anda, dan tidak dimodelkan di sini",
+    },
+}
+
+#: The languages every strategy view is produced in.
+STRATEGY_LANGUAGES: tuple[str, ...] = ("en", "id")
+
+
+def _t(key: str, language: str, **params: Any) -> str:
+    """One sentence, in one language.
+
+    A missing key raises rather than falling back to English: a half-translated
+    panel that silently mixes languages is harder to notice than one that fails
+    the moment it is written.
+    """
+    return PHRASES[key][language].format(**params)
 
 
 def _fmt(value: Decimal | float | None) -> str | None:
@@ -147,14 +422,18 @@ def _not_holding(
     label: RecommendationLabel,
     confidence: float,
     levels: dict[str, str],
+    language: str = "en",
 ) -> Guidance:
     support = levels.get("support")
     resistance = levels.get("resistance")
 
+    def say(key: str, **params: Any) -> str:
+        return _t(key, language, **params)
+
     invalidation = (
-        [f"price closes below support at {support}"]
+        [say("invalid.support", support=support)]
         if support
-        else ["the level the thesis rests on gives way"]
+        else [say("invalid.level_gives_way")]
     )
 
     if label in (RecommendationLabel.STRONG_BUY, RecommendationLabel.BUY):
@@ -162,15 +441,17 @@ def _not_holding(
             return Guidance(
                 position=PositionState.NOT_HOLDING,
                 stance=Stance.WAIT_FOR_LEVEL,
-                rationale=(
-                    f"The stance is {label.value} but calibrated confidence is "
-                    f"{confidence:.0f}, below the {ENTRY_CONFIDENCE_FLOOR:.0f} this "
-                    "platform treats as enough evidence to favour starting a position."
+                rationale=say(
+                    "nh.thin.rationale",
+                    label=label.value,
+                    confidence=confidence,
+                    floor=ENTRY_CONFIDENCE_FLOOR,
                 ),
                 conditions=[
-                    "more of the evidence sources agree, raising confidence",
-                    f"price pulls back towards support at {support}" if support else
-                    "a clearer level to work against appears",
+                    say("nh.thin.more_agreement"),
+                    say("nh.thin.pullback", support=support)
+                    if support
+                    else say("nh.thin.clearer_level"),
                 ],
                 invalidated_if=invalidation,
                 reference_levels=levels,
@@ -178,17 +459,14 @@ def _not_holding(
         return Guidance(
             position=PositionState.NOT_HOLDING,
             stance=Stance.ENTRY_CANDIDATE,
-            rationale=(
-                f"A {label.value} stance at {confidence:.0f} confidence describes an "
-                "asset the evidence currently favours, which is what makes it a "
-                "candidate to consider rather than one to watch."
+            rationale=say(
+                "nh.candidate.rationale", label=label.value, confidence=confidence
             ),
             conditions=[
-                f"a defined level to work against - support sits at {support}"
+                say("nh.candidate.level_support", support=support)
                 if support
-                else "a defined level to work against",
-                "the position size fits your own concentration limits, which this "
-                "analysis knows nothing about",
+                else say("nh.candidate.level_plain"),
+                say("nh.candidate.sizing"),
             ],
             invalidated_if=invalidation,
             reference_levels=levels,
@@ -198,18 +476,16 @@ def _not_holding(
         return Guidance(
             position=PositionState.NOT_HOLDING,
             stance=Stance.WAIT_FOR_LEVEL,
-            rationale=(
-                "A watchlist stance means the case is not yet made either way - "
-                "worth following, without a basis to start today."
-            ),
+            rationale=say("nh.watchlist.rationale"),
             conditions=[
-                f"price clears resistance at {resistance} and holds" if resistance
-                else "the price structure resolves in one direction",
-                f"or price reaches support at {support} with the thesis intact"
+                say("nh.watchlist.clears", resistance=resistance)
+                if resistance
+                else say("nh.watchlist.resolves"),
+                say("nh.watchlist.reaches", support=support)
                 if support
-                else "or a clearer entry level forms",
+                else say("nh.watchlist.clearer_entry"),
             ],
-            invalidated_if=["the reason for following it stops applying"],
+            invalidated_if=[say("nh.watchlist.stops_applying")],
             reference_levels=levels,
         )
 
@@ -217,13 +493,9 @@ def _not_holding(
         return Guidance(
             position=PositionState.NOT_HOLDING,
             stance=Stance.NO_ENTRY_BASIS,
-            rationale=(
-                "A hold describes staying where you are. For someone with no "
-                "position, staying where you are means not starting one - the same "
-                "stance reads differently from the two sides."
-            ),
-            conditions=["a directional case forms in either direction"],
-            invalidated_if=["the analysis moves off neutral"],
+            rationale=say("nh.hold.rationale"),
+            conditions=[say("nh.hold.directional")],
+            invalidated_if=[say("nh.hold.off_neutral")],
             reference_levels=levels,
         )
 
@@ -231,12 +503,9 @@ def _not_holding(
     return Guidance(
         position=PositionState.NOT_HOLDING,
         stance=Stance.AVOID,
-        rationale=(
-            f"A {label.value} stance describes evidence pointing down. There is no "
-            "reading of it that favours starting a position."
-        ),
+        rationale=say("nh.avoid.rationale", label=label.value),
         conditions=[],
-        invalidated_if=["the analysis turns, which would be a different stance entirely"],
+        invalidated_if=[say("invalid.stance_turns")],
         reference_levels=levels,
     )
 
@@ -245,31 +514,35 @@ def _holding(
     label: RecommendationLabel,
     confidence: float,
     levels: dict[str, str],
+    language: str = "en",
 ) -> Guidance:
     support = levels.get("support")
     target = levels.get("target")
     stop = levels.get("suggested_stop")
 
+    def say(key: str, **params: Any) -> str:
+        return _t(key, language, **params)
+
     stop_line = (
-        f"price reaches the suggested stop at {stop}"
+        say("invalid.stop", stop=stop)
         if stop
-        else (f"price closes below support at {support}" if support else
-              "the level the thesis rests on gives way")
+        else (
+            say("invalid.support", support=support)
+            if support
+            else say("invalid.level_gives_way")
+        )
     )
 
     if label is RecommendationLabel.STRONG_BUY:
         return Guidance(
             position=PositionState.HOLDING,
             stance=Stance.ACCUMULATE_CANDIDATE,
-            rationale=(
-                f"The evidence favours the asset at {confidence:.0f} confidence, so an "
-                "existing position has no case against it and adding is a candidate."
-            ),
+            rationale=say("h.accumulate.rationale", confidence=confidence),
             conditions=[
-                "adding would not push this holding past your own concentration limit",
-                f"a pullback towards support at {support} rather than into strength"
+                say("h.accumulate.concentration"),
+                say("h.accumulate.pullback", support=support)
                 if support
-                else "an entry level you are willing to average at",
+                else say("h.accumulate.average_level"),
             ],
             invalidated_if=[stop_line],
             reference_levels=levels,
@@ -279,13 +552,8 @@ def _holding(
         return Guidance(
             position=PositionState.HOLDING,
             stance=Stance.MAINTAIN,
-            rationale=(
-                f"A buy stance at {confidence:.0f} confidence supports keeping the "
-                "position. It does not by itself argue for enlarging it."
-            ),
-            conditions=[f"the target at {target} remains the case being tested"]
-            if target
-            else [],
+            rationale=say("h.buy.rationale", confidence=confidence),
+            conditions=[say("h.buy.target", target=target)] if target else [],
             invalidated_if=[stop_line],
             reference_levels=levels,
         )
@@ -294,12 +562,9 @@ def _holding(
         return Guidance(
             position=PositionState.HOLDING,
             stance=Stance.MAINTAIN,
-            rationale=(
-                f"A {label.value} stance gives no reason to change an existing "
-                "position in either direction."
-            ),
-            conditions=["nothing in the evidence has turned"],
-            invalidated_if=[stop_line, "the next analysis reaches a different stance"],
+            rationale=say("h.maintain.rationale", label=label.value),
+            conditions=[say("h.maintain.nothing_turned")],
+            invalidated_if=[stop_line, say("h.maintain.next_analysis")],
             reference_levels=levels,
         )
 
@@ -307,27 +572,18 @@ def _holding(
         return Guidance(
             position=PositionState.HOLDING,
             stance=Stance.TRIM_CANDIDATE,
-            rationale=(
-                "The evidence has weakened without turning outright negative, which "
-                "is what a reduce stance describes: a smaller position, not none."
-            ),
-            conditions=[
-                "how much to trim is a position-sizing decision this analysis cannot "
-                "make for you",
-            ],
-            invalidated_if=["the evidence recovers and the stance moves back up"],
+            rationale=say("h.reduce.rationale"),
+            conditions=[say("h.reduce.sizing")],
+            invalidated_if=[say("h.reduce.recovers")],
             reference_levels=levels,
         )
 
     return Guidance(
         position=PositionState.HOLDING,
         stance=Stance.EXIT_CANDIDATE,
-        rationale=(
-            f"A sell stance at {confidence:.0f} confidence describes evidence pointing "
-            "down, which makes closing the position the candidate reading."
-        ),
-        conditions=["timing and tax consequences are yours, and are not modelled here"],
-        invalidated_if=["the analysis turns, which would be a different stance entirely"],
+        rationale=say("h.exit.rationale", confidence=confidence),
+        conditions=[say("h.exit.timing")],
+        invalidated_if=[say("invalid.stance_turns")],
         reference_levels=levels,
     )
 
@@ -345,10 +601,22 @@ def build_strategy(
     resolved = label if isinstance(label, RecommendationLabel) else RecommendationLabel(label)
     levels = _levels(support_level, resistance_level, target_price, suggested_stop)
 
+    # Built once per language, from the same branch logic. Nothing is rendered
+    # from anything else, so the two cannot describe different stances - they
+    # are the same decision tree walked twice with a different phrase table.
     return StrategyView(
         label=resolved,
         confidence=confidence,
-        not_holding=_not_holding(resolved, confidence, levels),
-        holding=_holding(resolved, confidence, levels),
-        disclaimer=STRATEGY_DISCLAIMER,
+        not_holding=_not_holding(resolved, confidence, levels, "en"),
+        holding=_holding(resolved, confidence, levels, "en"),
+        disclaimer=_t("disclaimer", "en"),
+        translations={
+            language: {
+                "not_holding": _not_holding(resolved, confidence, levels, language).as_dict(),
+                "holding": _holding(resolved, confidence, levels, language).as_dict(),
+                "disclaimer": _t("disclaimer", language),
+            }
+            for language in STRATEGY_LANGUAGES
+            if language != "en"
+        },
     )

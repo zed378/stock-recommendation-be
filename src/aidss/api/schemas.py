@@ -388,6 +388,12 @@ class StrategyResponse(BaseModel):
     not_holding: GuidanceResponse
     holding: GuidanceResponse
     disclaimer: str
+    #: The same two readings in every other language, keyed by language code.
+    #: Not a machine rendering: this text is product copy with a price
+    #: interpolated into it, so both languages are written by hand and neither
+    #: is the original. Sent with the response because it costs nothing to
+    #: build and switching should not be a request.
+    translations: dict[str, Any] = Field(default_factory=dict)
 
 
 class QuoteSnapshotResponse(BaseModel):

@@ -2520,6 +2520,10 @@ export interface components {
             holding: components["schemas"]["GuidanceResponse"];
             /** Disclaimer */
             disclaimer: string;
+            /** Translations */
+            translations?: {
+                [key: string]: unknown;
+            };
         };
         /** SuspendRequest */
         SuspendRequest: {

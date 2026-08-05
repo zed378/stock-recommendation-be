@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
@@ -5,6 +6,13 @@ import { Card, Caveat, Empty, ErrorNote, Loading } from "@/components/primitives
 import type { components } from "@/api/schema";
 
 type Guidance = components["schemas"]["GuidanceResponse"];
+
+/** One language's version of the two readings. */
+type Translated = {
+  not_holding: Guidance;
+  holding: Guidance;
+  disclaimer: string;
+};
 
 /**
  * One stance, read from both sides of a position.
@@ -16,7 +24,12 @@ type Guidance = components["schemas"]["GuidanceResponse"];
  * and common case that only shows up when both columns are visible.
  */
 export function Strategy({ ticker }: { ticker: string }) {
-  const { t, n } = useI18n();
+  const { t, n, locale } = useI18n();
+  // Starts on the interface language and then stays where the reader puts it.
+  // Independent of the header switch on purpose: someone reading the app in
+  // English may still want this panel in Indonesian, and the two choices are
+  // about different things.
+  const [language, setLanguage] = useState<string>(locale);
 
   const query = useQuery({
     queryKey: ["strategy", ticker],
@@ -43,30 +56,66 @@ export function Strategy({ ticker }: { ticker: string }) {
 
   const data = query.data;
 
+  // Every language the server built this view in. The response carries the
+  // English one at the top level and the rest under `translations`, so the
+  // switch never needs a request - and this text is product copy with a price
+  // interpolated into it, so no model is involved either.
+  const other = (data.translations ?? {}) as Record<string, Translated>;
+  const available = ["en", ...Object.keys(other)];
+  const shown = available.includes(language) ? language : "en";
+  const view = shown === "en" ? data : other[shown];
+
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-          <div>
-            <p className="text-xs text-faint">{t("rec.title")}</p>
-            <p className="mt-0.5 text-sm font-medium text-ink">
-              {t(`rec.label.${data.label}` as MessageKey)}
-            </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+            <div>
+              <p className="text-xs text-faint">{t("rec.title")}</p>
+              <p className="mt-0.5 text-sm font-medium text-ink">
+                {t(`rec.label.${data.label}` as MessageKey)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-faint">{t("rec.confidence")}</p>
+              <p className="mt-0.5 font-mono text-sm tnum text-ink">{n(data.confidence, 1)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-faint">{t("rec.confidence")}</p>
-            <p className="mt-0.5 font-mono text-sm tnum text-ink">{n(data.confidence, 1)}</p>
-          </div>
+
+          {/* Standalone: it changes what these cards say and nothing else.
+              Both languages are written by hand, so neither is "the original"
+              and the control offers them side by side rather than as an
+              original and a translation. */}
+          {available.length > 1 && (
+            <div
+              role="group"
+              aria-label={t("strategy.language")}
+              className="flex overflow-hidden rounded-md border border-line"
+            >
+              {available.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setLanguage(option)}
+                  aria-pressed={shown === option}
+                  className={`px-2.5 py-1 text-xs uppercase transition-colors ${
+                    shown === option ? "bg-hover text-ink" : "text-faint hover:text-muted"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <Caveat>{t("strategy.bothNote")}</Caveat>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <GuidancePanel title={t("strategy.notHolding")} guidance={data.not_holding} />
-        <GuidancePanel title={t("strategy.holding")} guidance={data.holding} />
+        <GuidancePanel title={t("strategy.notHolding")} guidance={view.not_holding} />
+        <GuidancePanel title={t("strategy.holding")} guidance={view.holding} />
       </div>
 
-      <p className="text-xs leading-relaxed text-faint">{data.disclaimer}</p>
+      <p className="text-xs leading-relaxed text-faint">{view.disclaimer}</p>
     </div>
   );
 }

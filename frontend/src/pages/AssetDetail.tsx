@@ -351,6 +351,17 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
 
   const result = run.data ?? existing.data;
 
+  // One hook for the whole tab, driven by the recommendation because that is
+  // the payload with a fetch fallback for analyses stored before renderings
+  // were kept. The agents follow whatever it decides, so the evidence and the
+  // conclusion can never end up in different languages at once.
+  //
+  // Called unconditionally, above the early return below: a hook behind a
+  // condition changes the hook order between renders.
+  const translation = useTranslation(
+    (result?.recommendation ?? {}) as unknown as Record<string, unknown>,
+  );
+
   const runButton = (
     <Button busy={run.isPending} onClick={() => run.mutate()}>
       {run.isPending ? t("analysis.running") : t("analysis.run")}
@@ -361,9 +372,25 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-medium text-ink">{t("analysis.title")}</h2>
-        {runButton}
+        <div className="flex items-center gap-2">
+          {/* One control for the whole tab. There used to be one per card, and
+              reading a single analysis in the other language meant finding and
+              flipping each of them - which also let the agents and the
+              conclusion sit in different languages at the same time. */}
+          {result && !run.isPending && (
+            <LanguageSwitch
+              showing={translation.showing}
+              isPending={translation.isPending}
+              source={translation.source}
+              target={translation.target}
+              onOriginal={translation.showOriginal}
+              onTranslate={translation.showTranslation}
+            />
+          )}
+          {runButton}
+        </div>
       </div>
 
       {run.isPending && (
@@ -388,10 +415,16 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
           <AgentRoster result={result} />
           <AgentReports
             agents={result.agents}
-            fallbackLanguage={result.recommendation?.language}
+            showing={translation.showing}
+            target={translation.target}
           />
           {result.recommendation && (
-            <TranslatedRecommendation rec={result.recommendation} />
+            <RecommendationPanel
+              rec={result.recommendation}
+              rendered={translation.rendered}
+              showing={translation.showing}
+              error={translation.error}
+            />
           )}
         </>
       )}
@@ -407,33 +440,29 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
  * stance - which is the whole reason this is a translation rather than a second
  * analysis.
  */
-function TranslatedRecommendation({
+function RecommendationPanel({
   rec,
+  rendered,
+  showing,
+  error,
 }: {
   rec: NonNullable<components["schemas"]["AnalysisResponse"]["recommendation"]>;
+  /** Already resolved by the tab's single language control. */
+  rendered: Record<string, unknown>;
+  showing: boolean;
+  error: string | null;
 }) {
   const { t } = useI18n();
-  const translation = useTranslation(rec as unknown as Record<string, unknown>);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-ink">{t("rec.title")}</h3>
-        <LanguageSwitch
-          showing={translation.showing}
-          isPending={translation.isPending}
-          source={translation.source}
-          target={translation.target}
-          onOriginal={translation.showOriginal}
-          onTranslate={translation.showTranslation}
-        />
-      </div>
+      <h3 className="text-sm font-medium text-ink">{t("rec.title")}</h3>
 
-      <TranslationNotice showing={false} error={translation.error} />
+      <TranslationNotice showing={false} error={error} />
 
-      <Recommendation rec={{ ...rec, ...translation.rendered } as typeof rec} />
+      <Recommendation rec={{ ...rec, ...rendered } as typeof rec} />
 
-      <TranslationNotice showing={translation.showing} error={null} />
+      <TranslationNotice showing={showing} error={null} />
     </div>
   );
 }
@@ -461,17 +490,15 @@ type AgentPayload = {
  */
 function AgentReports({
   agents,
-  fallbackLanguage,
+  showing,
+  target,
 }: {
   agents: unknown;
-  /** What the recommendation says it is in. Used for analyses stored before
-   *  agents recorded their own language - inferring it from today's default
-   *  would label older Indonesian prose "EN", which is the same mistake the
-   *  recommendation switch used to make. */
-  fallbackLanguage?: string;
+  /** Driven by the one control at the top of the tab. */
+  showing: boolean;
+  target: string;
 }) {
   const { t } = useI18n();
-  const [showing, setShowing] = useState(false);
 
   const entries = useMemo(() => {
     if (!agents || typeof agents !== "object") return [];
@@ -480,26 +507,10 @@ function AgentReports({
 
   if (!entries.length) return null;
 
-  const source = entries[0][1]?.language ?? fallbackLanguage ?? "en";
-  const target = source === "id" ? "en" : "id";
   const available = entries.some((entry) => entry[1]?.translations?.[target]?.fields);
 
   return (
-    <Card
-      title={t("analysis.agentFindings")}
-      action={
-        available ? (
-          <LanguageSwitch
-            showing={showing}
-            isPending={false}
-            source={source}
-            target={target}
-            onOriginal={() => setShowing(false)}
-            onTranslate={() => setShowing(true)}
-          />
-        ) : undefined
-      }
-    >
+    <Card title={t("analysis.agentFindings")}>
       <div className="space-y-5">
         {entries.map(([name, payload]) => (
           <AgentReport
@@ -510,8 +521,9 @@ function AgentReports({
           />
         ))}
       </div>
-      {!available && <Caveat>{t("analysis.noAgentTranslation")}</Caveat>}
-      {showing && <Caveat>{t("translate.machineNote")}</Caveat>}
+      {/* Only while the reader is asking for the other language. Saying it
+          unprompted would be a warning about something that has not happened. */}
+      {showing && !available && <Caveat>{t("analysis.noAgentTranslation")}</Caveat>}
     </Card>
   );
 }

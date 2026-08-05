@@ -327,6 +327,7 @@ export const id = {
   "strategy.emptyHint": "Jalankan analisis dulu — strategi diturunkan darinya, bukan dibuat terpisah.",
   "strategy.notHolding": "Jika belum punya",
   "strategy.holding": "Jika sudah punya",
+  "strategy.language": "Bahasa rekomendasi",
   "strategy.bothNote":
     "Keduanya ditampilkan, apa pun posisi Anda. Emiten yang layak dipertahankan tetapi " +
     "tidak layak dibeli hari ini adalah situasi nyata dan umum — menampilkan satu sisi saja " +
@@ -970,6 +971,7 @@ export const en: Record<MessageKey, string> = {
     "Run an analysis first — the strategy is derived from one, never produced independently.",
   "strategy.notHolding": "If you do not hold it",
   "strategy.holding": "If you hold it",
+  "strategy.language": "Recommendation language",
   "strategy.bothNote":
     "Both are shown whatever you hold. An asset worth keeping but not worth buying today " +
     "is a real and common situation, and showing only your own side would hide it.",

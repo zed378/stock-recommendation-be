@@ -199,3 +199,83 @@ def test_levels_are_carried_through_for_both_sides() -> None:
 def test_a_string_label_is_accepted() -> None:
     """The stored column is an enum, but callers reading JSON have a string."""
     assert build_strategy("buy", 80.0).label is RecommendationLabel.BUY
+
+
+# --- both languages, built the same way ------------------------------------
+
+
+#: Named apart from the `LEVELS` at the top of this file. Appending a second
+#: constant with the same name rebound it for every test above, which changed
+#: what they were asserting against without touching a line of them.
+ALL_LEVELS = dict(
+    support_level=Decimal("6362.5"),
+    resistance_level=Decimal("6550"),
+    target_price=Decimal("7000"),
+    suggested_stop=Decimal("6000"),
+)
+
+
+@pytest.mark.parametrize("label", list(RecommendationLabel))
+@pytest.mark.parametrize("confidence", [40.0, 85.0])
+@pytest.mark.parametrize("levels", [{}, ALL_LEVELS], ids=["no-levels", "all-levels"])
+def test_every_branch_renders_in_every_language(label, confidence, levels) -> None:
+    """A phrase table with a gap fails only on the branch that reaches it, and
+    only in one language - which is exactly the kind of hole that ships. This
+    walks every branch in every language instead of trusting the table."""
+    from aidss.recommendations.strategy import STRATEGY_LANGUAGES
+
+    view = build_strategy(label, confidence, **levels)
+
+    assert set(view.translations) == set(STRATEGY_LANGUAGES) - {"en"}
+    for language in view.translations:
+        rendered = view.translations[language]
+        for side in ("not_holding", "holding"):
+            assert rendered[side]["rationale"].strip()
+            # Never empty by construction: a stance with no stated invalidation
+            # is one that can never be shown to have been mistaken.
+            assert rendered[side]["invalidated_if"]
+
+
+@pytest.mark.parametrize("label", list(RecommendationLabel))
+def test_the_languages_describe_the_same_stance(label) -> None:
+    """Two walks of one decision tree, not two opinions. If the phrase table
+    ever drifted into changing which branch is taken, the stances would part
+    company and the reader would have no way to resolve it."""
+    view = build_strategy(label, 85.0, **ALL_LEVELS)
+
+    for rendered in view.translations.values():
+        assert rendered["not_holding"]["stance"] == view.not_holding.stance.value
+        assert rendered["holding"]["stance"] == view.holding.stance.value
+        assert rendered["not_holding"]["reference_levels"] == view.not_holding.reference_levels
+
+
+@pytest.mark.parametrize("label", list(RecommendationLabel))
+def test_no_language_leaves_a_placeholder_unfilled(label) -> None:
+    """A template whose parameter was never passed renders the braces
+    literally, which looks like a typo rather than the missing value it is."""
+    view = build_strategy(label, 85.0, **ALL_LEVELS)
+
+    texts = []
+    for rendered in (
+        view.not_holding.as_dict(),
+        view.holding.as_dict(),
+        *(
+            side
+            for language in view.translations.values()
+            for side in (language["not_holding"], language["holding"])
+        ),
+    ):
+        texts.append(rendered["rationale"])
+        texts.extend(rendered["conditions"])
+        texts.extend(rendered["invalidated_if"])
+
+    for text in texts:
+        assert "{" not in text and "}" not in text, text
+
+
+def test_the_indonesian_text_is_not_the_english_text() -> None:
+    """Both are written by hand. If one were ever accidentally copied from the
+    other, the switch would appear to work and change nothing."""
+    view = build_strategy(RecommendationLabel.WATCHLIST, 85.0, **ALL_LEVELS)
+    assert view.translations["id"]["not_holding"]["rationale"] != view.not_holding.rationale
+    assert view.translations["id"]["disclaimer"] != view.disclaimer
