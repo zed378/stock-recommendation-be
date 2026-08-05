@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { Empty, ErrorNote, Loading } from "@/components/primitives";
+import { isMuted, playChime, setMuted, unlockAudio } from "@/audio/chime";
 
 /**
  * The notification bell and its panel.
@@ -59,6 +60,37 @@ export function NotificationBell() {
     },
     refetchInterval: POLL_INTERVAL,
   });
+
+  // The count at the previous poll. `null` until the first one resolves, which
+  // is what stops the app chiming for a backlog it merely *loaded* - every
+  // page load would otherwise announce notifications that arrived yesterday.
+  const previousCount = useRef<number | null>(null);
+
+  useEffect(() => {
+    const count = unread.data;
+    if (count === undefined) return;
+
+    const before = previousCount.current;
+    previousCount.current = count;
+
+    // Only a rise. Falling means the reader marked something read, and
+    // acknowledging their own action back at them is noise.
+    if (before !== null && count > before) playChime();
+  }, [unread.data]);
+
+  // The autoplay policy keeps audio suspended until the page has been
+  // interacted with, and a reload resets that. Any click anywhere is a
+  // sufficient gesture, so this listens once for the earliest one rather than
+  // waiting for the reader to happen to touch the bell.
+  useEffect(() => {
+    const wake = () => unlockAudio();
+    document.addEventListener("pointerdown", wake, { once: true });
+    document.addEventListener("keydown", wake, { once: true });
+    return () => {
+      document.removeEventListener("pointerdown", wake);
+      document.removeEventListener("keydown", wake);
+    };
+  }, []);
 
   // Closing on an outside click and on Escape, because a panel that only
   // closes via its own button traps anyone who opened it by accident.
@@ -152,14 +184,17 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     >
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <span className="text-sm font-medium text-ink">{t("notif.title")}</span>
-        {unreadRows.length > 0 && (
-          <button
-            onClick={() => unreadRows.forEach((row) => markRead.mutate(row.id))}
-            className="ml-auto text-xs text-muted transition-colors hover:text-ink"
-          >
-            {t("notif.markAllRead")}
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {unreadRows.length > 0 && (
+            <button
+              onClick={() => unreadRows.forEach((row) => markRead.mutate(row.id))}
+              className="text-xs text-muted transition-colors hover:text-ink"
+            >
+              {t("notif.markAllRead")}
+            </button>
+          )}
+          <MuteToggle />
+        </div>
       </div>
 
       <div className="max-h-104 overflow-y-auto">
@@ -195,6 +230,42 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
         </label>
       </div>
     </div>
+  );
+}
+
+/**
+ * Turn the chime off.
+ *
+ * Present because a sound the reader cannot stop is a hostile feature: this
+ * plays without being asked for, on a screen someone may have open all day
+ * beside other work. Muting it must not mean closing the tab.
+ *
+ * Previewed on unmute - clicking it plays the sound, which is both a
+ * confirmation that audio works at all and the only way to find out what you
+ * have just switched on without waiting for something to happen.
+ */
+function MuteToggle() {
+  const { t } = useI18n();
+  const [muted, setMutedState] = useState(isMuted);
+
+  return (
+    <button
+      onClick={() => {
+        const next = !muted;
+        setMuted(next);
+        setMutedState(next);
+        if (!next) {
+          unlockAudio();
+          playChime();
+        }
+      }}
+      aria-pressed={muted}
+      title={muted ? t("notif.unmute") : t("notif.mute")}
+      aria-label={muted ? t("notif.unmute") : t("notif.mute")}
+      className="text-faint transition-colors hover:text-ink"
+    >
+      {muted ? <MutedIcon /> : <SoundIcon />}
+    </button>
   );
 }
 
@@ -350,6 +421,46 @@ function BellIcon() {
     >
       <path d="M10 2.5a4.5 4.5 0 0 0-4.5 4.5c0 3.5-1.25 4.75-1.25 4.75h11.5S14.5 10.5 14.5 7A4.5 4.5 0 0 0 10 2.5Z" />
       <path d="M8.5 14.75a1.75 1.75 0 0 0 3 0" />
+    </svg>
+  );
+}
+
+/** A speaker with waves - sound is on. */
+function SoundIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M4 8v4h2.5L10 15V5L6.5 8H4Z" />
+      <path d="M12.5 7.5a3.5 3.5 0 0 1 0 5" />
+      <path d="M14.75 5.5a6.5 6.5 0 0 1 0 9" />
+    </svg>
+  );
+}
+
+/** The same speaker, struck through - sound is off. */
+function MutedIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+    >
+      <path d="M4 8v4h2.5L10 15V5L6.5 8H4Z" />
+      <path d="m12.75 8 3.5 4" />
+      <path d="m16.25 8-3.5 4" />
     </svg>
   );
 }

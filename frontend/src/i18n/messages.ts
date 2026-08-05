@@ -472,6 +472,8 @@ export const id = {
   "notif.empty": "Belum ada notifikasi.",
   "notif.emptyHint":
     "Notifikasi muncul saat sebuah analisis selesai atau pantauan menemukan sesuatu.",
+  "notif.mute": "Matikan suara notifikasi",
+  "notif.unmute": "Nyalakan suara notifikasi",
   "notif.markRead": "Tandai sudah dibaca",
   "notif.markAllRead": "Tandai semua",
   "notif.showRead": "Tampilkan yang sudah dibaca",
@@ -939,6 +941,8 @@ export const en: Record<MessageKey, string> = {
   "notif.empty": "No notifications yet.",
   "notif.emptyHint":
     "They appear when an analysis finishes or monitoring observes something.",
+  "notif.mute": "Mute notification sound",
+  "notif.unmute": "Unmute notification sound",
   "notif.markRead": "Mark as read",
   "notif.markAllRead": "Mark all",
   "notif.showRead": "Show read",

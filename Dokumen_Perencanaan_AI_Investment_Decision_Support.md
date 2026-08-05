@@ -1014,6 +1014,12 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 **Kalimatnya disusun di klien, bukan dibaca dari server.** Pesan tersimpan ditulis sekali dalam satu bahasa pada saat kejadian, sehingga tidak bisa mengikuti sakelar bahasa yang ditekan pembaca setelahnya. Faktanya berjalan di `context` — ticker, jumlah agen, jumlah alert — dan kedua bahasa menyusun kalimat dari sana. Pesan tersimpan tetap ada sebagai rekaman dan sebagai fallback untuk kejadian yang belum dikenali build frontend.
 
+**Suaranya dibangkitkan, bukan diambil.** Nada disintesis lewat Web Audio: tidak ada berkas audio, tidak ada permintaan jaringan, tidak ada yang bergantung pada CDN atau pada CSP ketat yang harus meloloskan URL media — karena tidak ada URL. Dua nada naik, bukan satu bip: bip tunggal adalah kosakata galat, sedangkan yang terjadi adalah sesuatu *datang*.
+
+**Berbunyi hanya saat angkanya naik.** Menyalakan bunyi setiap kali hitungan dibaca akan mengumumkan tumpukan kemarin di setiap muat halaman; nilai pertama yang masuk dijadikan garis dasar dan tidak berbunyi. Turun juga tidak berbunyi — itu artinya pembaca menandai sesuatu terbaca, dan menyahut aksinya sendiri adalah kebisingan.
+
+**Bisa dimatikan, dan pilihannya disimpan.** Suara yang tidak bisa dihentikan pembacanya adalah fitur yang memusuhinya: ia berbunyi tanpa diminta, di layar yang mungkin terbuka seharian di samping pekerjaan lain. Menyalakannya kembali langsung memutar nadanya sekali, sebagai satu-satunya cara mengetahui apa yang baru saja dinyalakan tanpa menunggu sesuatu terjadi.
+
 **Riwayat tidak menghapus dirinya sendiri.** Menandai terbaca sempat mengeluarkan notifikasi dari satu-satunya endpoint yang mengembalikannya, sehingga "alert satu jam lalu itu tentang apa?" tidak punya jawaban. `include_read` memisahkan lonceng (yang belum dibaca) dari panel (yang bisa menampilkan seluruhnya), dan `/notifications/unread-count` melayani lencana dengan satu bilangan — memoll lima puluh baris tiap setengah menit untuk merender satu angka adalah pemborosan yang tidak perlu diadakan.
 
 ---
