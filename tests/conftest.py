@@ -12,6 +12,16 @@ import random
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+# Read no dotenv file. Set before anything imports `aidss.config`, because the
+# file is resolved at class-definition time.
+#
+# Without this the suite reads whatever `.env` happens to be in the working
+# directory, so its result depends on the developer's local configuration - a
+# machine with `AIDSS_AI_EMBEDDING_MODEL=` set produced one failure that a
+# machine without it did not. A hermetic suite that quietly reads an untracked
+# file is not hermetic; it just looks that way until two people compare notes.
+os.environ["AIDSS_ENV_FILE"] = ""
+
 os.environ.setdefault("AIDSS_ENVIRONMENT", "testing")
 os.environ.setdefault("AIDSS_DATABASE_URL", "sqlite+pysqlite:///:memory:")
 # At least 32 bytes: shorter HMAC keys are accepted but warned about, and the

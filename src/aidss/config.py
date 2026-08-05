@@ -7,16 +7,27 @@ constant in code, which is what makes FR-07 and Section 7 hold.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: Which dotenv file to read, and whether to read one at all.
+#:
+#: Setting ``AIDSS_ENV_FILE`` to an empty string disables it. The test suite
+#: does exactly that, because it must not depend on an untracked file that
+#: differs per machine - a developer with a local `.env` was getting a
+#: different suite result from one without, which is how this was found. A
+#: hermetic suite that quietly reads whatever is lying in the working directory
+#: is not hermetic.
+_ENV_FILE = os.environ.get("AIDSS_ENV_FILE", ".env") or None
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="AIDSS_",
-        env_file=".env",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -251,7 +251,7 @@ reasoning.
 ## Tests
 
 ```bash
-python -m pytest              # 846 hermetic tests, SQLite only, no network
+python -m pytest              # 890 hermetic tests, SQLite only, no network
 python -m ruff check .
 ```
 
@@ -307,6 +307,7 @@ The suite is organised around the risks the plan itself identifies:
 | [test_observability.py](tests/test_observability.py) | That a counter cannot decrease, that the `+Inf` bucket equals the total count (Prometheus rejects an exposition where it does not), that metrics are labelled by route template so a ticker cannot mint a time series, that credentials never reach a log line, and that `/health` and `/metrics` stay reachable while a client is throttled. |
 | [test_reporting.py](tests/test_reporting.py) | Counter-evidence appears with equal prominence, what was *not* covered is named, opening a report runs no agents and returns identical text twice, and no notification event can express an instruction. |
 | [test_security.py](tests/test_security.py), [test_api.py](tests/test_api.py), [test_api_analysis.py](tests/test_api_analysis.py) | Password policy, token forgery, role boundaries, per-user data ownership, and the full HTTP flow including analysis. Watchlist categories get their own block: the same ticker in two groups, a trimmed name so `"Perbankan"` and `"Perbankan "` do not become two groups that look identical, an emptied category that still exists, and the delete-scoping bug categories would have introduced. Search is pinned against the note, the category, and case — and against another user's rows, which it must never reach. |
+| [test_config.py](tests/test_config.py) | The empty-string case that took a deployment down: `AIDSS_DAILY_AI_BUDGET=` must mean *no ceiling*, not a parse error, because that is how every deployment mechanism spells "unset". Blank is unset; nonsense is still an error — silently reading `"abc"` as no ceiling would remove a spending limit somebody thought they had set. It also asserts the suite reads **no dotenv file at all**: `Settings` used to read `.env` from the working directory, so a developer with one got a different test result from a developer without, and the suite only looked hermetic until two people compared notes. |
 | [test_cli.py](tests/test_cli.py) | Why role changes are a shell command rather than an endpoint, made executable: a new account is an investor, promotion works and is written to the audit log with `actor_type=system`, a repeat grant writes nothing, and an unknown email exits non-zero so a provisioning script stops instead of reporting success while leaving nobody able to administer. |
 | [test_postgres_integration.py](tests/test_postgres_integration.py) *(`-m postgres`)* | Only what SQLite cannot show. A wrong-width embedding is rejected by the database; enums are stored as their values, checked through raw SQL rather than through the ORM that would map them back either way; `Decimal` keeps eight decimal places; CHECK and unique constraints hold. And the concurrency: 8 threads over 40 jobs claim each exactly once, 10 racing schedulers produce exactly one leader. The contention assertions were themselves checked — the same pattern run against a naive claim produced 127 double-assignments, so those tests fail when they should. |
 
@@ -318,12 +319,47 @@ Vite + React + TypeScript in [frontend/](frontend/), served by nginx, talking to
 the API on the same origin.
 
 ```bash
-docker compose up -d              # everything, dashboard on :5173
+cp .env.example .env              # fill in what you have; every setting has a default
+docker compose up -d --build      # dashboard on :5173, API on :7153
 
 # or, for development
 uvicorn aidss.main:app --port 8000
 cd frontend && npm install && npm run dev
 ```
+
+**The frontend container needs no environment variables**, and adding them would not do
+anything. Vite substitutes `import.meta.env` at *build* time, so a runtime variable never
+reaches the bundle; and the bundle does not need one, because it calls `/api` on its own
+origin and nginx proxies that to the API container by service name. There is exactly one
+build-time variable, `VITE_API_TARGET`, and it only redirects the *dev server's* proxy.
+
+`docker-compose.yml` lists every setting the application reads, with its default written
+out, sourced as `${VAR:-default}` so nothing secret is committed and a fresh clone still
+starts. The API and worker share one YAML anchor: they run the same code against the same
+database, and a worker collecting from a different provider than the API reports would be
+very hard to notice. A check that the file declares all 34 settings — no more, no fewer —
+was run against `Settings.model_fields` rather than by reading.
+
+### Two failures found by deploying, not by testing
+
+A deployment returned **502 for the whole domain**. Two defects, and the second is the one
+worth remembering:
+
+- **An empty environment variable crashed the API at startup.** `AIDSS_DAILY_AI_BUDGET=`
+  is how every deployment mechanism spells "no ceiling" — `${VAR:-}` in Compose, an
+  unfilled ConfigMap key, a blank line in `.env` — and `Decimal("")` raises. The fix is in
+  `Settings`, not in the compose file: environment variables are strings and have no null,
+  so blank now means unset for every optional setting.
+- **nginx refused to start because it could not resolve `api`.** With a literal hostname in
+  `proxy_pass`, nginx resolves once while loading its config and exits if that fails — so
+  one dead backend took the static site down with it, and the edge reported 502 for
+  everything rather than for the API. The upstream is now reached through a variable with
+  Docker's embedded resolver, which defers resolution to request time.
+
+The dashboard now loads while the API is down and `/api` returns a JSON 503 naming the
+cause, because nginx's HTML error page arrives at a `fetch()` as a JSON parse failure and
+hides what actually happened. Verified by stopping the API mid-run: shell still 200, API
+503 with a readable body, and full recovery on restart without touching nginx.
 
 **There is no default account.** Register from the sign-in page; a shipped default
 credential is a hole, not a convenience. New accounts get the `investor` role, which covers
