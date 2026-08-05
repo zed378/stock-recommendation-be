@@ -386,7 +386,10 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
       {result && !run.isPending && (
         <>
           <AgentRoster result={result} />
-          <AgentReports agents={result.agents} />
+          <AgentReports
+            agents={result.agents}
+            fallbackLanguage={result.recommendation?.language}
+          />
           {result.recommendation && (
             <TranslatedRecommendation rec={result.recommendation} />
           )}
@@ -456,7 +459,17 @@ type AgentPayload = {
  * and the switch says so instead of quietly fetching six translations - which
  * is the cost this was moved into the analysis to avoid.
  */
-function AgentReports({ agents }: { agents: unknown }) {
+function AgentReports({
+  agents,
+  fallbackLanguage,
+}: {
+  agents: unknown;
+  /** What the recommendation says it is in. Used for analyses stored before
+   *  agents recorded their own language - inferring it from today's default
+   *  would label older Indonesian prose "EN", which is the same mistake the
+   *  recommendation switch used to make. */
+  fallbackLanguage?: string;
+}) {
   const { t } = useI18n();
   const [showing, setShowing] = useState(false);
 
@@ -467,7 +480,7 @@ function AgentReports({ agents }: { agents: unknown }) {
 
   if (!entries.length) return null;
 
-  const source = entries[0][1]?.language ?? "en";
+  const source = entries[0][1]?.language ?? fallbackLanguage ?? "en";
   const target = source === "id" ? "en" : "id";
   const available = entries.some((entry) => entry[1]?.translations?.[target]?.fields);
 

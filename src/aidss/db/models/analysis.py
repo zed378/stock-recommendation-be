@@ -91,7 +91,12 @@ class Recommendation(Base):
     #: The columns hold the **original** - the text that passed schema
     #: validation and the execution-language guard. Naming its language is what
     #: makes the row below readable as renderings of it rather than as peers.
-    language: Mapped[str] = mapped_column(String(5), default="id")
+    #: No default. A default here is a guess that looks like a fact: it was
+    #: "id", the writer forgot to pass the real value, and English analyses
+    #: were stored claiming to be Indonesian for as long as nobody read one.
+    #: Required now, so forgetting is an error at write time rather than a
+    #: mislabelled row nobody can distinguish from a correct one.
+    language: Mapped[str] = mapped_column(String(5))
 
     #: Renderings of the prose columns, keyed by language:
     #: ``{"en": {"fields": {...}, "model": "...", "translated_at": "..."}}``.

@@ -174,6 +174,13 @@ class RecommendationEngine:
             target_price_method=result.levels.target_price_method,
             suggested_stop=result.levels.suggested_stop,
             horizon=result.output.horizon,
+            # Written from what the prompt actually asked for. Left out, the
+            # column silently took the model's default of "id" whatever the
+            # prompt had said - so English prose was stored labelled Indonesian,
+            # the switch offered to translate it into the language it was
+            # already in, and `render_translation` rendered "the other one"
+            # into English as well. Two identical columns, one of them lying.
+            language=result.language,
         )
         self._session.add(row)
         self._session.flush()

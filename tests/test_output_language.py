@@ -205,3 +205,39 @@ def test_a_failed_agent_translation_does_not_lose_the_analysis(session, monkeypa
     assert all(
         not payload["translations"] for payload in run.as_payload()["agents"].values()
     )
+
+
+def test_the_stored_row_records_the_language_the_prompt_asked_for(session) -> None:
+    """The column was never written, so it took the model's default of "id"
+    whatever the prompt had said. English analyses were stored claiming to be
+    Indonesian - and the switch then offered to translate them into the
+    language they were already in, which no stored rendering could satisfy.
+
+    `RecommendationResult.language` was set correctly all along, which is why
+    the API response looked right and only the database was wrong.
+    """
+    from sqlalchemy import select
+
+    from aidss.agents.engine import AnalysisEngine
+    from aidss.collectors.market_data import MarketDataCollector
+    from aidss.config import Settings
+    from aidss.db.models import Recommendation
+    from aidss.domain.types import Timeframe
+    from aidss.plugins.registry import get_market_data_provider
+    from tests.test_agents import make_gateway
+
+    collector = MarketDataCollector(
+        get_market_data_provider(Settings(market_data_provider="fixture"))
+    )
+    asset = collector.get_or_create_asset(session, "TLKM", sector="Infrastructure")
+    end = datetime(2025, 6, 1, tzinfo=UTC)
+    collector.collect(session, asset, Timeframe.D1, end - timedelta(days=400), end)
+
+    run = AnalysisEngine(session, make_gateway()).analyze(
+        asset, Timeframe.D1, translate_output=False
+    )
+    assert run.recommendation is not None
+
+    row = session.scalar(select(Recommendation))
+    assert row is not None
+    assert row.language == run.language
