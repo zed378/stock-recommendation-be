@@ -24,6 +24,14 @@ export function useTranslation(fields: Fields, isPersonal = false) {
   const { t, locale } = useI18n();
   const [showing, setShowing] = useState(false);
 
+  // The analysis stores the other language when it runs, so the common case
+  // needs no request at all. `translations` is keyed by language; the entry
+  // for the one the reader does not currently have is the one to show.
+  const wanted = locale === "id" ? "en" : "id";
+  const stored = (fields.translations as Record<string, { fields?: Fields }> | undefined)?.[
+    wanted
+  ]?.fields;
+
   const translation = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/translate", {
@@ -41,15 +49,23 @@ export function useTranslation(fields: Fields, isPersonal = false) {
     onSuccess: () => setShowing(true),
   });
 
-  const translated = (translation.data?.fields ?? {}) as Fields;
+  // Stored first, fetched only if there is none. A stored rendering is the
+  // same text the endpoint would return, so preferring it costs nothing and
+  // removes the wait entirely.
+  const translated = stored ?? ((translation.data?.fields ?? {}) as Fields);
 
   return {
     /** The fields to render: the original, or the original with prose replaced. */
     rendered: showing ? { ...fields, ...translated } : fields,
     showing,
+    /** True when the switch is instant, because the analysis already stored it. */
+    isReady: Boolean(stored),
     isPending: translation.isPending,
     error: translation.isError ? (translation.error as Error).message : null,
     showOriginal: () => setShowing(false),
-    showTranslation: () => (translation.data ? setShowing(true) : translation.mutate()),
+    showTranslation: () => {
+      if (stored || translation.data) setShowing(true);
+      else translation.mutate();
+    },
   };
 }

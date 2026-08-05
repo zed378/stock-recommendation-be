@@ -20,10 +20,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from aidss.config import get_settings
 from aidss.db.models import PromptTemplate as PromptTemplateRow
 from aidss.domain.types import ChatMessage
 from aidss.prompts import catalog
 from aidss.prompts.catalog import PromptTemplate
+from aidss.prompts.language import OutputLanguage
 
 
 class PromptNotFoundError(LookupError):
@@ -136,8 +138,14 @@ class PromptManager:
 class PromptComposer:
     """Template + context -> the exact messages sent to the model."""
 
-    def __init__(self, manager: PromptManager | None = None) -> None:
+    def __init__(
+        self,
+        manager: PromptManager | None = None,
+        *,
+        language: OutputLanguage | None = None,
+    ) -> None:
         self.manager = manager or PromptManager()
+        self.language = language or OutputLanguage(get_settings().analysis_language)
 
     def compose(
         self,
@@ -146,9 +154,16 @@ class PromptComposer:
         output_model: type[BaseModel],
         *,
         corrective_instruction: str | None = None,
+        language: OutputLanguage | None = None,
     ) -> ComposedPrompt:
         template = self.manager.get(template_name)
-        system = template.render_system(schema_hint(output_model))
+        # Falls back to the configured language rather than to silence: a
+        # prompt that names no language gets whatever the model prefers, and
+        # the stored `language` column then records an assumption instead of a
+        # fact about the text.
+        system = template.render_system(
+            schema_hint(output_model), language or self.language
+        )
         user = template.user.format(**{k: _render(v) for k, v in context.items()})
 
         messages = [

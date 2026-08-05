@@ -24,7 +24,7 @@ achieve that is to make storing an invalid one impossible.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -63,6 +63,12 @@ class RecommendationResult:
     levels: DerivedLevels
     run: AgentRun
     recommendation_id: uuid.UUID | None = None
+    #: Which language the prose above is written in - the one that passed
+    #: validation. Named so the renderings below read as renderings of it.
+    language: str = "id"
+    #: Renderings keyed by language, produced during the same run so a reader
+    #: never waits for a translation of the page they are already on.
+    translations: dict[str, Any] = field(default_factory=dict)
 
     def as_payload(self) -> dict[str, Any]:
         """The complete Section 5.4 structure, ready for the API."""
@@ -89,6 +95,8 @@ class RecommendationResult:
             "model": self.run.usage.model,
             "provider": self.run.usage.provider,
             "attempts": self.run.attempts,
+            "language": self.language,
+            "translations": dict(self.translations),
         }
 
 
@@ -135,6 +143,10 @@ class RecommendationEngine:
                 result = RecommendationResult(
                     output=output, calibration=calibration, levels=levels, run=run
                 )
+                # Recorded from what the prompt actually asked for, not
+                # assumed. That is the difference between the column being a
+                # fact about the text and a guess about it.
+                result.language = self._runner.language.value
                 if persist and analysis_result_id is not None:
                     result.recommendation_id = self._persist(analysis_result_id, result)
                 return result

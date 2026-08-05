@@ -2030,6 +2030,15 @@ export interface components {
             provider?: string | null;
             /** Attempts */
             attempts?: number | null;
+            /**
+             * Language
+             * @default id
+             */
+            language: string;
+            /** Translations */
+            translations?: {
+                [key: string]: unknown;
+            };
         };
         /** ReflectionResponse */
         ReflectionResponse: {

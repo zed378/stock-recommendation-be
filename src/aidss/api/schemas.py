@@ -181,6 +181,15 @@ class RecommendationResponse(BaseModel):
     provider: str | None = None
     attempts: int | None = None
 
+    #: Which language the prose fields above are in - the text that passed
+    #: schema validation and the execution-language guard.
+    language: str = "id"
+    #: Renderings of that prose, keyed by language, produced during the same
+    #: run as the analysis. Present means the reader can switch language with
+    #: no request at all. Absent means the on-demand `/translate` endpoint is
+    #: the fallback - a slower path, not a missing feature.
+    translations: dict[str, Any] = Field(default_factory=dict)
+
 
 class AgentSkipResponse(BaseModel):
     agent: str

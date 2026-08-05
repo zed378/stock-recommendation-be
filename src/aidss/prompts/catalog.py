@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aidss.prompts.language import LANGUAGE_RULE
+from aidss.prompts.language import LANGUAGE_RULE, OutputLanguage, output_language_rule
 
 #: Bumped when a template's wording changes in a way that could change output.
 #: Existing rows keep their old version, so past results stay reproducible.
@@ -51,10 +51,18 @@ class PromptTemplate:
     system: str
     user: str
 
-    def render_system(self, schema: str) -> str:
-        return "\n\n".join(
-            [self.system, _NUMERIC_RULE, LANGUAGE_RULE, _JSON_RULE.format(schema=schema)]
-        )
+    def render_system(self, schema: str, language: OutputLanguage | None = None) -> str:
+        """The full system prompt, with the output language stated when asked.
+
+        Optional so every existing caller and test keeps working; the composer
+        passes the configured language, which is what makes the stored
+        `language` a fact about the text rather than an assumption about it.
+        """
+        parts = [self.system, _NUMERIC_RULE, LANGUAGE_RULE]
+        if language is not None:
+            parts.append(output_language_rule(language))
+        parts.append(_JSON_RULE.format(schema=schema))
+        return "\n\n".join(parts)
 
 
 # ---------------------------------------------------------------------------

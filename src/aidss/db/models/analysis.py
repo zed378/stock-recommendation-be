@@ -85,6 +85,30 @@ class Recommendation(Base):
     #: Named `suggested_stop`: a suggestion, never an instruction (Section 5.4).
     suggested_stop: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     horizon: Mapped[InvestmentHorizon] = mapped_column(enum_column(InvestmentHorizon, length=10))
+
+    #: Which language the prose columns above are written in.
+    #:
+    #: The columns hold the **original** - the text that passed schema
+    #: validation and the execution-language guard. Naming its language is what
+    #: makes the row below readable as renderings of it rather than as peers.
+    language: Mapped[str] = mapped_column(String(5), default="id")
+
+    #: Renderings of the prose columns, keyed by language:
+    #: ``{"en": {"fields": {...}, "model": "...", "translated_at": "..."}}``.
+    #:
+    #: One column rather than a paired `reasoning_id` / `reasoning_en` for each
+    #: field, for a reason that is about meaning rather than tidiness: paired
+    #: columns are symmetric, and symmetry says the two are equally
+    #: authoritative. They are not. One was validated; the other is a rendering
+    #: of it, and the schema should say so. A third language also costs nothing
+    #: here and six more columns there.
+    #:
+    #: Written during the analysis run so a reader never waits for a
+    #: translation they are already looking at the page for. Empty when the
+    #: translation failed - which must not fail the analysis - and the
+    #: on-demand `/translate` endpoint remains as the fallback.
+    translations: Mapped[dict[str, Any]] = mapped_column(default=dict)
+
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     analysis_result: Mapped[AnalysisResult] = relationship(back_populates="recommendations")

@@ -86,6 +86,32 @@ class OutputLanguage(StrEnum):
     ID = "id"
     EN = "en"
 
+    @property
+    def english_name(self) -> str:
+        return "Indonesian" if self is OutputLanguage.ID else "English"
+
+
+def output_language_rule(language: OutputLanguage) -> str:
+    """Tell the model which language to answer in.
+
+    Nothing used to. The model answered in whatever language it felt like -
+    English, usually - while the stored `language` column said Indonesian
+    because that was the default nobody had checked. Asking for two languages
+    is what exposed it: the "translation" came back identical to the
+    "original", because both were English.
+
+    Field names stay English on purpose. They are schema keys, and translating
+    one produces a document that fails validation.
+    """
+    return f"""\
+OUTPUT LANGUAGE (mandatory):
+Write every piece of prose - reasoning, factors, scenarios, summaries - in
+{language.english_name}. Use {language.english_name} even when the input data,
+the indicator names, or the news headlines are in another language.
+
+JSON field names, enum values, ticker symbols, and indicator names stay exactly
+as the schema defines them. Only the prose you write is in {language.english_name}."""
+
 
 LANGUAGE_RULE = """\
 LANGUAGE RULE (mandatory, applies to every sentence you write):

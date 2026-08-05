@@ -34,7 +34,7 @@ from aidss.agents.analyzers import (
 )
 from aidss.agents.base import Agent, AgentRun, AgentRunner, AgentSkip, ConversationRecorder
 from aidss.agents.context import AnalysisContext, ContextBuilder
-from aidss.db.models import AIConversation, AnalysisResult, Asset
+from aidss.db.models import AIConversation, AnalysisResult, Asset, Recommendation
 from aidss.domain.types import Timeframe
 from aidss.llm.errors import GatewayError
 from aidss.llm.gateway import LLMGateway
@@ -45,6 +45,7 @@ from aidss.recommendations.engine import (
     RecommendationRejected,
     RecommendationResult,
 )
+from aidss.recommendations.rendering import render_translation
 
 
 @dataclass(slots=True)
@@ -71,6 +72,11 @@ class AnalysisRun:
     analysis_result_id: uuid.UUID | None = None
     conversation_id: uuid.UUID | None = None
     recommendation: RecommendationResult | None = None
+    #: Whether the other language was produced and stored in this run. False
+    #: means the reader falls back to the on-demand endpoint, which is a slower
+    #: path rather than a missing feature - and reporting it is what lets the
+    #: interface tell those two apart.
+    translated: bool = False
 
     @property
     def synthesis(self) -> AgentRun | None:
@@ -134,6 +140,11 @@ class AnalysisEngine:
         user_id: uuid.UUID | None = None,
         persist: bool = True,
         include_recommendation: bool = True,
+        #: Produce the other language in the same run. On by default: the
+        #: reader is already waiting, and doing it now removes the wait from
+        #: every later view. Off for callers that only want the analysis - a
+        #: batch backfill, say - where the extra call buys nothing.
+        translate_output: bool = True,
     ) -> AnalysisRun:
         context = self._context_builder.build(asset, timeframe, user_id=user_id)
         run = AnalysisRun(asset_ticker=asset.ticker, timeframe=timeframe)
@@ -172,11 +183,40 @@ class AnalysisEngine:
 
         if include_recommendation and run.analyzer_runs:
             self._recommend(context, runner, run, persist=persist)
+
+            # Translated before the snapshot is written, not after. The
+            # snapshot is what `GET /recommendation` reads, so storing it first
+            # would leave every later view without the translation while the
+            # response to *this* request carried one - the two disagreeing
+            # about the same analysis.
+            if persist and translate_output:
+                self._render_other_language(run)
+
             if persist and run.analysis_result_id is not None:
-                # Re-store the payload now that it includes the recommendation.
+                # Re-stored now that the payload includes the recommendation
+                # and whatever rendering succeeded.
                 self._update_snapshot(run, context)
 
         return run
+
+    def _render_other_language(self, run: AnalysisRun) -> None:
+        recommendation_id = (
+            run.recommendation.recommendation_id if run.recommendation else None
+        )
+        if recommendation_id is None:
+            return
+        run.translated = render_translation(
+            self._session, self._gateway, recommendation_id
+        )
+        if run.translated and run.recommendation is not None:
+            # Read back rather than reconstructed, so the payload carries what
+            # was actually stored. A response describing a translation the
+            # database does not hold would send the reader to a switch that
+            # then had nothing behind it.
+            row = self._session.get(Recommendation, recommendation_id)
+            if row is not None:
+                run.recommendation.language = row.language
+                run.recommendation.translations = dict(row.translations or {})
 
     def _recommend(
         self,

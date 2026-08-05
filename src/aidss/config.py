@@ -124,6 +124,18 @@ class Settings(BaseSettings):
     def embeddings_enabled(self) -> bool:
         return bool(self.ai_embedding_model.strip())
 
+    #: The language every agent is told to write its prose in.
+    #:
+    #: Asked for explicitly rather than left to the model. Nothing used to name
+    #: a language at all, so the model answered in whatever it preferred -
+    #: English, in practice - while the stored `language` column recorded the
+    #: default nobody had checked. Producing two languages is what exposed it:
+    #: the "translation" came back identical to the "original".
+    #:
+    #: Indonesian by default because this is an IDX product read by Indonesian
+    #: investors. The other language is rendered from it during the same run.
+    analysis_language: str = "id"
+
     #: Vector width of the embedding model. A property of the model, not of the
     #: schema: text-embedding-3-small is 1536, -3-large is 3072, nomic-embed-text
     #: is 768. PostgreSQL enforces it, so a mismatch fails the insert rather than

@@ -24,6 +24,7 @@ from aidss.db.models import AIMessage
 from aidss.llm.cost import Usage
 from aidss.llm.gateway import LLMGateway, LLMRequest
 from aidss.llm.router import Sensitivity, TaskComplexity
+from aidss.prompts.language import OutputLanguage
 from aidss.prompts.manager import PromptComposer
 from aidss.prompts.schemas import AgentOutput
 from aidss.prompts.validator import ValidationFailure, validate
@@ -145,6 +146,16 @@ class AgentRunner:
         self._recorder = recorder
         self._max_validation_retries = max_validation_retries
         self._high_privacy = high_privacy
+
+    @property
+    def language(self) -> OutputLanguage:
+        """The language the prompts ask for, so callers can record it.
+
+        Read off the composer rather than from settings again: the two could
+        drift, and what a stored analysis needs is the language it was actually
+        asked to write in.
+        """
+        return self._composer.language
 
     def run(
         self,
