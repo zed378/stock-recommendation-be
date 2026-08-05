@@ -2088,6 +2088,11 @@ export interface components {
             prompt_version: string | null;
             /** Disclaimer */
             disclaimer: string;
+            /**
+             * Language
+             * @default id
+             */
+            language: string;
         };
         /** RegisterRequest */
         RegisterRequest: {

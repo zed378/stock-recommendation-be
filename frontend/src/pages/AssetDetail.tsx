@@ -418,6 +418,8 @@ function TranslatedRecommendation({
         <LanguageSwitch
           showing={translation.showing}
           isPending={translation.isPending}
+          source={translation.source}
+          target={translation.target}
           onOriginal={translation.showOriginal}
           onTranslate={translation.showTranslation}
         />

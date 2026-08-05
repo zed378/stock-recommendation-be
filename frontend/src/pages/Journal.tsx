@@ -228,6 +228,8 @@ function Reflection({ data }: { data: Record<string, unknown> }) {
         <LanguageSwitch
           showing={translation.showing}
           isPending={translation.isPending}
+          source={translation.source}
+          target={translation.target}
           onOriginal={translation.showOriginal}
           onTranslate={translation.showTranslation}
         />

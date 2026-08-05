@@ -32,7 +32,14 @@ EXPOSE 80
 
 # Reports unhealthy while nginx is up but the bundle is missing, which is the
 # failure a plain port check would call healthy.
+#
+# `127.0.0.1`, not `localhost`. In this image `localhost` resolves to `::1`
+# only, while nginx `listen 80` binds IPv4 - so the check connected to an
+# address nothing was listening on and the container reported unhealthy for its
+# whole life while serving every request correctly. An always-failing health
+# check is worse than none: it reads as an outage, and anything gated on
+# `service_healthy` would wait forever.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget -q -O /dev/null http://localhost/ || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

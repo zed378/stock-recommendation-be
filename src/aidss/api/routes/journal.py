@@ -37,6 +37,7 @@ from aidss.api.schemas import (
     ReflectionResponse,
 )
 from aidss.collectors.normalization import normalize_ticker
+from aidss.config import get_settings
 from aidss.db.models import (
     ActorType,
     AnalysisResult,
@@ -208,6 +209,7 @@ def reflect_on_journal(
         model=run.usage.model,
         prompt_version=run.template_version,
         disclaimer=REFLECTION_DISCLAIMER,
+        language=get_settings().analysis_language,
     )
 
 

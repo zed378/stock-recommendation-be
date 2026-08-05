@@ -455,6 +455,12 @@ class ReflectionResponse(BaseModel):
     model: str | None
     prompt_version: str | None
     disclaimer: str
+    #: Which language the prose above is in. Stated rather than left for the
+    #: client to infer from its own locale: the output language is a server
+    #: setting, so a reader with the interface in English is still looking at
+    #: Indonesian prose on a default deployment - and a switch that guessed
+    #: would offer to translate it into the language it is already in.
+    language: str = "id"
 
 
 # --- Conversation (Section 10 `/chat`) -------------------------------------

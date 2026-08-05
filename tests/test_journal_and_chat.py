@@ -138,6 +138,19 @@ def test_the_reflection_disclaimer_says_what_it_is_not(client, auth_headers) -> 
     assert "not investment advice" in lowered
 
 
+def test_the_reflection_states_which_language_it_is_in(client, auth_headers) -> None:
+    """The output language is a server setting, so a reader with the interface
+    in English is still looking at Indonesian prose on a default deployment. A
+    switch that inferred the language from the locale offered to translate the
+    text into the language it was already written in - and then had to fetch,
+    every time, a translation that could never match."""
+    from aidss.config import get_settings
+
+    add_entries(client, auth_headers, 5)
+    body = client.post("/journal/reflection", headers=auth_headers).json()
+    assert body["language"] == get_settings().analysis_language
+
+
 def test_the_reflection_agent_routes_as_sensitive() -> None:
     """A decision journal is a record of someone's thinking about their money."""
     from aidss.llm.router import Sensitivity

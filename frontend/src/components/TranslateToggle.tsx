@@ -21,17 +21,23 @@ import { Caveat, ErrorNote, Spinner } from "@/components/primitives";
 export function LanguageSwitch({
   showing,
   isPending,
+  source,
+  target,
   onOriginal,
   onTranslate,
 }: {
   showing: boolean;
   isPending: boolean;
+  /** The language the prose is in - from the content, never from the locale. */
+  source: string;
+  /** The language the switch offers. */
+  target: string;
   onOriginal: () => void;
   onTranslate: () => void;
 }) {
-  const { locale, t } = useI18n();
-  const original = locale === "id" ? "ID" : "EN";
-  const other = locale === "id" ? "EN" : "ID";
+  const { t } = useI18n();
+  const original = source.toUpperCase();
+  const other = target.toUpperCase();
 
   return (
     <div
