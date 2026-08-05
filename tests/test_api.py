@@ -236,6 +236,71 @@ def test_categories_report_their_sizes(client: TestClient, auth_headers) -> None
     assert {row["name"]: row["count"] for row in rows} == {"Energi": 1, "Perbankan": 2}
 
 
+def test_a_category_can_be_created_without_a_ticker(client: TestClient, auth_headers) -> None:
+    """Organising a watchlist used to be possible only while adding to it:
+    someone who wanted three groups first had to pick three tickers to put in
+    them."""
+    response = client.post(
+        "/watchlist/categories", json={"name": "Perbankan"}, headers=auth_headers
+    )
+    assert response.status_code == 201
+    assert response.json() == {"name": "Perbankan", "count": 0}
+
+    rows = client.get("/watchlist/categories", headers=auth_headers).json()
+    assert {"name": "Perbankan", "count": 0} in rows
+
+
+def test_a_created_category_can_be_filled(client: TestClient, auth_headers) -> None:
+    """The group made up front must be the same one an add lands in, not a
+    second row that happens to share its name."""
+    client.post("/watchlist/categories", json={"name": "Energi"}, headers=auth_headers)
+    add(client, auth_headers, "ADRO", "Energi")
+
+    rows = client.get("/watchlist/categories", headers=auth_headers).json()
+    assert [row for row in rows if row["name"] == "Energi"] == [
+        {"name": "Energi", "count": 1}
+    ]
+
+
+def test_creating_a_category_that_exists_is_refused(client: TestClient, auth_headers) -> None:
+    """Returning the existing group would look identical to having made a new
+    one, and the reader would believe they had two."""
+    add(client, auth_headers, "BBCA", "Perbankan")
+    response = client.post(
+        "/watchlist/categories", json={"name": "Perbankan"}, headers=auth_headers
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"]
+
+
+def test_a_created_category_name_is_trimmed(client: TestClient, auth_headers) -> None:
+    client.post(
+        "/watchlist/categories", json={"name": "  Perbankan  "}, headers=auth_headers
+    )
+    rows = client.get("/watchlist/categories", headers=auth_headers).json()
+    assert [row["name"] for row in rows] == ["Perbankan"]
+
+
+def test_a_blank_category_name_is_refused(client: TestClient, auth_headers) -> None:
+    """Whitespace trims to nothing, which would otherwise create a group with an
+    invisible name that cannot be told apart from any other."""
+    response = client.post(
+        "/watchlist/categories", json={"name": "   "}, headers=auth_headers
+    )
+    assert response.status_code == 422
+
+
+def test_a_created_category_belongs_to_its_owner(client: TestClient, auth_headers) -> None:
+    client.post("/watchlist/categories", json={"name": "Perbankan"}, headers=auth_headers)
+
+    credentials = {"email": "cat-owner@example.com", "password": "correct-horse-battery"}
+    client.post("/auth/register", json=credentials)
+    token = client.post("/auth/login", json=credentials).json()["access_token"]
+
+    other = {"Authorization": f"Bearer {token}"}
+    assert client.get("/watchlist/categories", headers=other).json() == []
+
+
 def test_an_emptied_category_still_exists(client: TestClient, auth_headers) -> None:
     """Removing the last item empties a group; it does not delete it. Hiding it
     would make the removal look as though it took the group with it."""

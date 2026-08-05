@@ -406,7 +406,21 @@ export interface paths {
          */
         get: operations["list_categories_watchlist_categories_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Category
+         * @description Make an empty category.
+         *
+         *     Categories used to exist only as a side effect of adding a ticker, which
+         *     meant organising a watchlist could only happen while adding to it: someone
+         *     who wanted three groups first had to pick three tickers to put in them. An
+         *     empty group is a perfectly reasonable thing to want - it is the shape of the
+         *     watchlist someone is about to build.
+         *
+         *     A clash is a 409 rather than a silent success. Returning the existing group
+         *     would look identical to having made a new one, and the reader would think
+         *     they had two.
+         */
+        post: operations["create_category_watchlist_categories_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2294,6 +2308,11 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** WatchlistCategoryCreate */
+        WatchlistCategoryCreate: {
+            /** Name */
+            name: string;
+        };
         /** WatchlistCategoryRename */
         WatchlistCategoryRename: {
             /** Name */
@@ -3009,6 +3028,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WatchlistCategoryResponse"][];
+                };
+            };
+        };
+    };
+    create_category_watchlist_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatchlistCategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistCategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

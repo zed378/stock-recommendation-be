@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from aidss.api.deps import get_db, require_permission
 from aidss.api.schemas import (
     DEFAULT_CATEGORY,
+    WatchlistCategoryCreate,
     WatchlistCategoryRename,
     WatchlistCategoryResponse,
     WatchlistItemCreate,
@@ -39,8 +40,10 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 def _category(session: Session, user: User, name: str) -> Watchlist:
     """Fetch the user's category by name, creating it on first use.
 
-    Created rather than rejected because a category with no members is not a
-    thing anyone wants to create, name, and then fill. The name is trimmed so
+    Created rather than rejected, so naming a new group while adding a ticker
+    works in one step. That is not the only way to make one - see
+    ``create_category`` - but it stays because the alternative is refusing an
+    add over a group that could simply be made. The name is trimmed so
     "Perbankan" and "Perbankan " do not become two groups that look identical.
     """
     trimmed = name.strip() or DEFAULT_CATEGORY
@@ -129,6 +132,50 @@ def list_categories(
         .order_by(Watchlist.name)
     ).all()
     return [WatchlistCategoryResponse(name=name, count=count) for name, count in rows]
+
+
+@router.post(
+    "/categories",
+    response_model=WatchlistCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_category(
+    payload: WatchlistCategoryCreate,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> WatchlistCategoryResponse:
+    """Make an empty category.
+
+    Categories used to exist only as a side effect of adding a ticker, which
+    meant organising a watchlist could only happen while adding to it: someone
+    who wanted three groups first had to pick three tickers to put in them. An
+    empty group is a perfectly reasonable thing to want - it is the shape of the
+    watchlist someone is about to build.
+
+    A clash is a 409 rather than a silent success. Returning the existing group
+    would look identical to having made a new one, and the reader would think
+    they had two.
+    """
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A category needs a name",
+        )
+
+    existing = session.scalar(
+        select(Watchlist).where(Watchlist.user_id == user.id, Watchlist.name == name)
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A category named {name!r} already exists",
+        )
+
+    watchlist = Watchlist(user_id=user.id, name=name)
+    session.add(watchlist)
+    session.flush()
+    return _category_response(session, watchlist)
 
 
 @router.patch("/categories/{name}", response_model=WatchlistCategoryResponse)

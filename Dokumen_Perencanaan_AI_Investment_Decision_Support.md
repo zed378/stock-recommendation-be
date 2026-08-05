@@ -661,6 +661,7 @@ erDiagram
 | `/alerts` | GET | Alert yang terbentuk untuk pengguna |
 | `/alerts/{id}/acknowledge` | POST | Tandai alert sudah dibaca |
 | `/watchlist/categories` | GET | Daftar kelompok watchlist beserta jumlah anggotanya |
+| `/watchlist/categories` | POST | Buat kelompok kosong tanpa harus menambah emiten |
 | `/watchlist/categories/{name}` | PATCH/DELETE | Ganti nama / hapus kelompok (anggota pindah ke `Default`) |
 | `/translate` | POST | Render prosa analisis tersimpan ke bahasa lain (Section 23) |
 
@@ -1021,6 +1022,22 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 **Bisa dimatikan, dan pilihannya disimpan.** Suara yang tidak bisa dihentikan pembacanya adalah fitur yang memusuhinya: ia berbunyi tanpa diminta, di layar yang mungkin terbuka seharian di samping pekerjaan lain. Menyalakannya kembali langsung memutar nadanya sekali, sebagai satu-satunya cara mengetahui apa yang baru saja dinyalakan tanpa menunggu sesuatu terjadi.
 
 **Riwayat tidak menghapus dirinya sendiri.** Menandai terbaca sempat mengeluarkan notifikasi dari satu-satunya endpoint yang mengembalikannya, sehingga "alert satu jam lalu itu tentang apa?" tidak punya jawaban. `include_read` memisahkan lonceng (yang belum dibaca) dari panel (yang bisa menampilkan seluruhnya), dan `/notifications/unread-count` melayani lencana dengan satu bilangan — memoll lima puluh baris tiap setengah menit untuk merender satu angka adalah pemborosan yang tidak perlu diadakan.
+
+---
+
+## 22b. Kelompok Watchlist
+
+**Kelompok bukan konsep baru yang ditempelkan.** `watchlists` sudah membawa `name` dengan batasan unik per pengguna sejak skema awal, dan `watchlist_items` menggantung padanya. Setiap endpoint dulu menuliskan "Default" secara keras, sehingga seorang pengguna hanya bisa punya satu daftar tanpa nama. Sebuah kelompok *adalah* nama itu.
+
+**Satu emiten boleh berada di beberapa kelompok.** Keunikan ada pada `(watchlist_id, asset_id)`. BBCA adalah bank sekaligus pembagi dividen, dan memaksa memilih di antara keduanya membuat pengelompokan kurang berguna dibanding tanpa pengelompokan sama sekali.
+
+**Kelompok bisa dibuat kosong.** Semula kelompok hanya lahir sebagai efek samping menambah emiten, sehingga menata watchlist hanya mungkin sambil mengisinya: yang ingin tiga kelompok harus lebih dulu mencari tiga emiten untuk dimasukkan. Kelompok kosong adalah hal yang wajar diinginkan — ia bentuk watchlist yang sedang akan dibangun seseorang. Pembuatan implisit saat menambah emiten tetap ada, karena menolak sebuah penambahan demi kelompok yang bisa saja langsung dibuat bukan perbaikan.
+
+**Nama yang bentrok dijawab 409, bukan diam-diam mengembalikan yang sudah ada.** Hasilnya akan terlihat sama persis dengan berhasil membuat yang baru, dan pembaca akan mengira punya dua. Hal yang sama berlaku pada ganti nama: penggabungan tidak dicoba, karena itu diam-diam menyatukan dua kelompok yang sengaja dipisahkan dan membatalkannya harus manual.
+
+**Menghapus kelompok memindahkan anggotanya ke `Default`, tidak menghapusnya.** Membubarkan pengelompokan bukan hal yang sama dengan memutuskan berhenti memantau emiten di dalamnya, dan keduanya mudah tertukar ketika satu aksi melakukan keduanya. `Default` sendiri tidak bisa dihapus — ia tempat segalanya mendarat, jadi menghapusnya membuat fallback tidak punya tempat jatuh.
+
+**Nama dipangkas.** Tanpa itu "Perbankan" dan "Perbankan " menjadi dua kelompok yang terlihat identik di antarmuka.
 
 ---
 
