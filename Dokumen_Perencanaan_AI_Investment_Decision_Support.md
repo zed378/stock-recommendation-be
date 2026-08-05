@@ -1052,6 +1052,12 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 - **Penjaga bahasa-eksekusi berlaku pada keluarannya.** Sumber yang lolos dalam Bahasa Indonesia bisa kembali sebagai "buy now" dalam Bahasa Inggris; aturan yang hanya ditegakkan pada aslinya akan berlubang selebar fitur ini.
 - **Refleksi jurnal melewati jalur sensitif**, karena catatan pribadi tidak boleh sampai ke penyedia yang analisisnya sendiri akan ditolak ke sana.
 
+**Bahasa Inggris adalah bahasa utama.** Model yang tersedia di sini bernalar lebih andal di dalamnya, dan setiap aturan yang menguji keluaran — terutama penjaga bahasa-eksekusi — ditulis dan diuji terhadap teks Inggris. Bahasa Indonesia dirender darinya dalam run yang sama dan disimpan berdampingan, sehingga pembaca Indonesia tidak menunggu apa pun.
+
+**Kedua bahasa disimpan untuk setiap agen, bukan hanya untuk rekomendasi.** Tab analisis menampilkan temuan tiap agen, dan sakelar yang menerjemahkan kesimpulannya saja akan meninggalkan bukti di bawahnya dalam bahasa yang tidak diminta pembaca. Dirender sekali saat analisis berjalan: pembaca sudah menunggu satu kali, dan alternatifnya adalah membayar panggilan model setiap kali seseorang menekan sakelar atas teks yang tidak bisa berubah. Analisis jadi lebih lama; notifikasi sudah ada untuk memberi tahu kapan selesai.
+
+**Satu panggilan per agen, bukan satu panggilan untuk semuanya.** Membatch lebih murah, tetapi `translate` menolak respons yang menjatuhkan satu kunci — dan dengan seluruh agen dalam satu payload, satu kelalaian akan membuang seluruh himpunan. Per agen, kegagalan hanya membebani render agen itu.
+
 **Bahasa asli datang dari kontennya, bukan dari antarmuka.** Bahasa keluaran adalah setelan server (`AIDSS_ANALYSIS_LANGUAGE`): pada penyebaran default prosanya Bahasa Indonesia apa pun bahasa antarmuka pembaca. Sakelar yang menyimpulkannya dari locale memberi label "EN" pada prosa Indonesia dan, saat ditekan, meminta terjemahan **ke bahasa yang sudah dipakai teks itu** — permintaan yang tidak pernah cocok dengan terjemahan tersimpan mana pun, sehingga ia memanggil endpoint setiap kali untuk hasil yang sudah ada di basis data. Maka setiap respons berprosa menyatakan `language`-nya sendiri, dan sakelarnya menampilkan pasangan itu.
 
 ---
