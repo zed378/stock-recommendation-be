@@ -469,3 +469,42 @@ def test_an_admin_can_read_the_budget(client: TestClient, admin_headers) -> None
     body = client.get("/admin/budget", headers=admin_headers).json()
     assert body["state"] in {"ok", "warning", "exceeded"}
     assert body["message"]
+
+
+def test_library_chatter_is_held_at_warning() -> None:
+    """`httpx` logs a line per outbound request. One monitoring pass over a
+    watchlist of thirteen is thirteen lines a minute for ever - about twenty
+    thousand a day of "GET ... 200 OK" that bury the lines saying what the
+    platform actually did.
+    """
+    import logging
+
+    from aidss.observability.logging import NOISY_LIBRARIES, configure_logging
+
+    configure_logging("INFO")
+    for name in NOISY_LIBRARIES:
+        assert logging.getLogger(name).level == logging.WARNING, name
+
+
+def test_the_quieting_survives_a_debug_root() -> None:
+    """DEBUG is what an operator reaches for when hunting something specific,
+    which is exactly when the flood is least welcome."""
+    import logging
+
+    from aidss.observability.logging import configure_logging
+
+    configure_logging("DEBUG")
+    assert logging.getLogger().level == logging.DEBUG
+    assert logging.getLogger("httpx").level == logging.WARNING
+
+
+def test_a_failing_request_is_still_reported() -> None:
+    """WARNING, not silence: turning a library off entirely trades one
+    blindness for another."""
+    import logging
+
+    from aidss.observability.logging import configure_logging
+
+    configure_logging("INFO")
+    assert logging.getLogger("httpx").isEnabledFor(logging.WARNING)
+    assert logging.getLogger("httpx").isEnabledFor(logging.ERROR)

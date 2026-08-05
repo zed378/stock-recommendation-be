@@ -116,6 +116,18 @@ _RESERVED = frozenset(
 )
 
 
+#: Third-party loggers held at WARNING, whatever level the platform runs at.
+#:
+#: `httpx` logs a line for every outbound request. One monitoring pass over a
+#: watchlist of thirteen is thirteen lines, every minute, for ever - roughly
+#: twenty thousand a day of "GET ... 200 OK" that nobody will ever read, and
+#: which bury the handful of lines that say what the platform actually did.
+#:
+#: WARNING rather than silence: a failing request still has to be visible, and
+#: turning a library off entirely trades one blindness for another.
+NOISY_LIBRARIES: tuple[str, ...] = ("httpx", "httpcore", "urllib3", "asyncio")
+
+
 def configure_logging(level: str = "INFO", *, json_output: bool = True) -> None:
     """Install the JSON formatter on the root handler.
 
@@ -132,6 +144,13 @@ def configure_logging(level: str = "INFO", *, json_output: bool = True) -> None:
         JSONFormatter() if json_output else logging.Formatter("%(levelname)s %(name)s %(message)s")
     )
     root.addHandler(handler)
+
+    # Applied after the root level, because setting the root to DEBUG would
+    # otherwise turn these back on - which is exactly when the flood is least
+    # welcome, since DEBUG is what an operator reaches for when hunting
+    # something specific.
+    for name in NOISY_LIBRARIES:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def new_request_id() -> str:
