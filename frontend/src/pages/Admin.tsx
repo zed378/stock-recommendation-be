@@ -77,10 +77,21 @@ export function Admin() {
   );
 }
 
-/** Renders a `{key: value}` blob from the API without assuming its shape. */
-function KeyValues({ data }: { data: unknown }) {
+/**
+ * Counts, rendered as counts.
+ *
+ * Deliberately not a generic renderer any more. The previous one
+ * `JSON.stringify`d whatever it did not understand, so a nested `by_agent` map
+ * spilled a wall of JSON out of its card and pushed the page wider than the
+ * viewport - the same failure the indicator snapshot had. Every panel below now
+ * knows the shape it is showing, and anything nested gets a component that can
+ * lay it out.
+ */
+function Counts({ data, labels }: { data: unknown; labels: Record<string, MessageKey> }) {
   const { t, n } = useI18n();
-  const entries = Object.entries((data ?? {}) as Record<string, unknown>);
+  const entries = Object.entries((data ?? {}) as Record<string, unknown>).filter(
+    ([, value]) => typeof value === "number",
+  );
   if (!entries.length) return <p className="text-sm text-faint">{t("common.none")}</p>;
 
   return (
@@ -88,17 +99,8 @@ function KeyValues({ data }: { data: unknown }) {
       {entries.map(([key, value]) => (
         <Stat
           key={key}
-          label={key.replace(/_/g, " ")}
-          value={
-            typeof value === "number"
-              ? n(value, Number.isInteger(value) ? 0 : 2)
-              : value === null || value === undefined
-                ? "—"
-                : typeof value === "object"
-                  ? JSON.stringify(value)
-                  : String(value)
-          }
-          mono={typeof value !== "string"}
+          label={labels[key] ? t(labels[key]) : key.replace(/_/g, " ")}
+          value={n(value as number, 0)}
         />
       ))}
     </dl>
@@ -171,15 +173,166 @@ function Overview() {
       </Card>
 
       <Card title={t("admin.inventory")}>
-        <KeyValues data={data?.inventory} />
+        <Counts
+          data={data?.inventory}
+          labels={{
+            users: "admin.users",
+            assets: "admin.assets",
+            price_bars: "admin.priceBars",
+            news_items: "admin.newsItems",
+            analyses: "admin.analyses",
+            recommendations: "admin.recommendations",
+            active_schedules: "admin.activeSchedules",
+          }}
+        />
       </Card>
-      <Card title={t("admin.ingestion")}>
-        <KeyValues data={data?.ingestion} />
-      </Card>
-      <Card title={t("admin.aiUsage")}>
-        <KeyValues data={data?.ai_usage} />
-      </Card>
+
+      <Ingestion data={data?.ingestion} />
+      <AiUsage data={data?.ai_usage} />
     </div>
+  );
+}
+
+interface IngestionData {
+  runs?: number;
+  failed?: number;
+  success_rate?: number;
+  bars_ingested?: number;
+  bars_rejected?: number;
+  last_run_at?: string | null;
+  recent_failures?: unknown[];
+}
+
+function Ingestion({ data }: { data: unknown }) {
+  const { t, n, dateTime } = useI18n();
+  const flow = (data ?? {}) as IngestionData;
+  const rate = flow.success_rate;
+  const failures = Array.isArray(flow.recent_failures) ? flow.recent_failures : [];
+
+  return (
+    <Card title={t("admin.ingestion")}>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
+        <Stat label={t("admin.runs")} value={n(flow.runs ?? null, 0)} />
+        <Stat
+          label={t("admin.failedRuns")}
+          value={n(flow.failed ?? null, 0)}
+          tone={(flow.failed ?? 0) > 0 ? "fall" : "neutral"}
+        />
+        {/* A fraction, not a count. Printing 1.0 as "1" reads as one run
+            succeeding rather than as all of them. */}
+        <Stat
+          label={t("admin.successRate")}
+          value={rate === undefined || rate === null ? "—" : `${n(rate * 100, 0)}%`}
+          tone={rate !== undefined && rate !== null && rate < 1 ? "fall" : "rise"}
+        />
+        <Stat label={t("admin.barsIngested")} value={n(flow.bars_ingested ?? null, 0)} />
+        <Stat
+          label={t("admin.barsRejected")}
+          value={n(flow.bars_rejected ?? null, 0)}
+          tone={(flow.bars_rejected ?? 0) > 0 ? "watch" : "neutral"}
+        />
+      </dl>
+
+      <dl className="mt-4 grid gap-x-6 gap-y-4 border-t border-line pt-4 sm:grid-cols-2">
+        <Stat
+          label={t("admin.lastRun")}
+          // Never-run and run-just-now are different facts, so they read
+          // differently rather than one showing a raw ISO string.
+          value={flow.last_run_at ? dateTime(flow.last_run_at) : t("admin.neverRun")}
+          mono={false}
+        />
+        <div>
+          <dt className="text-xs text-faint">{t("admin.recentFailures")}</dt>
+          <dd className="mt-0.5 text-sm">
+            {failures.length === 0 ? (
+              // "None" rather than an empty array printed literally.
+              <span className="text-rise/80">{t("admin.noFailures")}</span>
+            ) : (
+              <ul className="space-y-1">
+                {failures.map((failure, index) => (
+                  <li key={index} className="text-xs leading-relaxed text-fall/90">
+                    {typeof failure === "string" ? failure : JSON.stringify(failure)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+      </dl>
+    </Card>
+  );
+}
+
+interface AgentUsage {
+  calls?: number;
+  tokens?: number;
+  cost?: string | number;
+}
+
+function AiUsage({ data }: { data: unknown }) {
+  const { t, n } = useI18n();
+  const usage = (data ?? {}) as {
+    total_tokens?: number;
+    total_calls?: number;
+    estimated_cost?: string | number;
+    by_agent?: Record<string, AgentUsage>;
+    note?: string;
+  };
+
+  // Sorted by spend, because "which agent is costing the most" is the question
+  // this panel exists to answer. Alphabetical order answers nothing.
+  const agents = Object.entries(usage.by_agent ?? {}).sort(
+    (a, b) => (b[1].tokens ?? 0) - (a[1].tokens ?? 0),
+  );
+
+  return (
+    <Card title={t("admin.aiUsage")}>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+        <Stat label={t("admin.totalTokens")} value={n(usage.total_tokens ?? null, 0)} />
+        <Stat label={t("admin.totalCalls")} value={n(usage.total_calls ?? null, 0)} />
+        <Stat label={t("admin.estimatedCost")} value={n(usage.estimated_cost ?? null, 2)} />
+      </dl>
+
+      {agents.length > 0 && (
+        <div className="mt-4 border-t border-line pt-4">
+          <p className="mb-2 text-xs text-faint">{t("admin.byAgent")}</p>
+          {/* A table, because it is tabular. The previous renderer stringified
+              this map and pushed the whole page sideways. */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-faint">
+                  <th className="pb-2 pr-4 font-medium">{t("admin.agent")}</th>
+                  <th className="pb-2 pr-4 text-right font-medium">{t("admin.calls")}</th>
+                  <th className="pb-2 pr-4 text-right font-medium">{t("admin.tokens")}</th>
+                  <th className="pb-2 text-right font-medium">{t("admin.cost")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {agents.map(([name, row]) => (
+                  <tr key={name}>
+                    <td className="py-2 pr-4 font-mono text-xs text-ink/90">
+                      {name.replace(/_/g, " ")}
+                    </td>
+                    <td className="py-2 pr-4 text-right font-mono tnum text-muted">
+                      {n(row.calls ?? null, 0)}
+                    </td>
+                    <td className="py-2 pr-4 text-right font-mono tnum text-ink/90">
+                      {n(row.tokens ?? null, 0)}
+                    </td>
+                    <td className="py-2 text-right font-mono tnum text-muted">
+                      {n(row.cost ?? null, 2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {usage.note && <Caveat>{usage.note}</Caveat>}
+    </Card>
   );
 }
 

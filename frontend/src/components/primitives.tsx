@@ -171,10 +171,18 @@ export function Stat({
 }: {
   label: string;
   value: ReactNode;
-  tone?: "neutral" | "rise" | "fall";
+  // `watch` is distinct from `fall` on purpose: rejected bars are worth
+  // noticing and are not a failure, and colouring the two the same would make
+  // every warning read as an outage.
+  tone?: "neutral" | "rise" | "fall" | "watch";
   mono?: boolean;
 }) {
-  const tones = { neutral: "text-ink", rise: "text-rise", fall: "text-fall" };
+  const tones = {
+    neutral: "text-ink",
+    rise: "text-rise",
+    fall: "text-fall",
+    watch: "text-watch",
+  };
   return (
     <div>
       <dt className="text-xs text-faint">{label}</dt>

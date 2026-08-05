@@ -15,7 +15,8 @@ import { PriceChart } from "@/components/PriceChart";
 import { Recommendation } from "@/components/Recommendation";
 import { IndicatorSnapshotView } from "@/components/Indicators";
 import { Strategy } from "@/components/Strategy";
-import { TranslateToggle } from "@/components/TranslateToggle";
+import { LanguageSwitch, TranslationNotice } from "@/components/TranslateToggle";
+import { useTranslation } from "@/components/useTranslation";
 import type { components } from "@/api/schema";
 
 type Tab = "chart" | "indicators" | "fundamentals" | "analysis" | "strategy" | "news";
@@ -386,19 +387,47 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
         <>
           <AgentRoster result={result} />
           {result.recommendation && (
-            // The prose is translatable; the label, confidence, and prices are
-            // not - they come from the stored analysis either way, so the two
-            // renderings can never disagree about the stance.
-            <TranslateToggle fields={result.recommendation as Record<string, unknown>}>
-              {(rendered) => (
-                <Recommendation
-                  rec={{ ...result.recommendation, ...rendered } as typeof result.recommendation}
-                />
-              )}
-            </TranslateToggle>
+            <TranslatedRecommendation rec={result.recommendation} />
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The recommendation, with the language switch in the header where it is found.
+ *
+ * Only the prose is translated. The label, confidence, and prices come from the
+ * stored analysis either way, so the two renderings cannot disagree about the
+ * stance - which is the whole reason this is a translation rather than a second
+ * analysis.
+ */
+function TranslatedRecommendation({
+  rec,
+}: {
+  rec: NonNullable<components["schemas"]["AnalysisResponse"]["recommendation"]>;
+}) {
+  const { t } = useI18n();
+  const translation = useTranslation(rec as unknown as Record<string, unknown>);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-ink">{t("rec.title")}</h3>
+        <LanguageSwitch
+          showing={translation.showing}
+          isPending={translation.isPending}
+          onOriginal={translation.showOriginal}
+          onTranslate={translation.showTranslation}
+        />
+      </div>
+
+      <TranslationNotice showing={false} error={translation.error} />
+
+      <Recommendation rec={{ ...rec, ...translation.rendered } as typeof rec} />
+
+      <TranslationNotice showing={translation.showing} error={null} />
     </div>
   );
 }
