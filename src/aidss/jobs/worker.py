@@ -34,6 +34,7 @@ from aidss.jobs.handlers import (
     PermanentJobError,
     due_news_schedules,
     enqueue_due_fundamentals,
+    enqueue_monitoring_pass,
     get_handler,
 )
 from aidss.jobs.leader import LeaseHolder
@@ -301,6 +302,11 @@ class Scheduler:
             # carrying a schedule row each.
             fundamentals = enqueue_due_fundamentals(session, now=now)
 
+            # Monitoring is paced by a fixed interval, and the dedup key is the
+            # interval bucket - so a scheduler ticking every minute still
+            # queues one pass per interval rather than one per tick.
+            monitoring = enqueue_monitoring_pass(session, now=now)
+
             session.commit()
             return {
                 "leader": True,
@@ -312,7 +318,10 @@ class Scheduler:
                 "enqueued": enqueued,
                 "already_queued": skipped,
                 "fundamentals": fundamentals,
-                "total_enqueued": enqueued + fundamentals["enqueued"],
+                "monitoring": monitoring,
+                "total_enqueued": (
+                    enqueued + fundamentals["enqueued"] + monitoring["enqueued"]
+                ),
             }
         except Exception:
             session.rollback()

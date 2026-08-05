@@ -77,6 +77,15 @@ export const id = {
     "masuk ke keduanya.",
   "watchlist.expandAll": "Buka semua",
   "watchlist.collapseAll": "Tutup semua",
+  "watchlist.newCategory": "+ Buat kelompok baru",
+  "watchlist.newCategoryName": "Nama kelompok baru",
+  "watchlist.rename": "Ganti nama",
+  "watchlist.renamePrompt": "Ganti nama kelompok {name} menjadi:",
+  "watchlist.deleteCategory": "Hapus kelompok",
+  "watchlist.confirmDeleteCategory":
+    "Hapus kelompok {name}? {count} emiten di dalamnya akan dipindahkan ke Default, " +
+    "bukan ikut dihapus.",
+  "watchlist.categoryActionFailed": "Aksi kelompok gagal.",
 
   "watchlist.search": "Cari",
   "watchlist.searchPlaceholder": "Kode, nama perusahaan, sektor, atau catatan Anda…",
@@ -270,6 +279,92 @@ export const id = {
   "chat.you": "Anda",
   "chat.assistant": "AI",
 
+  // --- strategy: sudah punya vs belum punya -------------------------------
+  "tab.strategy": "Strategi",
+  "strategy.title": "Apa artinya bagi posisi Anda",
+  "strategy.empty": "Belum ada rekomendasi tersimpan untuk emiten ini.",
+  "strategy.emptyHint": "Jalankan analisis dulu — strategi diturunkan darinya, bukan dibuat terpisah.",
+  "strategy.notHolding": "Jika belum punya",
+  "strategy.holding": "Jika sudah punya",
+  "strategy.bothNote":
+    "Keduanya ditampilkan, apa pun posisi Anda. Emiten yang layak dipertahankan tetapi " +
+    "tidak layak dibeli hari ini adalah situasi nyata dan umum — menampilkan satu sisi saja " +
+    "akan menyembunyikannya.",
+  "strategy.conditions": "Syarat",
+  "strategy.invalidatedIf": "Batal jika",
+  "strategy.levels": "Level acuan",
+
+  "stance.entry_candidate": "Kandidat masuk",
+  "stance.wait_for_level": "Tunggu level",
+  "stance.no_entry_basis": "Tidak ada dasar masuk",
+  "stance.avoid": "Hindari",
+  "stance.maintain": "Pertahankan",
+  "stance.accumulate_candidate": "Kandidat tambah",
+  "stance.trim_candidate": "Kandidat kurangi",
+  "stance.exit_candidate": "Kandidat keluar",
+
+  // --- stock picks --------------------------------------------------------
+  "nav.picks": "Stock Pick",
+  "picks.title": "Stock pick",
+  "picks.horizon": "Horizon",
+  "picks.horizonNote":
+    "Horizon menyebut jendela waktu kondisi itu biasanya dibaca — bukan berapa lama " +
+    "sesuatu akan terjadi.",
+  "picks.empty": "Tidak ada emiten yang memenuhi kondisi ini.",
+  "picks.emptyHint": "Kondisi bisa dilonggarkan, atau data harga belum cukup.",
+  "picks.considered": "{count} emiten dipertimbangkan",
+  "picks.insufficient": "{count} dilewati karena riwayat harga belum cukup",
+  "picks.score": "Skor",
+  "picks.met": "Kondisi terpenuhi",
+  "picks.unmet": "Tidak terpenuhi",
+  "picks.watchlistOnly": "Hanya watchlist saya",
+  "picks.nearLimitOnly": "Hanya yang mendekati ARA",
+  "picks.limitProximity": "Pemakaian band ARA",
+  "picks.limitCeiling": "Batas atas sesi",
+  "picks.notAForecast": "Ini penyaringan, bukan ramalan",
+
+  // --- monitoring ---------------------------------------------------------
+  "nav.monitoring": "Pantauan",
+  "monitoring.title": "Pantauan & alert",
+  "monitoring.quotes": "Harga terakhir",
+  "monitoring.pollNow": "Perbarui sekarang",
+  "monitoring.polling": "Memperbarui…",
+  "monitoring.empty": "Belum ada emiten yang dipantau.",
+  "monitoring.emptyHint": "Tambahkan emiten ke watchlist untuk mulai memantaunya.",
+  "monitoring.neverPolled": "Belum pernah diambil",
+  "monitoring.delayed": "Tertunda",
+  "monitoring.delayedNote":
+    "Sumber gratis tertunda sekitar 15 menit. Ditampilkan apa adanya — antarmuka yang " +
+    "menyajikan harga tertunda seolah terkini mengundang keputusan atas angka yang sudah berubah.",
+  "monitoring.observedAt": "Diamati",
+
+  "alerts.title": "Alert",
+  "alerts.empty": "Belum ada alert.",
+  "alerts.emptyHint": "Alert muncul saat level ditembus, sikap berubah, atau band ARA hampir habis.",
+  "alerts.unacknowledgedOnly": "Hanya yang belum dibaca",
+  "alerts.acknowledge": "Tandai dibaca",
+  "alerts.acknowledged": "Sudah dibaca",
+  "alerts.note":
+    "Alert menyatakan apa yang terjadi, bukan apa yang harus dilakukan. Sikap dan " +
+    "confidence-nya ada di layar analisis, lengkap dengan faktor yang bertentangan.",
+  "alert.level_approached": "Mendekati level",
+  "alert.level_crossed": "Menembus level",
+  "alert.stance_changed": "Sikap berubah",
+  "alert.limit_proximity": "Mendekati batas ARA",
+  "alert.suggested_stop_reached": "Mencapai level stop",
+  "alert.unusual_move": "Pergerakan tidak biasa",
+  "alert.stanceFrom": "Dari",
+  "alert.stanceTo": "Menjadi",
+
+  // --- translation --------------------------------------------------------
+  "translate.show": "Tampilkan dalam Bahasa Inggris",
+  "translate.showOriginal": "Tampilkan aslinya",
+  "translate.working": "Menerjemahkan…",
+  "translate.failed": "Terjemahan gagal.",
+  "translate.machineNote":
+    "Terjemahan mesin dari analisis di atas. Aslinya tetap yang otoritatif — label, " +
+    "harga, dan confidence tidak diterjemahkan.",
+
   // --- admin -------------------------------------------------------------
   "nav.admin": "Admin",
   "admin.title": "Dashboard admin",
@@ -404,6 +499,14 @@ export const en: Record<MessageKey, string> = {
     "One ticker may sit in several categories — a bank that pays dividends belongs in both.",
   "watchlist.expandAll": "Expand all",
   "watchlist.collapseAll": "Collapse all",
+  "watchlist.newCategory": "+ New category",
+  "watchlist.newCategoryName": "New category name",
+  "watchlist.rename": "Rename",
+  "watchlist.renamePrompt": "Rename {name} to:",
+  "watchlist.deleteCategory": "Delete category",
+  "watchlist.confirmDeleteCategory":
+    "Delete {name}? Its {count} tickers move to Default rather than being removed.",
+  "watchlist.categoryActionFailed": "The category action failed.",
 
   "watchlist.search": "Search",
   "watchlist.searchPlaceholder": "Ticker, company, sector, or your own note…",
@@ -587,6 +690,90 @@ export const en: Record<MessageKey, string> = {
   "chat.emptyHint": "Ask a question to start.",
   "chat.you": "You",
   "chat.assistant": "AI",
+
+  "tab.strategy": "Strategy",
+  "strategy.title": "What this means for your position",
+  "strategy.empty": "No stored recommendation for this ticker yet.",
+  "strategy.emptyHint":
+    "Run an analysis first — the strategy is derived from one, never produced independently.",
+  "strategy.notHolding": "If you do not hold it",
+  "strategy.holding": "If you hold it",
+  "strategy.bothNote":
+    "Both are shown whatever you hold. An asset worth keeping but not worth buying today " +
+    "is a real and common situation, and showing only your own side would hide it.",
+  "strategy.conditions": "Conditions",
+  "strategy.invalidatedIf": "Invalidated if",
+  "strategy.levels": "Reference levels",
+
+  "stance.entry_candidate": "Entry candidate",
+  "stance.wait_for_level": "Wait for a level",
+  "stance.no_entry_basis": "No basis to enter",
+  "stance.avoid": "Avoid",
+  "stance.maintain": "Maintain",
+  "stance.accumulate_candidate": "Candidate to add",
+  "stance.trim_candidate": "Candidate to trim",
+  "stance.exit_candidate": "Candidate to exit",
+
+  "nav.picks": "Stock picks",
+  "picks.title": "Stock picks",
+  "picks.horizon": "Horizon",
+  "picks.horizonNote":
+    "The horizon names the window each condition is conventionally read over — not how " +
+    "long anything will take to happen.",
+  "picks.empty": "No ticker meets these conditions.",
+  "picks.emptyHint": "Loosen the conditions, or there may not be enough price history yet.",
+  "picks.considered": "{count} tickers considered",
+  "picks.insufficient": "{count} skipped for want of price history",
+  "picks.score": "Score",
+  "picks.met": "Conditions met",
+  "picks.unmet": "Not met",
+  "picks.watchlistOnly": "My watchlist only",
+  "picks.nearLimitOnly": "Near the auto-reject ceiling only",
+  "picks.limitProximity": "Auto-reject band used",
+  "picks.limitCeiling": "Session ceiling",
+  "picks.notAForecast": "This is a screen, not a forecast",
+
+  "nav.monitoring": "Monitoring",
+  "monitoring.title": "Monitoring & alerts",
+  "monitoring.quotes": "Latest observations",
+  "monitoring.pollNow": "Refresh now",
+  "monitoring.polling": "Refreshing…",
+  "monitoring.empty": "Nothing is being monitored yet.",
+  "monitoring.emptyHint": "Add a ticker to your watchlist to start following it.",
+  "monitoring.neverPolled": "Never observed",
+  "monitoring.delayed": "Delayed",
+  "monitoring.delayedNote":
+    "The free sources are delayed by roughly 15 minutes. Shown rather than implied — an " +
+    "interface presenting a delayed price as current invites decisions on numbers that " +
+    "have already moved.",
+  "monitoring.observedAt": "Observed",
+
+  "alerts.title": "Alerts",
+  "alerts.empty": "No alerts yet.",
+  "alerts.emptyHint":
+    "Alerts appear when a level is crossed, a stance changes, or the auto-reject band is nearly used.",
+  "alerts.unacknowledgedOnly": "Unread only",
+  "alerts.acknowledge": "Mark read",
+  "alerts.acknowledged": "Read",
+  "alerts.note":
+    "An alert states what happened, not what to do about it. The stance and its confidence " +
+    "live on the analysis screen, with the factors arguing against it.",
+  "alert.level_approached": "Level approached",
+  "alert.level_crossed": "Level crossed",
+  "alert.stance_changed": "Stance changed",
+  "alert.limit_proximity": "Near the auto-reject ceiling",
+  "alert.suggested_stop_reached": "Suggested stop reached",
+  "alert.unusual_move": "Unusual move",
+  "alert.stanceFrom": "From",
+  "alert.stanceTo": "To",
+
+  "translate.show": "Show in Indonesian",
+  "translate.showOriginal": "Show the original",
+  "translate.working": "Translating…",
+  "translate.failed": "The translation failed.",
+  "translate.machineNote":
+    "A machine translation of the analysis above. The original remains authoritative — " +
+    "labels, prices, and confidence are not translated.",
 
   "nav.admin": "Admin",
   "admin.title": "Admin dashboard",

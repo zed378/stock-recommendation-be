@@ -91,6 +91,24 @@ class Settings(BaseSettings):
     ai_base_url: str = "https://api.openai.com/v1"
     ai_api_key: str | None = None
     ai_chat_model: str = "gpt-4o-mini"
+
+    #: Whether the endpoint above runs on infrastructure you control.
+    #:
+    #: This is an **assertion by the operator**, not something the platform can
+    #: work out. A URL says nothing about who owns the machine behind it: a
+    #: self-hosted vLLM published at a public domain looks exactly like a
+    #: third-party API, and a hostname heuristic gets that backwards in the
+    #: dangerous direction.
+    #:
+    #: It gates the agents that handle personal financial data - portfolio,
+    #: risk, journal reflection (Sections 12.10, 13). With this False they
+    #: refuse to run rather than send positions to a third party, which is the
+    #: safe default and the reason it is False.
+    #:
+    #: Set it True only if the inference actually happens on hardware you
+    #: control. A localhost URL is detected automatically, so this exists for
+    #: the case where it does not look local but is.
+    ai_self_hosted: bool = False
     #: Leave **empty** when the endpoint serves no embedding model. Many
     #: self-hosted gateways front chat-only backends and answer `/embeddings`
     #: with 404 for every model they advertise; setting this to "" says so up
@@ -133,6 +151,14 @@ class Settings(BaseSettings):
     #: financials change quarterly, so refetching more often than this spends
     #: an allowance to rewrite identical numbers.
     fundamentals_refresh_interval_days: int = 30
+
+    #: How often the scheduler queues a monitoring pass over followed assets.
+    #:
+    #: "Near real time" is the honest ceiling: the free sources are delayed by
+    #: roughly fifteen minutes, so polling faster asks the same stale number
+    #: more often. Five minutes keeps alerts responsive without pretending to a
+    #: freshness nothing here has. Set to 0 to stop monitoring entirely.
+    monitoring_interval_seconds: int = 300
 
     #: Ceiling on how many assets one scheduler tick may queue for refresh.
     #: The daily quota is the real limit; this stops a first run against a

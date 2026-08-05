@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 #: Imperative execution phrasing. Each pattern targets a *command to transact*,
 #: not the vocabulary of trading: "buying pressure", "sellers are active", and
@@ -74,6 +75,18 @@ def is_compliant(text: str) -> bool:
 #: Injected into every prompt that produces investor-facing narrative. Stated
 #: as a rule with a worked contrast, because models follow demonstrated
 #: patterns more reliably than prohibitions alone.
+class OutputLanguage(StrEnum):
+    """The languages this platform renders analysis in.
+
+    Closed rather than a free string: a translation target the validator has no
+    execution-language patterns for would be published unchecked, and the
+    guard in this module only covers Indonesian and English.
+    """
+
+    ID = "id"
+    EN = "en"
+
+
 LANGUAGE_RULE = """\
 LANGUAGE RULE (mandatory, applies to every sentence you write):
 Write informational and conditional analysis. Never write an execution

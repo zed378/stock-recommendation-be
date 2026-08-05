@@ -8,7 +8,8 @@ by ``tests/test_architecture_constraints.py`` rather than left to convention.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 from aidss.api.middleware import (
     RateLimitMiddleware,
@@ -22,12 +23,20 @@ from aidss.api.routes import (
     jobs,
     journal,
     knowledge,
+    market,
     portfolio,
     reports,
     system,
     watchlist,
 )
 from aidss.config import Settings, get_settings
+from aidss.llm.errors import (
+    AllProvidersFailedError,
+    BudgetExceededError,
+    CircuitOpenError,
+    GatewayError,
+    NoEligibleProviderError,
+)
 from aidss.observability.logging import configure_logging
 
 DESCRIPTION = """
@@ -71,7 +80,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reports.router)
     app.include_router(journal.router)
     app.include_router(jobs.router)
+    app.include_router(market.router)
+    _install_gateway_error_handler(app)
     return app
+
+
+#: How each gateway failure should reach the caller. The distinction is not
+#: cosmetic: a client can retry a 503 and must not retry a 402-shaped budget
+#: refusal, and an operator reading 500s in a dashboard learns nothing about
+#: which of the two happened.
+_GATEWAY_STATUS: tuple[tuple[type[GatewayError], int], ...] = (
+    (BudgetExceededError, status.HTTP_429_TOO_MANY_REQUESTS),
+    (CircuitOpenError, status.HTTP_503_SERVICE_UNAVAILABLE),
+    (NoEligibleProviderError, status.HTTP_503_SERVICE_UNAVAILABLE),
+    (AllProvidersFailedError, status.HTTP_502_BAD_GATEWAY),
+)
+
+
+def _install_gateway_error_handler(app: FastAPI) -> None:
+    """Turn AI-layer failures into answers rather than 500s.
+
+    Registered once for the whole application rather than caught per route.
+    Every endpoint that reaches the gateway can raise these, and the one that
+    forgot was the one someone hit: a configuration problem - no provider
+    permitted to see personal financial data - surfaced as "Internal Server
+    Error", which hides the very message that explains how to fix it.
+
+    A 500 also says the wrong thing. None of these is a bug in the server; they
+    are a budget reached, a breaker open, or a provider not configured for the
+    request. Reporting them as faults sends whoever is on call looking for one.
+    """
+
+    @app.exception_handler(GatewayError)
+    async def handle_gateway_error(_: Request, exc: GatewayError) -> JSONResponse:
+        code = next(
+            (status_code for kind, status_code in _GATEWAY_STATUS if isinstance(exc, kind)),
+            status.HTTP_502_BAD_GATEWAY,
+        )
+        headers = {}
+        if isinstance(exc, CircuitOpenError):
+            # Standard, and actionable: the breaker already knows how long.
+            headers["Retry-After"] = str(max(1, int(exc.retry_after)))
+        return JSONResponse(status_code=code, content={"detail": str(exc)}, headers=headers)
 
 
 app = create_app()

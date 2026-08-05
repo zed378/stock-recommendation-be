@@ -413,6 +413,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/watchlist/categories/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Category
+         * @description Remove a category. Its items move to ``Default`` rather than disappearing.
+         *
+         *     Deleting a grouping is not the same as deciding to stop following the
+         *     assets in it, and the two are easy to confuse when one action does both.
+         *     Moving them keeps a mis-click cheap: the grouping is gone, the watchlist is
+         *     intact, and putting them back is a rename away.
+         *
+         *     ``Default`` itself cannot be deleted - it is where everything else lands,
+         *     so removing it would leave the fallback with nowhere to fall back to.
+         */
+        delete: operations["delete_category_watchlist_categories__name__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename Category
+         * @description Rename a category, carrying its items with it.
+         *
+         *     Renaming the row rather than moving items between two rows: the items never
+         *     change hands, so there is no window where a rename half-applied leaves some
+         *     of them in the old group.
+         */
+        patch: operations["rename_category_watchlist_categories__name__patch"];
+        trace?: never;
+    };
     "/watchlist/{item_id}": {
         parameters: {
             query?: never;
@@ -443,15 +479,18 @@ export interface paths {
         };
         /**
          * Search
-         * @description Search across ticker, company name, and the user's own note.
+         * @description Search across ticker, company name, sector, category, and the user's note.
          *
          *     Case-insensitive via `ilike`: tickers are stored upper case, but company
          *     names and notes are free text, and a case-sensitive `like` would make
          *     searching one's own note a guessing game about how it was typed.
          *
-         *     The note is searched because it is where the reason for following an asset
-         *     lives - "kandidat dividen", "menunggu laporan Q3" - and that is more often
-         *     what someone is looking for than a code they already know.
+         *     Two of the five fields are there for reasons worth stating. The **note** is
+         *     where the reason for following an asset lives - "kandidat dividen",
+         *     "menunggu laporan Q3" - and that is more often what someone is looking for
+         *     than a code they already know. The **category** is searched because a user
+         *     reading a group heading on screen and typing it into the box expects to
+         *     find that group; leaving it out made the most obvious query return nothing.
          */
         get: operations["search_watchlist_search_get"];
         put?: never;
@@ -1031,6 +1070,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stock-picks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stock Picks
+         * @description Rank stored assets by how many of the horizon's stated conditions they meet.
+         *
+         *     Reads stored price history only. A screen that collected data would take
+         *     minutes and would spend provider quota on assets nobody asked about.
+         */
+        get: operations["stock_picks_stock_picks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{ticker}/strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Asset Strategy
+         * @description What the stored stance implies, read from both sides of a position.
+         *
+         *     Both readings are returned regardless of what the caller actually holds.
+         *     Seeing the case you are *not* in is what makes the asymmetry visible: an
+         *     asset worth keeping but not worth buying today is a real and common
+         *     situation, and returning only the reader's own side would hide it.
+         */
+        get: operations["asset_strategy_assets__ticker__strategy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/translate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Translate Payload
+         * @description Render a stored analysis in the other language.
+         *
+         *     A *rendering*, not a second analysis. Generating the analysis twice could
+         *     produce two different stances for one asset with equal authority, and a
+         *     reader seeing "beli" beside "hold" would have no way to resolve it. The
+         *     original stays authoritative; this returns prose only, with the labels,
+         *     prices, and confidence carried through untouched.
+         */
+        post: operations["translate_payload_translate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/monitoring/quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Monitored Quotes
+         * @description The latest observation for every asset this user follows.
+         */
+        get: operations["monitored_quotes_monitoring_quotes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/monitoring/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poll Now
+         * @description Observe this user's followed assets now, rather than waiting for the worker.
+         *
+         *     Scoped to the caller's own watchlist: a manual poll is a person looking at
+         *     their screen, and letting it sweep every asset in the system would let one
+         *     user spend everyone's provider quota.
+         */
+        post: operations["poll_now_monitoring_poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Alerts */
+        get: operations["list_alerts_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/{alert_id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge Alert */
+        post: operations["acknowledge_alert_alerts__alert_id__acknowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1046,6 +1237,37 @@ export interface components {
             agent: string;
             /** Reason */
             reason: string;
+        };
+        /** AlertResponse */
+        AlertResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ticker */
+            ticker: string;
+            /** Kind */
+            kind: string;
+            /** Direction */
+            direction: string;
+            /** Message */
+            message: string;
+            /** Observed Price */
+            observed_price: string | null;
+            /** Reference Price */
+            reference_price: string | null;
+            /** Context */
+            context: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Triggered At
+             * Format: date-time
+             */
+            triggered_at: string;
+            /** Acknowledged At */
+            acknowledged_at: string | null;
         };
         /** AllocationChangeRequest */
         AllocationChangeRequest: {
@@ -1288,6 +1510,23 @@ export interface components {
             /** Source */
             source: string;
         };
+        /** GuidanceResponse */
+        GuidanceResponse: {
+            /** Position */
+            position: string;
+            /** Stance */
+            stance: string;
+            /** Rationale */
+            rationale: string;
+            /** Conditions */
+            conditions: string[];
+            /** Invalidated If */
+            invalidated_if: string[];
+            /** Reference Levels */
+            reference_levels: {
+                [key: string]: string;
+            };
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1337,6 +1576,12 @@ export interface components {
             /** @default manual */
             input_method: components["schemas"]["HoldingInputMethod"];
         };
+        /**
+         * Horizon
+         * @description The window a condition is conventionally read over.
+         * @enum {string}
+         */
+        Horizon: "1d" | "7d" | "14d" | "30d";
         /** IndicatorSnapshotResponse */
         IndicatorSnapshotResponse: {
             /** Ticker */
@@ -1623,6 +1868,16 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * OutputLanguage
+         * @description The languages this platform renders analysis in.
+         *
+         *     Closed rather than a free string: a translation target the validator has no
+         *     execution-language patterns for would be published unchecked, and the
+         *     guard in this module only covers Indonesian and English.
+         * @enum {string}
+         */
+        OutputLanguage: "id" | "en";
         /** PortfolioAnalysisResponse */
         PortfolioAnalysisResponse: {
             /** Portfolio */
@@ -1693,6 +1948,25 @@ export interface components {
             } | null;
             /** Note */
             note: string;
+        };
+        /** QuoteSnapshotResponse */
+        QuoteSnapshotResponse: {
+            /** Ticker */
+            ticker: string;
+            /** Exchange */
+            exchange: string;
+            /** Price */
+            price: string | null;
+            /** Previous Close */
+            previous_close: string | null;
+            /** Quoted At */
+            quoted_at: string | null;
+            /** Observed At */
+            observed_at: string | null;
+            /** Source */
+            source: string | null;
+            /** Is Delayed */
+            is_delayed: boolean;
         };
         /**
          * RecommendationLabel
@@ -1856,6 +2130,44 @@ export interface components {
             /** Disclaimer */
             disclaimer: string;
         };
+        /** StockPickResponse */
+        StockPickResponse: {
+            /** Horizon */
+            horizon: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Considered */
+            considered: number;
+            /** Insufficient History */
+            insufficient_history: string[];
+            /** Picks */
+            picks: {
+                [key: string]: unknown;
+            }[];
+            /** Caveat */
+            caveat: string;
+        };
+        /** StrategyResponse */
+        StrategyResponse: {
+            /** Ticker */
+            ticker: string;
+            /** Label */
+            label: string;
+            /** Confidence */
+            confidence: number;
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            not_holding: components["schemas"]["GuidanceResponse"];
+            holding: components["schemas"]["GuidanceResponse"];
+            /** Disclaimer */
+            disclaimer: string;
+        };
         /**
          * Timeframe
          * @description Timeframes the Indicator Engine supports (Section 5.3, multi-timeframe).
@@ -1876,6 +2188,28 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /**
+         * TranslationRequest
+         * @description Prose to render in the other language.
+         *
+         *     The caller sends the fields it wants translated rather than an analysis id,
+         *     so the same endpoint serves an analysis, a reflection, and a chat answer
+         *     without three near-identical routes. Non-prose keys are filtered server
+         *     side: translating a stance label would produce a value the enum does not
+         *     contain.
+         */
+        TranslationRequest: {
+            /** Fields */
+            fields: {
+                [key: string]: unknown;
+            };
+            language: components["schemas"]["OutputLanguage"];
+            /**
+             * Is Personal
+             * @default false
+             */
+            is_personal: boolean;
         };
         /** UserResponse */
         UserResponse: {
@@ -1910,6 +2244,11 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WatchlistCategoryRename */
+        WatchlistCategoryRename: {
+            /** Name */
+            name: string;
         };
         /** WatchlistCategoryResponse */
         WatchlistCategoryResponse: {
@@ -2621,6 +2960,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WatchlistCategoryResponse"][];
+                };
+            };
+        };
+    };
+    delete_category_watchlist_categories__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistCategoryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_category_watchlist_categories__name__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatchlistCategoryRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistCategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3632,6 +4037,213 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueueStatsResponse"];
+                };
+            };
+        };
+    };
+    stock_picks_stock_picks_get: {
+        parameters: {
+            query?: {
+                horizon?: components["schemas"]["Horizon"];
+                limit?: number;
+                min_score?: number;
+                watchlist_only?: boolean;
+                /** @description Only assets that have consumed most of the session's upward auto-rejection band. Proximity is measured; it is not a prediction that the limit will be reached. */
+                near_limit_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockPickResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    asset_strategy_assets__ticker__strategy_get: {
+        parameters: {
+            query?: {
+                exchange?: string;
+            };
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    translate_payload_translate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitored_quotes_monitoring_quotes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteSnapshotResponse"][];
+                };
+            };
+        };
+    };
+    poll_now_monitoring_poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_alerts_alerts_get: {
+        parameters: {
+            query?: {
+                unacknowledged_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_alert_alerts__alert_id__acknowledge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

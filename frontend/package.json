@@ -10,7 +10,7 @@
     "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
     "//api:types": "Regenerate the API types from the running backend. Run after any change to a FastAPI route or schema; the resulting diff in src/api/schema.d.ts IS the record of what changed.",
-    "api:types": "openapi-typescript http://127.0.0.1:8000/openapi.json -o src/api/schema.d.ts"
+    "api:types": "openapi-typescript http://127.0.0.1:7153/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

@@ -94,8 +94,16 @@ def build_bindings(
             model=settings.ai_chat_model,
             handles=frozenset(TaskComplexity),
             priority=10,
+            # Three ways to be self-hosted, in order of how much they can be
+            # trusted: the adapter is a local fixture, the URL is demonstrably
+            # local, or the operator says so. The last one exists because a
+            # self-hosted model published at a public domain is indisting-
+            # uishable from a third-party API by inspection - and without it,
+            # every agent handling personal financial data is unreachable for
+            # anyone whose inference is not literally on localhost.
             self_hosted=settings.ai_provider in SELF_HOSTED_ADAPTERS
-            or _is_local(settings.ai_base_url),
+            or _is_local(settings.ai_base_url)
+            or settings.ai_self_hosted,
         )
     ]
 

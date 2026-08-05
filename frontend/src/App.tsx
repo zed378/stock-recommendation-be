@@ -12,6 +12,8 @@ import { Portfolio } from "@/pages/Portfolio";
 import { Journal } from "@/pages/Journal";
 import { Chat } from "@/pages/Chat";
 import { Admin } from "@/pages/Admin";
+import { StockPicks } from "@/pages/StockPicks";
+import { Monitoring } from "@/pages/Monitoring";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +55,8 @@ export default function App() {
                 <Route path="/assets/:ticker" element={<AssetDetail />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/journal" element={<Journal />} />
+                <Route path="/picks" element={<StockPicks />} />
+                <Route path="/monitoring" element={<Monitoring />} />
                 <Route path="/chat" element={<Chat />} />
                 {/* Registered for everyone; the page itself explains the role
                     requirement. An unlinked route is still reachable by typing

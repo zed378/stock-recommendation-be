@@ -14,9 +14,11 @@ import {
 import { PriceChart } from "@/components/PriceChart";
 import { Recommendation } from "@/components/Recommendation";
 import { IndicatorSnapshotView } from "@/components/Indicators";
+import { Strategy } from "@/components/Strategy";
+import { TranslateToggle } from "@/components/TranslateToggle";
 import type { components } from "@/api/schema";
 
-type Tab = "chart" | "indicators" | "fundamentals" | "analysis" | "news";
+type Tab = "chart" | "indicators" | "fundamentals" | "analysis" | "strategy" | "news";
 
 // Typed from the API's own enum rather than as loose strings, so an invented
 // timeframe is a compile error rather than a 422 at runtime.
@@ -70,6 +72,7 @@ export function AssetDetail() {
     { id: "indicators", label: t("tab.indicators") },
     { id: "fundamentals", label: t("tab.fundamentals") },
     { id: "analysis", label: t("tab.analysis") },
+    { id: "strategy", label: t("tab.strategy") },
     { id: "news", label: t("tab.news") },
   ];
 
@@ -168,6 +171,7 @@ export function AssetDetail() {
       {tab === "indicators" && <Indicators ticker={ticker} timeframe={timeframe} />}
       {tab === "fundamentals" && <Fundamentals ticker={ticker} />}
       {tab === "analysis" && <Analysis ticker={ticker} timeframe={timeframe} />}
+      {tab === "strategy" && <Strategy ticker={ticker} />}
       {tab === "news" && <News ticker={ticker} />}
     </div>
   );
@@ -381,7 +385,18 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
       {result && !run.isPending && (
         <>
           <AgentRoster result={result} />
-          {result.recommendation && <Recommendation rec={result.recommendation} />}
+          {result.recommendation && (
+            // The prose is translatable; the label, confidence, and prices are
+            // not - they come from the stored analysis either way, so the two
+            // renderings can never disagree about the stance.
+            <TranslateToggle fields={result.recommendation as Record<string, unknown>}>
+              {(rendered) => (
+                <Recommendation
+                  rec={{ ...result.recommendation, ...rendered } as typeof result.recommendation}
+                />
+              )}
+            </TranslateToggle>
+          )}
         </>
       )}
     </div>

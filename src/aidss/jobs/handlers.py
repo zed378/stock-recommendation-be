@@ -29,6 +29,7 @@ from aidss.indicators.engine import IndicatorEngine
 from aidss.indicators.features import persist_features
 from aidss.jobs import queue, quota
 from aidss.llm.provisioning import build_gateway
+from aidss.monitoring.poller import poll_watched_assets
 from aidss.news.collector import NewsCollector, NewsScheduler
 from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.registry import get_market_data_provider, get_news_provider
@@ -167,6 +168,18 @@ def refresh_fundamentals(session: Session, payload: dict[str, Any]) -> dict[str,
         "unsupported": report.unsupported,
         "quota": quota.state(session, source, limit=limit).as_dict(),
     }
+
+
+@register("monitoring.poll")
+def poll_monitored_assets(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Observe every followed asset once and evaluate the alert rules.
+
+    One provider call per asset serves everyone following it, which is why this
+    is a single system-wide job rather than one per user. Alert deduplication is
+    per user, so two people watching the same asset are each told once.
+    """
+    report = poll_watched_assets(session, get_market_data_provider())
+    return report.as_dict()
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +338,11 @@ def enqueue_due_fundamentals(
     source = get_market_data_provider().fundamentals_source_name()
     limit = settings.fundamentals_daily_quota
 
-    budget = quota.state(session, source, limit=limit)
+    # `now=now` matters: without it the budget is read for the wall-clock day
+    # while the dedup key below is built from `now`, so the two disagree about
+    # which day it is. Harmless most of the time and wrong exactly at midnight,
+    # which is when a scheduler is least likely to be watched.
+    budget = quota.state(session, source, limit=limit, now=now)
     room = settings.fundamentals_max_enqueued_per_tick
     if not budget.unlimited:
         room = min(room, budget.remaining)
@@ -349,6 +366,31 @@ def enqueue_due_fundamentals(
             already += 1
 
     return {"enqueued": enqueued, "already_queued": already, "quota": budget.as_dict()}
+
+
+def enqueue_monitoring_pass(
+    session: Session, *, now: datetime | None = None
+) -> dict[str, Any]:
+    """Queue one monitoring pass per interval, however often the scheduler ticks.
+
+    The dedup key is the interval *bucket* rather than the timestamp: a
+    scheduler running every minute would otherwise queue sixty passes an hour
+    against a source that updates every fifteen minutes.
+    """
+    now = now or datetime.now(UTC)
+    interval = get_settings().monitoring_interval_seconds
+    if interval <= 0:
+        return {"enqueued": 0, "already_queued": 0, "disabled": True}
+
+    bucket = int(now.timestamp()) // interval
+    result = queue.enqueue(
+        session, "monitoring.poll", {}, dedup_key=f"monitoring:{bucket}"
+    )
+    return {
+        "enqueued": 1 if result.created else 0,
+        "already_queued": 0 if result.created else 1,
+        "disabled": False,
+    }
 
 
 def due_news_schedules(

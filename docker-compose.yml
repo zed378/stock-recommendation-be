@@ -65,6 +65,15 @@ x-aidss-env: &aidss-env
   AIDSS_AI_API_KEY: ${AIDSS_AI_API_KEY:-}
   AIDSS_AI_CHAT_MODEL: ${AIDSS_AI_CHAT_MODEL:-gpt-4o-mini}
 
+  # Whether that endpoint runs on hardware you control. An assertion by the
+  # operator, because a URL cannot answer it: a self-hosted model published at
+  # a public domain looks exactly like a third-party API.
+  #
+  # Gates every agent handling personal financial data - portfolio, risk,
+  # journal reflection. False means they refuse to run rather than send
+  # positions to a third party, which is why false is the default.
+  AIDSS_AI_SELF_HOSTED: ${AIDSS_AI_SELF_HOSTED:-false}
+
   # EMPTY means the endpoint serves no embedding model, which is a supported
   # configuration: retrieval runs on BM25 alone and exact-token search is
   # unaffected. Naming a chat model here does not help - it spends a failed

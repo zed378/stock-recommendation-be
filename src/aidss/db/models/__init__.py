@@ -29,6 +29,12 @@ from aidss.db.models.asset import (
     HistoricalPrice,
     TechnicalIndicator,
 )
+from aidss.db.models.monitoring import (
+    Alert,
+    AlertDirection,
+    AlertKind,
+    QuoteSnapshot,
+)
 from aidss.db.models.news import (
     NewsEmbedding,
     NewsItem,
@@ -86,8 +92,12 @@ __all__ = [
     "PortfolioAnalysis",
     "PortfolioHolding",
     "PromptTemplate",
+    "Alert",
+    "AlertDirection",
+    "AlertKind",
     "ProviderIngestionRun",
     "ProviderQuotaUsage",
+    "QuoteSnapshot",
     "Recommendation",
     "RecommendationLabel",
     "RiskAssessment",

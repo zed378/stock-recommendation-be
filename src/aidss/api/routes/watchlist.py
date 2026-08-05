@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from aidss.api.deps import get_db, require_permission
 from aidss.api.schemas import (
     DEFAULT_CATEGORY,
+    WatchlistCategoryRename,
     WatchlistCategoryResponse,
     WatchlistItemCreate,
     WatchlistItemMove,
@@ -100,6 +101,15 @@ def list_items(
     return [_to_response(item, asset, name) for item, asset, name in rows]
 
 
+def _category_response(session: Session, watchlist: Watchlist) -> WatchlistCategoryResponse:
+    count = session.scalar(
+        select(func.count(WatchlistItem.id)).where(
+            WatchlistItem.watchlist_id == watchlist.id
+        )
+    )
+    return WatchlistCategoryResponse(name=watchlist.name, count=count or 0)
+
+
 @router.get("/categories", response_model=list[WatchlistCategoryResponse])
 def list_categories(
     session: Session = Depends(get_db),
@@ -119,6 +129,110 @@ def list_categories(
         .order_by(Watchlist.name)
     ).all()
     return [WatchlistCategoryResponse(name=name, count=count) for name, count in rows]
+
+
+@router.patch("/categories/{name}", response_model=WatchlistCategoryResponse)
+def rename_category(
+    name: str,
+    payload: WatchlistCategoryRename,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> WatchlistCategoryResponse:
+    """Rename a category, carrying its items with it.
+
+    Renaming the row rather than moving items between two rows: the items never
+    change hands, so there is no window where a rename half-applied leaves some
+    of them in the old group.
+    """
+    current = session.scalar(
+        select(Watchlist).where(Watchlist.user_id == user.id, Watchlist.name == name.strip())
+    )
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    target = payload.name.strip()
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A category needs a name",
+        )
+    if target == current.name:
+        return _category_response(session, current)
+
+    clash = session.scalar(
+        select(Watchlist).where(Watchlist.user_id == user.id, Watchlist.name == target)
+    )
+    if clash is not None:
+        # Checked rather than left to the unique constraint, which would
+        # surface as a 500 with a database message in it. Merging is not
+        # attempted: it would silently combine two groups the user separated on
+        # purpose, and the undo is manual.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A category named {target!r} already exists",
+        )
+
+    current.name = target
+    session.flush()
+    return _category_response(session, current)
+
+
+@router.delete("/categories/{name}", response_model=list[WatchlistCategoryResponse])
+def delete_category(
+    name: str,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> list[WatchlistCategoryResponse]:
+    """Remove a category. Its items move to ``Default`` rather than disappearing.
+
+    Deleting a grouping is not the same as deciding to stop following the
+    assets in it, and the two are easy to confuse when one action does both.
+    Moving them keeps a mis-click cheap: the grouping is gone, the watchlist is
+    intact, and putting them back is a rename away.
+
+    ``Default`` itself cannot be deleted - it is where everything else lands,
+    so removing it would leave the fallback with nowhere to fall back to.
+    """
+    trimmed = name.strip()
+    if trimmed == DEFAULT_CATEGORY:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{DEFAULT_CATEGORY!r} cannot be deleted: it is where items from other "
+                "deleted categories are moved to"
+            ),
+        )
+
+    current = session.scalar(
+        select(Watchlist).where(Watchlist.user_id == user.id, Watchlist.name == trimmed)
+    )
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    fallback = _category(session, user, DEFAULT_CATEGORY)
+    items = session.scalars(
+        select(WatchlistItem).where(WatchlistItem.watchlist_id == current.id)
+    ).all()
+
+    for item in items:
+        already_there = session.scalar(
+            select(WatchlistItem).where(
+                WatchlistItem.watchlist_id == fallback.id,
+                WatchlistItem.asset_id == item.asset_id,
+            )
+        )
+        if already_there is not None:
+            # The asset is already in Default, so moving it would violate the
+            # per-category uniqueness. Dropping this row loses nothing: the
+            # asset stays followed, which is what the move was protecting.
+            session.delete(item)
+        else:
+            item.watchlist_id = fallback.id
+
+    session.flush()
+    session.delete(current)
+    session.flush()
+    return list_categories(session=session, user=user)
 
 
 @router.post("", response_model=WatchlistItemResponse, status_code=status.HTTP_201_CREATED)

@@ -73,14 +73,45 @@ class ModelRouter:
     ) -> list[ProviderBinding]:
         eligible = [b for b in self.bindings if b.can_serve(complexity, sensitivity)]
         if not eligible:
-            raise NoEligibleProviderError(
-                f"No provider is configured for complexity={complexity.value!r} "
-                f"and sensitivity={sensitivity.value!r}. "
-                f"Configured: {[b.name for b in self.bindings]}"
-            )
+            raise NoEligibleProviderError(self._why_nothing_matched(complexity, sensitivity))
         # Stable sort, so bindings sharing a priority keep configuration order
         # and the chain is reproducible across runs.
         return sorted(eligible, key=lambda b: b.priority)
+
+    def _why_nothing_matched(
+        self, complexity: TaskComplexity, sensitivity: Sensitivity
+    ) -> str:
+        """Name the actual cause, because the two look identical from outside.
+
+        "No provider configured" was true and useless: a provider *was*
+        configured, and it was excluded on privacy grounds by a rule the reader
+        has no reason to know exists. Someone hitting this had to read the
+        router to find out that a hostname heuristic had decided their own
+        server belonged to a third party.
+        """
+        if not self.bindings:
+            return "No AI provider is configured at all."
+
+        handles_complexity = [b for b in self.bindings if complexity in b.handles]
+        if not handles_complexity:
+            roles = ", ".join(
+                f"{b.name} (handles {sorted(c.value for c in b.handles)})"
+                for b in self.bindings
+            )
+            return (
+                f"No provider handles complexity={complexity.value!r}. Configured: {roles}."
+            )
+
+        # Providers can serve the complexity, so privacy is what excluded them.
+        names = ", ".join(b.name for b in handles_complexity)
+        return (
+            f"This request handles personal financial data (sensitivity="
+            f"{sensitivity.value!r}) and no configured provider is marked as "
+            f"self-hosted, so it was refused rather than sent to a third party. "
+            f"Configured: {names}. If the endpoint runs on infrastructure you "
+            f"control, say so with AIDSS_AI_SELF_HOSTED=true - the platform "
+            f"cannot tell that from a URL."
+        )
 
     def get(self, name: str) -> ProviderBinding | None:
         return next((b for b in self.bindings if b.name == name), None)

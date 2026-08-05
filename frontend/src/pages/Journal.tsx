@@ -12,6 +12,7 @@ import {
   Loading,
   Stat,
 } from "@/components/primitives";
+import { TranslateToggle } from "@/components/TranslateToggle";
 
 export function Journal() {
   const { t, dateTime, date } = useI18n();
@@ -162,9 +163,53 @@ export function Journal() {
       {reflect.isError && <ErrorNote message={(reflect.error as Error).message} />}
       {reflect.data && (
         <Card title={t("journal.reflection")}>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/90">
-            {String(reflect.data.answer ?? reflect.data.summary ?? "")}
-          </p>
+          {/* `isPersonal` routes the translation through the sensitive path:
+              a journal entry must not reach a provider the analysis itself
+              would have been refused to. */}
+          <TranslateToggle fields={reflect.data} isPersonal>
+            {(rendered) => (
+              <div className="space-y-3">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink/90">
+                  {String(rendered.summary ?? rendered.answer ?? "")}
+                </p>
+
+                {Array.isArray(rendered.patterns) && rendered.patterns.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {(rendered.patterns as string[]).map((line, index) => (
+                      <li
+                        key={index}
+                        className="relative pl-4 text-sm leading-relaxed text-ink/85 before:absolute before:left-0 before:top-2 before:size-1.5 before:rounded-full before:bg-muted/60"
+                      >
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* What the reflection could *not* conclude, shown as
+                    prominently as what it could. An agent that says "no
+                    outcomes are recorded, so I cannot assess discipline" is
+                    doing the most useful thing it does. */}
+                {Array.isArray(rendered.insufficient_evidence_for) &&
+                  rendered.insufficient_evidence_for.length > 0 && (
+                    <div className="border-t border-line pt-3">
+                      <p className="mb-1.5 text-xs text-faint">
+                        {t("analysis.skipped")}
+                      </p>
+                      <ul className="space-y-1">
+                        {(rendered.insufficient_evidence_for as string[]).map(
+                          (line, index) => (
+                            <li key={index} className="text-xs leading-relaxed text-watch">
+                              {line}
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    </div>
+                  )}
+              </div>
+            )}
+          </TranslateToggle>
         </Card>
       )}
 

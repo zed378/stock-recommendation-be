@@ -304,6 +304,97 @@ def test_moving_an_item_that_is_not_yours_is_a_404(client: TestClient, auth_head
     assert response.status_code == 404
 
 
+def test_a_category_can_be_renamed_carrying_its_items(client: TestClient, auth_headers) -> None:
+    """The rename moves the row, not the items - so there is no window where a
+    half-applied rename leaves some of them in the old group."""
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "BBRI", "Perbankan")
+
+    renamed = client.patch(
+        "/watchlist/categories/Perbankan", json={"name": "Bank"}, headers=auth_headers
+    )
+    assert renamed.status_code == 200
+    assert renamed.json() == {"name": "Bank", "count": 2}
+
+    listed = client.get("/watchlist", headers=auth_headers).json()
+    assert {item["category"] for item in listed} == {"Bank"}
+
+
+def test_renaming_onto_an_existing_category_is_refused(client: TestClient, auth_headers) -> None:
+    """Merging is not attempted: it would silently combine two groups the user
+    separated on purpose, and the undo is manual."""
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "ADRO", "Energi")
+
+    clash = client.patch(
+        "/watchlist/categories/Perbankan", json={"name": "Energi"}, headers=auth_headers
+    )
+    assert clash.status_code == 409
+
+
+def test_renaming_a_category_that_is_not_yours_is_a_404(client: TestClient, auth_headers) -> None:
+    add(client, auth_headers, "BBCA", "Perbankan")
+    client.post(
+        "/auth/register", json={"email": "other2@example.com", "password": "correct-horse-battery"}
+    )
+    token = client.post(
+        "/auth/login", json={"email": "other2@example.com", "password": "correct-horse-battery"}
+    ).json()["access_token"]
+
+    response = client.patch(
+        "/watchlist/categories/Perbankan",
+        json={"name": "Milik Saya"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+def test_deleting_a_category_moves_its_items_to_default(
+    client: TestClient, auth_headers
+) -> None:
+    """Deleting a grouping is not the same as deciding to stop following the
+    assets in it, and one action doing both makes a mis-click expensive."""
+    add(client, auth_headers, "BBCA", "Perbankan")
+    add(client, auth_headers, "BBRI", "Perbankan")
+
+    deleted = client.delete("/watchlist/categories/Perbankan", headers=auth_headers)
+    assert deleted.status_code == 200
+
+    listed = client.get("/watchlist", headers=auth_headers).json()
+    assert sorted(item["ticker"] for item in listed) == ["BBCA", "BBRI"]
+    assert {item["category"] for item in listed} == {"Default"}
+
+    names = [row["name"] for row in deleted.json()]
+    assert "Perbankan" not in names
+
+
+def test_an_asset_already_in_default_is_not_duplicated_by_the_move(
+    client: TestClient, auth_headers
+) -> None:
+    """Per-category uniqueness would reject the move; dropping the row loses
+    nothing, because the asset stays followed either way."""
+    add(client, auth_headers, "BBCA", "Default")
+    add(client, auth_headers, "BBCA", "Perbankan")
+
+    assert client.delete("/watchlist/categories/Perbankan", headers=auth_headers).status_code == 200
+
+    listed = client.get("/watchlist", headers=auth_headers).json()
+    assert [(i["ticker"], i["category"]) for i in listed] == [("BBCA", "Default")]
+
+
+def test_the_default_category_cannot_be_deleted(client: TestClient, auth_headers) -> None:
+    """It is where everything else lands, so removing it would leave the
+    fallback with nowhere to fall back to."""
+    add(client, auth_headers, "BBCA", "Default")
+    response = client.delete("/watchlist/categories/Default", headers=auth_headers)
+    assert response.status_code == 409
+    assert "Default" in response.json()["detail"]
+
+
+def test_deleting_an_unknown_category_is_a_404(client: TestClient, auth_headers) -> None:
+    assert client.delete("/watchlist/categories/Nope", headers=auth_headers).status_code == 404
+
+
 # --- Watchlist search ------------------------------------------------------
 
 

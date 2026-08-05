@@ -14,6 +14,7 @@ from aidss.db.models.news import ScheduleStatus
 from aidss.db.models.system import ActorType, JobStatus
 from aidss.db.models.user import HoldingInputMethod, UserRole
 from aidss.domain.types import InvestmentHorizon, RecommendationLabel, Timeframe
+from aidss.prompts.language import OutputLanguage
 
 
 class ORMModel(BaseModel):
@@ -248,6 +249,91 @@ class WatchlistCategoryResponse(BaseModel):
 
 class WatchlistItemMove(BaseModel):
     category: str = Field(min_length=1, max_length=120)
+
+
+class WatchlistCategoryRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+# --- Screening, strategy, monitoring ---------------------------------------
+
+
+class StockPickResponse(BaseModel):
+    horizon: str
+    generated_at: datetime
+    considered: int
+    insufficient_history: list[str]
+    picks: list[dict[str, Any]]
+    #: Repeated on the response rather than left to the interface. A ranked
+    #: list of tickers reads as a forecast unless it says otherwise on the same
+    #: screen, and an API client has no interface at all.
+    caveat: str
+
+
+class GuidanceResponse(BaseModel):
+    position: str
+    stance: str
+    rationale: str
+    conditions: list[str]
+    invalidated_if: list[str]
+    reference_levels: dict[str, str]
+
+
+class StrategyResponse(BaseModel):
+    ticker: str
+    label: str
+    confidence: float
+    as_of: datetime
+    #: Both readings, always. Returning only the caller's own side would hide
+    #: that an asset can be worth keeping and not worth buying at the same time.
+    not_holding: GuidanceResponse
+    holding: GuidanceResponse
+    disclaimer: str
+
+
+class QuoteSnapshotResponse(BaseModel):
+    ticker: str
+    exchange: str
+    price: Decimal | None
+    previous_close: Decimal | None
+    quoted_at: datetime | None
+    observed_at: datetime | None
+    source: str | None
+    #: The free sources are delayed by roughly fifteen minutes. Shown rather
+    #: than implied, because an interface presenting a delayed price as current
+    #: invites decisions on numbers that have already moved.
+    is_delayed: bool
+
+
+class TranslationRequest(BaseModel):
+    """Prose to render in the other language.
+
+    The caller sends the fields it wants translated rather than an analysis id,
+    so the same endpoint serves an analysis, a reflection, and a chat answer
+    without three near-identical routes. Non-prose keys are filtered server
+    side: translating a stance label would produce a value the enum does not
+    contain.
+    """
+
+    fields: dict[str, Any]
+    language: OutputLanguage
+    #: Journal reflections are personal financial data and must route through
+    #: the sensitive path, which refuses a third-party provider.
+    is_personal: bool = False
+
+
+class AlertResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str
+    kind: str
+    direction: str
+    message: str
+    observed_price: Decimal | None
+    reference_price: Decimal | None
+    #: Where a stance travels, as data. Never as an instruction in the message.
+    context: dict[str, Any] | None
+    triggered_at: datetime
+    acknowledged_at: datetime | None
 
 
 # --- Portfolio -------------------------------------------------------------

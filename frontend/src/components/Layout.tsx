@@ -16,6 +16,8 @@ export function Layout() {
 
   const links = [
     { to: "/watchlist", label: t("nav.watchlist") },
+    { to: "/picks", label: t("nav.picks") },
+    { to: "/monitoring", label: t("nav.monitoring") },
     { to: "/portfolio", label: t("nav.portfolio") },
     { to: "/journal", label: t("nav.journal") },
     { to: "/chat", label: t("nav.chat") },
