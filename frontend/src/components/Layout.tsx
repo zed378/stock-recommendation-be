@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/auth/context";
 import { useI18n } from "@/i18n/context";
 import type { Locale } from "@/i18n/context";
 import { NotificationBell } from "@/components/Notifications";
-import { SidebarDrawer, SidebarNav, useDrawer } from "@/components/Sidebar";
+import { SidebarDrawer, SidebarNav } from "@/components/Sidebar";
 import { useEvents } from "@/realtime/useEvents";
 
 /**
@@ -23,7 +24,7 @@ export function Layout() {
   // under it, for the case where a proxy refuses the upgrade.
   useEvents(Boolean(user));
 
-  const drawer = useDrawer();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <div className="min-h-full lg:flex">
@@ -42,13 +43,13 @@ export function Layout() {
         </div>
       </aside>
 
-      <SidebarDrawer open={drawer.open} onClose={() => drawer.setOpen(false)} />
+      <SidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <div className="flex min-h-screen w-full min-w-0 flex-col">
         <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
           <div className="flex items-center gap-3 px-4 py-3">
             <button
-              onClick={() => drawer.setOpen(true)}
+              onClick={() => setDrawerOpen(true)}
               aria-label={t("nav.openMenu")}
               className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink lg:hidden"
             >

@@ -4,24 +4,18 @@ import { useAuth } from "@/auth/context";
 /**
  * What the primary navigation contains.
  *
- * Apart from the components that render it, and not as a matter of taste: a
- * module exporting both a hook and a component cannot be hot-reloaded, and
+ * Kept apart from the components that render it, and not as a matter of taste:
+ * a module exporting both a hook and a component cannot be hot-reloaded, and
  * this project has already lost an afternoon to exactly that - the i18n
  * context did it, the app white-screened on any edit, and the warning had been
  * dismissed as "only costs HMR state".
  *
- * The grouping itself.
- *
- * A flat row of seven links said nothing about how the product is organised:
- * "Picks" and "Chat" are both research, "Portfolio" and "Journal" are both
- * records of what you actually did, and Admin is a different job entirely.
- * Grouping is the cheapest way to say that, and it is what makes room for the
- * admin sections to be reachable at all - as tabs they were a place you could
- * only arrive at by clicking through.
- *
- * Groups are headings rather than collapsible drawers. There are four of them
- * with a dozen links in total; hiding any of that behind a disclosure costs a
- * click and saves nothing worth the click.
+ * The grouping is the point of the change. A flat row of seven links said
+ * nothing about how the product is organised: "Picks" and "Chat" are both
+ * research, "Portfolio" and "Journal" are both records of what you actually
+ * did, and Admin is a different job entirely. It is also what makes room for
+ * the admin sections to be reachable at all - as tabs they were somewhere you
+ * could only arrive at by clicking through.
  */
 
 type Item = { to: string; label: MessageKey; end?: boolean };
