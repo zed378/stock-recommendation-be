@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/api/client";
 import { useAuth } from "@/auth/context";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { id as messages } from "@/i18n/messages";
@@ -15,6 +17,22 @@ export function Login() {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const registrationStatus = useQuery({
+    queryKey: ["registration-status"],
+    queryFn: async () => {
+      const { data } = await api.GET("/auth/registration-status");
+      return data;
+    },
+  });
+
+  const registrationOpen = registrationStatus.data?.registration_open ?? true;
+
+  useEffect(() => {
+    if (!registrationOpen && mode === "signUp") {
+      setMode("signIn");
+    }
+  }, [registrationOpen, mode]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -84,18 +102,14 @@ export function Login() {
         </div>
       </aside>
 
-      <div className="relative flex min-h-full items-center justify-center px-4 py-12">
-        <div className="absolute right-4 top-4">
-          {/* The only way to change language before signing in. Without it, a
-              reader whose browser reports English meets an English login page
-              for an Indonesian product and has nowhere to say otherwise. */}
-          <LocaleSwitch />
-        </div>
-
+      <div className="flex items-center justify-center px-4 py-12 lg:px-8">
         <div className="w-full max-w-sm">
-          <div className="mb-8 text-center lg:hidden">
-            <h1 className="text-lg font-semibold text-ink">{t("app.name")}</h1>
-            <p className="mt-1 text-xs text-faint">{t("app.tagline")}</p>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold text-ink">{t("app.name")}</h1>
+              <p className="mt-1 text-xs text-faint">{t("app.tagline")}</p>
+            </div>
+            <LocaleSwitch />
           </div>
 
           <div className="mb-6 hidden lg:block">
@@ -165,19 +179,21 @@ export function Login() {
               : t(mode === "signIn" ? "auth.signIn" : "auth.signUp")}
           </Button>
 
-          <p className="text-center text-xs text-faint">
-            {t(mode === "signIn" ? "auth.noAccount" : "auth.haveAccount")}{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setMode(mode === "signIn" ? "signUp" : "signIn");
-                setError(null);
-              }}
-              className="text-rise hover:underline"
-            >
-              {t(mode === "signIn" ? "auth.signUp" : "auth.signIn")}
-            </button>
-          </p>
+          {registrationOpen && (
+            <p className="text-center text-xs text-faint">
+              {t(mode === "signIn" ? "auth.noAccount" : "auth.haveAccount")}{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === "signIn" ? "signUp" : "signIn");
+                  setError(null);
+                }}
+                className="text-rise hover:underline"
+              >
+                {t(mode === "signIn" ? "auth.signUp" : "auth.signIn")}
+              </button>
+            </p>
+          )}
         </form>
 
           <p className="mt-6 text-center text-xs leading-relaxed text-faint">

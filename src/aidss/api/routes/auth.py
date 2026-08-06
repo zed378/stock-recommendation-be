@@ -19,6 +19,16 @@ from aidss.security.tokens import create_access_token
 router = APIRouter(prefix="/auth", tags=["auth"], route_class=CommitBeforeResponse)
 
 
+@router.get("/registration-status")
+def registration_status(session: Session = Depends(get_db)) -> dict:
+    open_status = get_setting(session, REGISTRATION_OPEN)
+    if not open_status:
+        has_users = session.scalar(select(User.id).limit(1)) is not None
+        if not has_users:
+            open_status = True
+    return {"registration_open": bool(open_status)}
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, session: Session = Depends(get_db)) -> User:
     """Create an account, if the operator currently allows it.
