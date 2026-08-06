@@ -1883,6 +1883,42 @@ export interface components {
             error?: string | null;
         };
         /**
+         * AIProviderUpdate
+         * @description Changing a provider. Every field optional, and that is the point.
+         *
+         *     A shared schema with the create request would make `name` required here,
+         *     so a caller correcting a model name would have to resend the whole row -
+         *     and the moment they resend a partial one, the fields they left out take
+         *     their defaults. That is how a fallback chain reorders itself because
+         *     somebody fixed a typo.
+         */
+        AIProviderUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Adapter Name */
+            adapter_name?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Default Model */
+            default_model?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Priority */
+            priority?: number | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Self Hosted */
+            self_hosted?: boolean | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Input Cost Per 1K */
+            input_cost_per_1k?: number | string | null;
+            /** Output Cost Per 1K */
+            output_cost_per_1k?: number | string | null;
+        };
+        /**
          * AIProviderWrite
          * @description Creating or updating a provider.
          *
@@ -6158,7 +6194,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AIProviderWrite"];
+                "application/json": components["schemas"]["AIProviderUpdate"];
             };
         };
         responses: {

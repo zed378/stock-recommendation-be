@@ -35,6 +35,7 @@ from aidss.api.schemas import (
     AdminUserResponse,
     AIProviderResponse,
     AIProviderTestResponse,
+    AIProviderUpdate,
     AIProviderWrite,
     BanRequest,
     IssuerResponse,
@@ -63,6 +64,7 @@ from aidss.db.models import (
     UserRole,
     UserStatus,
 )
+from aidss.domain.types import ChatMessage
 from aidss.jobs.queue import enqueue
 from aidss.llm.provisioning import provider_from_row
 from aidss.news.schedules import next_run_at
@@ -900,7 +902,7 @@ def create_ai_provider(
         )
     _check_adapter(payload.adapter_name)
     row = AIProviderConfig(name=payload.name)
-    _apply_provider(row, payload)
+    _apply_provider(row, payload, partial=False)
     session.add(row)
     session.flush()
     _audit(
@@ -917,15 +919,16 @@ def create_ai_provider(
 @router.patch("/ai-providers/{provider_id}", response_model=AIProviderResponse)
 def update_ai_provider(
     provider_id: uuid.UUID,
-    payload: AIProviderWrite,
+    payload: AIProviderUpdate,
     session: Session = Depends(get_db),
     actor: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
 ) -> AIProviderConfig:
     row = session.get(AIProviderConfig, provider_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
-    _check_adapter(payload.adapter_name)
-    _apply_provider(row, payload)
+    if payload.adapter_name:
+        _check_adapter(payload.adapter_name)
+    _apply_provider(row, payload, partial=True)
     session.flush()
     _audit(
         session,
@@ -979,8 +982,8 @@ def test_ai_provider(
     started = time.monotonic()
     try:
         provider = provider_from_row(row, settings)
-        result = provider.chat(
-            [{"role": "user", "content": "Reply with the single word: ok"}],
+        result = provider.chat_completion(
+            [ChatMessage(role="user", content="Reply with the single word: ok")],
             model=row.default_model or settings.ai_chat_model,
             max_tokens=5,
         )
@@ -1012,27 +1015,44 @@ def _check_adapter(adapter_name: str) -> None:
         ) from exc
 
 
-def _apply_provider(row: AIProviderConfig, payload: AIProviderWrite) -> None:
-    """Copy the writable fields, handling the credential's three intents.
+def _apply_provider(
+    row: AIProviderConfig, payload: AIProviderWrite | AIProviderUpdate, *, partial: bool
+) -> None:
+    """Copy the writable fields.
 
-    Omitted keeps what is stored, empty clears it, a value replaces it. An
-    admin editing the model name expects the first; a switch to a local model
-    needing no key expects the second; and collapsing them would make one of
-    those impossible to express.
+    `partial` is what makes PATCH a patch. Without it every field the caller
+    omitted took its schema default, so a request changing only the model
+    silently reset the priority to 100 and wiped the cost figures - a fallback
+    chain reordering itself because somebody corrected a model name.
+
+    The credential has three intents rather than two, and they cannot be
+    collapsed: omitted keeps what is stored, empty clears it, a value replaces
+    it. An admin editing the model name expects the first; a switch to a local
+    model needing no key expects the second.
     """
-    row.name = payload.name
-    row.adapter_name = payload.adapter_name
-    row.base_url = payload.base_url or None
-    row.default_model = payload.default_model or None
-    row.role = payload.role
-    row.priority = payload.priority
-    row.is_active = payload.is_active
-    row.self_hosted = payload.self_hosted
-    row.timeout_seconds = payload.timeout_seconds
-    row.input_cost_per_1k = payload.input_cost_per_1k
-    row.output_cost_per_1k = payload.output_cost_per_1k
+    provided = payload.model_fields_set if partial else set(type(payload).model_fields)
 
-    if payload.api_key is None:
+    for field in (
+        "name",
+        "adapter_name",
+        "role",
+        "priority",
+        "is_active",
+        "self_hosted",
+        "timeout_seconds",
+        "input_cost_per_1k",
+        "output_cost_per_1k",
+    ):
+        if field in provided:
+            setattr(row, field, getattr(payload, field))
+
+    # These two are stored as null rather than as an empty string, so that
+    # "unset" is one value rather than two that behave differently downstream.
+    for field in ("base_url", "default_model"):
+        if field in provided:
+            setattr(row, field, getattr(payload, field) or None)
+
+    if "api_key" not in provided or payload.api_key is None:
         return
     if payload.api_key == "":
         row.api_key_ciphertext, row.api_key_hint = None, None

@@ -505,3 +505,72 @@ def test_no_sub_sector_filter_returns_everything(client, admin_headers, session)
     body = client.get("/admin/issuers", headers=admin_headers).json()
 
     assert body["total"] == 4
+
+
+def test_a_partial_update_does_not_reset_the_fields_it_omits(client, admin_headers) -> None:
+    """Found by configuring a real provider: a PATCH correcting the model name
+    silently reset the priority to 100 and wiped the cost figures, because
+    every omitted field took its schema default. A fallback chain that
+    reorders itself when somebody fixes a typo is worse than no chain."""
+    created = client.post(
+        "/admin/ai-providers",
+        headers=admin_headers,
+        json={
+            "name": "ordered",
+            "priority": 10,
+            "role": "reasoning",
+            "input_cost_per_1k": "0.5",
+            "timeout_seconds": 300,
+        },
+    ).json()
+
+    updated = client.patch(
+        f"/admin/ai-providers/{created['id']}",
+        headers=admin_headers,
+        json={"default_model": "a-new-model"},
+    ).json()
+
+    assert updated["default_model"] == "a-new-model"
+    assert updated["priority"] == 10, "the position in the fallback chain moved"
+    assert updated["role"] == "reasoning"
+    assert updated["timeout_seconds"] == 300
+    assert str(updated["input_cost_per_1k"]).startswith("0.5")
+
+
+def test_a_provider_can_be_renamed_without_resending_everything(client, admin_headers) -> None:
+    created = client.post(
+        "/admin/ai-providers", headers=admin_headers, json={"name": "before", "priority": 7}
+    ).json()
+
+    updated = client.patch(
+        f"/admin/ai-providers/{created['id']}", headers=admin_headers, json={"name": "after"}
+    ).json()
+
+    assert updated["name"] == "after"
+    assert updated["priority"] == 7
+
+
+def test_the_test_endpoint_calls_a_method_the_adapter_actually_has(
+    client, admin_headers, monkeypatch
+) -> None:
+    """It called `provider.chat(...)`, which does not exist - the interface is
+    `chat_completion`. Every test button returned an AttributeError dressed up
+    as a provider failure, which is the one answer that cannot be told apart
+    from a genuinely unreachable endpoint.
+    """
+    from aidss.domain.types import ChatCompletion
+
+    created = client.post(
+        "/admin/ai-providers",
+        headers=admin_headers,
+        json={"name": "probe", "adapter_name": "fixture"},
+    ).json()
+
+    response = client.post(f"/admin/ai-providers/{created['id']}/test", headers=admin_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    # Either outcome is fine; an AttributeError is not, because it means the
+    # call never reached the adapter at all.
+    assert "AttributeError" not in (body.get("error") or ""), body
+    assert ChatCompletion  # the shape the endpoint reads back

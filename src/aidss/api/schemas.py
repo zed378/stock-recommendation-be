@@ -964,6 +964,31 @@ class AIProviderWrite(BaseModel):
     output_cost_per_1k: Decimal | None = Field(default=None, ge=0)
 
 
+class AIProviderUpdate(BaseModel):
+    """Changing a provider. Every field optional, and that is the point.
+
+    A shared schema with the create request would make `name` required here,
+    so a caller correcting a model name would have to resend the whole row -
+    and the moment they resend a partial one, the fields they left out take
+    their defaults. That is how a fallback chain reorders itself because
+    somebody fixed a typo.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    adapter_name: str | None = Field(default=None, max_length=80)
+    base_url: str | None = Field(default=None, max_length=500)
+    default_model: str | None = Field(default=None, max_length=120)
+    role: str | None = None
+    priority: int | None = Field(default=None, ge=0, le=10_000)
+    is_active: bool | None = None
+    self_hosted: bool | None = None
+    timeout_seconds: float | None = Field(default=None, gt=0, le=3600)
+    #: Absent keeps the stored key, `""` clears it, a value replaces it.
+    api_key: str | None = Field(default=None, max_length=400)
+    input_cost_per_1k: Decimal | None = Field(default=None, ge=0)
+    output_cost_per_1k: Decimal | None = Field(default=None, ge=0)
+
+
 class AIProviderTestResponse(BaseModel):
     """What the provider answered, just now."""
 
