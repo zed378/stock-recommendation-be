@@ -1674,6 +1674,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/issuers/sub-sectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sub Sectors
+         * @description The sub-sectors that actually occur, for the filter to offer.
+         *
+         *     Read from the data rather than from a hard-coded list: IDX revises its
+         *     classification, and a fixed list would go on offering categories nobody is
+         *     in while hiding the ones they moved to. Nulls are dropped - "no
+         *     sub-sector" is not a sub-sector to filter by.
+         */
+        get: operations["list_sub_sectors_admin_issuers_sub_sectors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/issuers/{issuer_id}": {
         parameters: {
             query?: never;
@@ -5889,6 +5914,8 @@ export interface operations {
             query?: {
                 /** @description Matches the code or the name */
                 search?: string | null;
+                /** @description Repeatable. Several are combined with OR, not AND. */
+                sub_sector?: string[];
                 listed_only?: boolean;
                 limit?: number;
                 offset?: number;
@@ -5906,6 +5933,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_IssuerResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sub_sectors_admin_issuers_sub_sectors_get: {
+        parameters: {
+            query?: {
+                listed_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */

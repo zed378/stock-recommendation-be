@@ -670,6 +670,10 @@ def _issuer_payload(issuer: Issuer) -> IssuerResponse:
 @router.get("/issuers", response_model=Page[IssuerResponse])
 def list_issuers(
     search: str | None = Query(default=None, description="Matches the code or the name"),
+    sub_sector: list[str] = Query(  # noqa: B008 - FastAPI resolves this per request
+        default_factory=list,
+        description="Repeatable. Several are combined with OR, not AND.",
+    ),
     listed_only: bool = Query(default=True),
     limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -686,6 +690,12 @@ def list_issuers(
         stmt = stmt.where(
             func.lower(Issuer.ticker).like(pattern) | func.lower(Issuer.name).like(pattern)
         )
+    chosen = [value.strip() for value in sub_sector if value.strip()]
+    if chosen:
+        # OR across the chosen sub-sectors, because an issuer has exactly one:
+        # combining them with AND would select nothing whenever more than one
+        # box is ticked, which is the normal way to use a multi-select.
+        stmt = stmt.where(Issuer.sub_sector.in_(chosen))
     rows, total = paginate(session, stmt, Issuer.ticker, limit, offset)
     return Page(
         items=[_issuer_payload(issuer) for issuer in rows],
@@ -693,6 +703,25 @@ def list_issuers(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/issuers/sub-sectors", response_model=list[str])
+def list_sub_sectors(
+    listed_only: bool = Query(default=True),
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> list[str]:
+    """The sub-sectors that actually occur, for the filter to offer.
+
+    Read from the data rather than from a hard-coded list: IDX revises its
+    classification, and a fixed list would go on offering categories nobody is
+    in while hiding the ones they moved to. Nulls are dropped - "no
+    sub-sector" is not a sub-sector to filter by.
+    """
+    stmt = select(Issuer.sub_sector).where(Issuer.sub_sector.is_not(None)).distinct()
+    if listed_only:
+        stmt = stmt.where(Issuer.is_listed.is_(True))
+    return sorted(value for value in session.scalars(stmt).all() if value)
 
 
 @router.patch("/issuers/{issuer_id}", response_model=IssuerResponse)

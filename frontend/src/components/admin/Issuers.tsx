@@ -4,6 +4,7 @@ import { api, errorMessage } from "@/api/client";
 import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { Pager, type PageState } from "@/components/Pager";
+import { MultiSelect } from "@/components/MultiSelect";
 import {
   Button,
   Card,
@@ -53,9 +54,10 @@ export function IssuersPanel() {
   const [editing, setEditing] = useState<Issuer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<PageState>({ limit: 50, offset: 0 });
+  const [subSectors, setSubSectors] = useState<string[]>([]);
 
   const issuers = useQuery({
-    queryKey: ["issuers", search, listedOnly, page],
+    queryKey: ["issuers", search, listedOnly, subSectors, page],
     queryFn: async () => {
       const { data, error: failed } = await api.GET("/admin/issuers", {
         params: { query: { search: search.trim() || undefined, listed_only: listedOnly, limit: 200 } },
@@ -65,6 +67,17 @@ export function IssuersPanel() {
         items: (data?.items ?? []).map(normalised),
         total: data?.total ?? 0,
       };
+    },
+  });
+
+  const options = useQuery({
+    queryKey: ["issuer-sub-sectors", listedOnly],
+    queryFn: async () => {
+      const { data, error: failed } = await api.GET("/admin/issuers/sub-sectors", {
+        params: { query: { listed_only: listedOnly } },
+      });
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data ?? [];
     },
   });
 
@@ -124,6 +137,16 @@ export function IssuersPanel() {
           }}
           placeholder={t("admin.issuers.searchPlaceholder")}
           aria-label={t("common.search")}
+        />
+        <MultiSelect
+          label={t("admin.issuers.subSectorFilter")}
+          placeholder={t("admin.issuers.subSectorFilter")}
+          options={options.data ?? []}
+          selected={subSectors}
+          onChange={(next) => {
+            setSubSectors(next);
+            setPage((current) => ({ ...current, offset: 0 }));
+          }}
         />
         <label className="flex items-center gap-1.5 text-xs text-muted">
           <input

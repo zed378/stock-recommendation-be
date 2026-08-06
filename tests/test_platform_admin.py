@@ -424,3 +424,84 @@ def test_a_partial_update_leaves_the_other_setting_alone(client, admin_headers) 
     body = client.get("/admin/settings", headers=admin_headers).json()
     assert body["registration_open"] is False
     assert body["news_sweep_cron"] == "0 * * * *"
+
+
+# --- browsing the issuer directory ------------------------------------------
+
+
+def _seed_issuers(session) -> None:
+    from aidss.collectors.issuers import sync_directory
+
+    sync_directory(
+        session,
+        [
+            {"KodeEmiten": "BBRI", "NamaEmiten": "PT Bank Rakyat Indonesia Tbk",
+             "SubSektor": "Bank", "EfekEmiten_Saham": True},
+            {"KodeEmiten": "BBCA", "NamaEmiten": "PT Bank Central Asia Tbk",
+             "SubSektor": "Bank", "EfekEmiten_Saham": True},
+            {"KodeEmiten": "ADRO", "NamaEmiten": "PT Adaro Energy Indonesia Tbk",
+             "SubSektor": "Minyak, Gas & Batu Bara", "EfekEmiten_Saham": True},
+            {"KodeEmiten": "AALI", "NamaEmiten": "PT Astra Agro Lestari Tbk",
+             "SubSektor": "Perkebunan", "EfekEmiten_Saham": True},
+        ],
+    )
+    session.commit()
+
+
+def test_the_sub_sector_options_come_from_the_data(client, admin_headers, session) -> None:
+    """Read from the rows rather than hard-coded: IDX revises its
+    classification, and a fixed list would go on offering categories nobody is
+    in while hiding the ones they moved to."""
+    _seed_issuers(session)
+
+    options = client.get("/admin/issuers/sub-sectors", headers=admin_headers).json()
+
+    assert options == ["Bank", "Minyak, Gas & Batu Bara", "Perkebunan"]
+
+
+def test_filtering_by_one_sub_sector(client, admin_headers, session) -> None:
+    _seed_issuers(session)
+
+    body = client.get(
+        "/admin/issuers", headers=admin_headers, params={"sub_sector": "Bank"}
+    ).json()
+
+    assert body["total"] == 2
+    assert {row["ticker"] for row in body["items"]} == {"BBRI", "BBCA"}
+
+
+def test_several_sub_sectors_are_combined_with_or(client, admin_headers, session) -> None:
+    """An issuer has exactly one sub-sector, so AND would select nothing
+    whenever more than one box is ticked - which is the normal way to use a
+    multi-select."""
+    _seed_issuers(session)
+
+    body = client.get(
+        "/admin/issuers",
+        headers=admin_headers,
+        params={"sub_sector": ["Bank", "Perkebunan"]},
+    ).json()
+
+    assert body["total"] == 3
+    assert {row["ticker"] for row in body["items"]} == {"BBRI", "BBCA", "AALI"}
+
+
+def test_the_sub_sector_filter_composes_with_the_search(client, admin_headers, session) -> None:
+    _seed_issuers(session)
+
+    body = client.get(
+        "/admin/issuers",
+        headers=admin_headers,
+        params={"sub_sector": "Bank", "search": "rakyat"},
+    ).json()
+
+    assert [row["ticker"] for row in body["items"]] == ["BBRI"]
+
+
+def test_no_sub_sector_filter_returns_everything(client, admin_headers, session) -> None:
+    """An empty list must not be read as "match nothing"."""
+    _seed_issuers(session)
+
+    body = client.get("/admin/issuers", headers=admin_headers).json()
+
+    assert body["total"] == 4
