@@ -27,6 +27,7 @@ from aidss.db.models.asset import (
     FeatureSnapshot,
     FundamentalMetric,
     HistoricalPrice,
+    Issuer,
     TechnicalIndicator,
 )
 from aidss.db.models.monitoring import (
@@ -38,9 +39,11 @@ from aidss.db.models.monitoring import (
 from aidss.db.models.news import (
     NewsEmbedding,
     NewsItem,
+    NewsItemIssuer,
     NewsSource,
     ScheduleStatus,
     SentimentScore,
+    TagMethod,
     TickerNewsSchedule,
 )
 from aidss.db.models.system import (
@@ -79,6 +82,7 @@ __all__ = [
     "FeatureSnapshot",
     "FundamentalMetric",
     "HistoricalPrice",
+    "Issuer",
     "HoldingInputMethod",
     "InvestmentHorizon",
     "InvestmentJournalEntry",
@@ -89,7 +93,9 @@ __all__ = [
     "LeaderLease",
     "NewsEmbedding",
     "NewsItem",
+    "NewsItemIssuer",
     "NewsSource",
+    "TagMethod",
     "Notification",
     "Portfolio",
     "PortfolioAnalysis",

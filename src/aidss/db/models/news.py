@@ -170,3 +170,57 @@ class NewsEmbedding(Base):
     __table_args__ = (
         UniqueConstraint("news_item_id", "chunk_index", name="uq_news_embedding_chunk"),
     )
+
+
+class TagMethod(StrEnum):
+    """How a story was connected to an issuer.
+
+    Stored per tag rather than inferred, because the three carry very different
+    confidence and a reader deserves to know which one applied. A story that
+    printed the code is about that company; a story matched on a two-word alias
+    might be about a namesake.
+    """
+
+    #: The four-letter IDX code appeared literally.
+    TICKER_CODE = "ticker_code"
+    #: The registered company name, minus its corporate form.
+    COMPANY_NAME = "company_name"
+    #: A shorter name the company is known by in the press.
+    ALIAS = "alias"
+
+
+class NewsItemIssuer(Base):
+    """Which issuers a story is about.
+
+    A separate table rather than a column, because one story is regularly about
+    several companies - any sector piece names half a dozen banks - and
+    ``news_items.asset_id`` can only hold one. That column stays as it is: it
+    records which asset's scheduled fetch *retrieved* the article, which is a
+    different fact from who the article is about, and conflating them is how a
+    sector story ends up filed under whichever ticker happened to find it.
+
+    The match is kept with the tag - the method and the text that matched - so a
+    wrong tag can be explained and the alias behind it corrected, instead of
+    being a bare association nobody can account for.
+    """
+
+    __tablename__ = "news_item_issuers"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    news_item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("news_items.id", ondelete="CASCADE"), index=True
+    )
+    issuer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("issuers.id", ondelete="CASCADE"), index=True
+    )
+    #: Denormalised on purpose. Nearly every read of this table wants the code,
+    #: and a join to fetch four characters is a join on every news query.
+    ticker: Mapped[str] = mapped_column(String(20), index=True)
+    method: Mapped[TagMethod] = mapped_column(enum_column(TagMethod))
+    #: The exact text that matched, so a bad tag names its own cause.
+    matched_text: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("news_item_id", "issuer_id", name="uq_news_item_issuer"),
+    )

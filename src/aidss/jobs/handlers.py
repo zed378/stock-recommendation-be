@@ -20,6 +20,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from aidss.agents.engine import AnalysisEngine
+from aidss.collectors.issuers import sync_directory
 from aidss.collectors.market_data import FundamentalCollector, MarketDataCollector, load_candles
 from aidss.config import get_settings
 from aidss.db.base import get_sessionmaker
@@ -31,6 +32,7 @@ from aidss.jobs import queue, quota
 from aidss.llm.provisioning import build_gateway
 from aidss.monitoring.poller import poll_watched_assets
 from aidss.news.collector import NewsCollector, NewsScheduler
+from aidss.news.sweep import sweep_all_sources, tag_untagged
 from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.registry import get_market_data_provider, get_news_provider
 from aidss.rag.provisioning import build_rag
@@ -219,6 +221,78 @@ def run_news_schedule(session: Session, payload: dict[str, Any]) -> dict[str, An
         raise ProviderUnavailableError("news", report.error or "ingestion failed")
 
     return report.as_dict()
+
+
+@register("news.sweep")
+def sweep_news(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Read every active feed once and attribute what it carries.
+
+    Queued rather than run on the request, because reading twenty feeds over
+    the open internet is not work that fits inside a request timeout - the
+    same reason the analysis moved off it.
+    """
+    provider = get_news_provider(session=session)
+    if not hasattr(provider, "fetch"):
+        # The fixture provider manufactures articles per ticker and has no feed
+        # to sweep. Saying so beats sweeping nothing and reporting success -
+        # which is how this subsystem sat broken for weeks.
+        raise PermanentJobError(
+            f"the configured news provider ({type(provider).__name__}) reads no feeds; "
+            "set AIDSS_NEWS_PROVIDER=rss"
+        )
+
+    try:
+        report = sweep_all_sources(session, provider)
+    except ValueError as exc:
+        raise PermanentJobError(str(exc)) from exc
+
+    result = report.as_payload()
+    user_id = payload.get("user_id")
+    if user_id:
+        NotificationService(session).notify(
+            uuid.UUID(str(user_id)),
+            NotificationEvent.NEWS_SWEEP_COMPLETE,
+            (
+                f"Read {report.sources_read} feeds: {report.inserted} new articles, "
+                f"{report.tagged} matched to an issuer."
+            ),
+            context=result,
+        )
+    return result
+
+
+@register("news.tag_backfill")
+def backfill_news_tags(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Attribute stories already in the database that carry no tags.
+
+    Exists because tagging arrived after the news did, and because correcting
+    an alias should be able to reach the archive rather than only future
+    articles.
+    """
+    limit = int(payload.get("limit") or 500)
+    return tag_untagged(session, limit=max(1, min(limit, 5000)))
+
+
+# ---------------------------------------------------------------------------
+# The listed-company directory
+# ---------------------------------------------------------------------------
+
+
+@register("issuers.sync")
+def sync_issuer_directory(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Refresh the IDX company directory that tagging matches against.
+
+    Its completeness is what tagging's recall rests on: an issuer missing here
+    produces no wrong tag, it produces silence, and silence is indistinguishable
+    from a story that named nobody.
+    """
+    from aidss.plugins.adapters.market_idx import IDXMarketDataProvider
+
+    provider = IDXMarketDataProvider.from_settings(get_settings())
+    rows = provider.list_companies()
+    if not rows:
+        raise ProviderUnavailableError("idx", "the company directory came back empty")
+    return sync_directory(session, rows).as_payload()
 
 
 # ---------------------------------------------------------------------------

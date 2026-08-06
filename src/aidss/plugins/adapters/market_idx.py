@@ -292,6 +292,45 @@ class IDXMarketDataProvider(MarketDataProvider):
                 self.name, f"response was not JSON: {body!r}", retryable=False
             ) from exc
 
+    # --- the listed-company directory ------------------------------------
+
+    def list_companies(self) -> list[dict[str, Any]]:
+        """Every company listed on IDX, as the exchange itself publishes them.
+
+        One request: the endpoint returns all ~962 in a single page, so paging
+        would be ceremony around a list that fits comfortably in memory. The
+        length is asked for generously and the total is checked against what
+        came back, because a silently truncated directory is a directory that
+        quietly stops recognising the companies past the cut.
+
+        Only equity issuers. The same endpoint also carries bond, ETF and EBA
+        listings, which have codes that are not tickers and would tag news to
+        instruments nobody analyses.
+        """
+        payload = self._get(
+            "/ListedCompany/GetCompanyProfiles",
+            {"start": 0, "length": 2000, "sortColumn": "Code", "sortOrder": "asc"},
+            referer="https://www.idx.co.id/id/perusahaan-tercatat/profil-perusahaan-tercatat/",
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise ProviderUnavailableError(
+                self.name,
+                f"company directory had an unexpected shape: {type(payload).__name__}",
+                retryable=False,
+            )
+
+        rows = payload["data"]
+        total = payload.get("recordsTotal")
+        if isinstance(total, int) and len(rows) < total:
+            raise ProviderUnavailableError(
+                self.name,
+                f"directory truncated: {len(rows)} of {total} returned. Raise the page "
+                "length rather than importing a partial directory, which would silently "
+                "stop recognising every issuer past the cut",
+                retryable=True,
+            )
+        return [row for row in rows if isinstance(row, dict) and row.get("EfekEmiten_Saham")]
+
     # --- fundamentals ----------------------------------------------------
 
     def get_fundamentals(self, ticker: str) -> list[FundamentalPoint]:

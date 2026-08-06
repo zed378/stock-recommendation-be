@@ -46,6 +46,11 @@ class NotificationEvent(StrEnum):
     #: the confidence and the counter-evidence are.
     MONITORING_ALERT = "monitoring_alert"
     NEWS_INGESTED = "news_ingested"
+    #: A sweep of every configured feed finished. Distinct from
+    #: NEWS_INGESTED, which is one ticker's scheduled fetch: this one is
+    #: system-wide and is normally something a person pressed a button for,
+    #: so it reports what the sweep found rather than what arrived for them.
+    NEWS_SWEEP_COMPLETE = "news_sweep_complete"
     SCHEDULE_NEEDS_ATTENTION = "schedule_needs_attention"
     INGESTION_FAILED = "ingestion_failed"
     BUDGET_THRESHOLD_REACHED = "budget_threshold_reached"
@@ -60,6 +65,7 @@ SUBJECTS: dict[NotificationEvent, str] = {
     NotificationEvent.RECOMMENDATION_UPDATED: "Recommendation updated",
     NotificationEvent.MONITORING_ALERT: "Monitoring raised an alert",
     NotificationEvent.NEWS_INGESTED: "New coverage collected",
+    NotificationEvent.NEWS_SWEEP_COMPLETE: "News sources read",
     NotificationEvent.SCHEDULE_NEEDS_ATTENTION: "A news schedule needs attention",
     NotificationEvent.INGESTION_FAILED: "Data ingestion failed",
     NotificationEvent.BUDGET_THRESHOLD_REACHED: "AI spend threshold reached",

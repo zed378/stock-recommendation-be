@@ -138,3 +138,47 @@ class FeatureSnapshot(Base):
     __table_args__ = (
         UniqueConstraint("asset_id", "timeframe", "timestamp", name="uq_feature_identity"),
     )
+
+
+class Issuer(Base):
+    """Every company listed on IDX, whether or not the platform tracks it.
+
+    Deliberately not the same table as ``assets``. An ``Asset`` is an
+    instrument the platform holds data for and can analyse; putting all 962
+    listed companies in there would advertise 962 analysable instruments while
+    having prices for a handful of them. This is reference data - a directory
+    used to work out who a news story is about - and it is complete precisely
+    because it is not claiming to be anything more.
+
+    Sourced from IDX's own company-profile endpoint, which is the same public
+    origin the fundamentals adapter already reads.
+    """
+
+    __tablename__ = "issuers"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    #: The four-letter IDX code. Unique, and the natural key everywhere else.
+    ticker: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(300))
+    sector: Mapped[str | None] = mapped_column(String(120), default=None)
+    sub_sector: Mapped[str | None] = mapped_column(String(120), default=None)
+    industry: Mapped[str | None] = mapped_column(String(120), default=None)
+    listing_board: Mapped[str | None] = mapped_column(String(60), default=None)
+    listed_on: Mapped[date | None] = mapped_column(default=None)
+    website: Mapped[str | None] = mapped_column(String(300), default=None)
+
+    #: Names this issuer is actually called in the press, which is rarely the
+    #: registered one: coverage says "Adaro", never "PT Adaro Andalan Indonesia
+    #: Tbk". Derived on import and editable afterwards, because derivation
+    #: cannot know that BBRI is "BRI" and that "Bank Rakyat Indonesia" is the
+    #: same company.
+    aliases: Mapped[list[Any]] = mapped_column(default=list)
+
+    #: Delisted issuers are kept rather than deleted. Their news is still in the
+    #: database and still refers to them, and a tag pointing at a row that no
+    #: longer exists is worse than a tag pointing at a company that no longer
+    #: trades.
+    is_listed: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    synced_at: Mapped[datetime] = mapped_column(default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
