@@ -1025,6 +1025,24 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 ---
 
+## 22d. Aksi Massal pada Alert
+
+**Satu pernyataan SQL, bukan perulangan permintaan.** Klien yang mengulang lima puluh permintaan bisa gagal di tengah dan meninggalkan daftar setengah tertangani tanpa apa pun yang mencatat di mana ia berhenti.
+
+**"Semua" punya endpoint sendiri, terpisah dari yang menerima daftar id.** Melipatnya menjadi "daftar kosong berarti semua" menaruh perbedaan antara "tandai tiga ini" dan "hapus segalanya" pada apakah filter klien kebetulan mengembalikan sesuatu — dan itu bukan perbedaan yang boleh bergantung pada bug di hulu. Daftar kosong ditolak 422.
+
+**Setiap pernyataan dibatasi user id di klausa WHERE yang sama dengan id-nya.** Sebuah id alert adalah token pembawa bagi baris yang disebutnya: siapa pun yang memegangnya bisa memasukkannya ke daftar. Menyaring kepemilikan belakangan — atau tidak sama sekali — adalah cara satu akun menghapus alert akun lain.
+
+**Jumlah dilaporkan dari server, bukan diasumsikan sama dengan yang dipilih.** Id yang sudah dibaca, atau milik orang lain, dilewati. Pemilih lima yang berubah tiga berhak tahu.
+
+**Alert yang sudah dibaca tidak dicap ulang,** sehingga stempel waktunya tetap berarti "kapan ini pertama kali dilihat".
+
+**Menghapus bertanya lebih dulu, menandai-dibaca tidak.** Penghapusan tidak bisa dibatalkan dan "hapus semua" satu-satunya aksi yang cakupannya tidak terlihat dari apa yang dicentang. Menanyakan hal yang bisa dibatalkan hanya melatih orang menutup dialog yang justru penting.
+
+**Pilihan disimpan sebagai himpunan id, bukan penanda per baris.** Daftar diambil ulang tiap tiga puluh detik; pilihan yang terikat posisi array akan diam-diam menunjuk baris yang berbeda setelah satu polling.
+
+---
+
 ## 22c. Event Realtime & Pekerjaan Panjang
 
 **Analisis penuh tidak boleh ditahan di atas satu request HTTP.** Satu run multi-agen adalah belasan panggilan model ditambah beberapa terjemahan. Ditahan di request, apa pun yang berada di depan server menjadi batas sebenarnya atas seberapa teliti sebuah analisis boleh dilakukan — dan di balik Cloudflare batas itu **100 detik yang tidak bisa dinaikkan dari sisi origin**. Yang diterima pembaca adalah halaman galat 524, sementara pekerjaannya jalan terus lalu hasilnya dibuang. Endpoint antrean sudah ada sejak job queue dibangun; tombolnya saja yang tidak memakainya.
