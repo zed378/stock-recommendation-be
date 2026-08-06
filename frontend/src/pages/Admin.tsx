@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/context";
@@ -14,8 +15,28 @@ import {
 } from "@/components/primitives";
 import { UsersPanel } from "@/components/admin/Users";
 import { NewsSourcesPanel } from "@/components/admin/NewsSources";
+import { IssuersPanel } from "@/components/admin/Issuers";
 
-type Tab = "overview" | "users" | "news" | "queue" | "providers" | "budget" | "audit";
+type Tab =
+  | "overview"
+  | "users"
+  | "news"
+  | "issuers"
+  | "queue"
+  | "providers"
+  | "budget"
+  | "audit";
+
+const TABS: Tab[] = [
+  "overview",
+  "users",
+  "news",
+  "issuers",
+  "queue",
+  "providers",
+  "budget",
+  "audit",
+];
 
 /**
  * The operations side of the platform.
@@ -29,7 +50,11 @@ type Tab = "overview" | "users" | "news" | "queue" | "providers" | "budget" | "a
 export function Admin() {
   const { t } = useI18n();
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>("overview");
+  // Read from the URL rather than held in state. As tab state no section had
+  // an address: an admin could not bookmark the news sources, link a colleague
+  // to the audit log, or reload without landing back on the overview.
+  const { section } = useParams();
+  const tab: Tab = TABS.includes(section as Tab) ? (section as Tab) : "overview";
 
   if (user && user.role !== "admin") {
     return (
@@ -42,39 +67,17 @@ export function Admin() {
     );
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "overview", label: t("admin.tab.overview") },
-    { id: "users", label: t("admin.tab.users") },
-    { id: "news", label: t("admin.tab.news") },
-    { id: "queue", label: t("admin.tab.queue") },
-    { id: "providers", label: t("admin.tab.providers") },
-    { id: "budget", label: t("admin.tab.budget") },
-    { id: "audit", label: t("admin.tab.audit") },
-  ];
-
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-ink">{t("admin.title")}</h1>
+      <h1 className="text-lg font-semibold text-ink">{t(`admin.tab.${tab}` as MessageKey)}</h1>
 
-      <nav className="flex flex-wrap gap-1 border-b border-line">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setTab(item.id)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-              tab === item.id
-                ? "border-rise text-ink"
-                : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {/* The row of tabs is gone: the sidebar carries these now, and two
+          navigations for one set of destinations is one too many. */}
 
       {tab === "overview" && <Overview />}
       {tab === "users" && <UsersPanel />}
       {tab === "news" && <NewsSourcesPanel />}
+      {tab === "issuers" && <IssuersPanel />}
       {tab === "queue" && <Queue />}
       {tab === "providers" && <Providers />}
       {tab === "budget" && <Budget />}

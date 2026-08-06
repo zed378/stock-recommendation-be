@@ -125,8 +125,27 @@ def test_a_generic_word_is_not_a_usable_alias() -> None:
         assert not is_usable_alias(word), word
 
 
-def test_an_alias_made_only_of_generic_words_is_refused() -> None:
-    assert not is_usable_alias("energi nusantara")
+def test_a_derived_two_word_prefix_of_generic_words_is_refused() -> None:
+    """Derivation gets no benefit of the doubt, and this is where the two rules
+    part company. "Kawasan Industri Jababeka" yields the prefix "kawasan
+    industri" - Indonesian for "industrial estate" - which matched a story about
+    an estate in Madura. The index may say "Bank Mandiri" because a person
+    vetted it; derivation may not invent the equivalent."""
+    assert "kawasan industri" not in derive_aliases("PT Kawasan Industri Jababeka Tbk")
+    assert "kawasan industri jababeka" in derive_aliases("PT Kawasan Industri Jababeka Tbk")
+
+
+def test_two_generic_words_together_are_a_name() -> None:
+    """This test used to assert the opposite, and the opposite was wrong.
+
+    "an alias made entirely of generic words is generic" rejects "Bank
+    Mandiri", "Semen Indonesia", "Kimia Farma" and "Bank Raya" - every one an
+    everyday name for a real issuer, and for most of them *the* everyday name.
+    The phrase the rule was meant to catch costs one uncertain tag; the rule
+    itself cost the coverage of several of the largest companies on the
+    exchange."""
+    assert is_usable_alias("bank mandiri")
+    assert is_usable_alias("semen indonesia")
     assert is_usable_alias("adaro andalan")
 
 

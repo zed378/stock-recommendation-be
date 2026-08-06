@@ -303,16 +303,39 @@ def list_news(
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
 ) -> list[dict]:
-    """Stored articles and their sentiment for one issuer (Section 10)."""
-    from aidss.db.models import SentimentScore
+    """Stored articles and their sentiment for one issuer (Section 10).
+
+    Two ways an article belongs to this ticker, and both count:
+
+      * ``asset_id`` - this asset's scheduled fetch retrieved it;
+      * a tag - a sweep of every feed found this issuer named in it.
+
+    Only the first was read before, which is why a ticker with fifty tagged
+    articles showed an empty News tab: the sweep stores with ``asset_id`` null
+    on purpose, because nothing fetched those articles on any asset's behalf.
+    Filtering on the column that records *who fetched it* to answer *what is
+    this about* returned nothing, correctly and uselessly.
+    """
+    from aidss.db.models import NewsItemIssuer, SentimentScore
 
     asset = _resolve_asset(session, ticker)
+    tagged = select(NewsItemIssuer.news_item_id).where(NewsItemIssuer.ticker == asset.ticker)
     items = session.scalars(
         select(NewsItem)
-        .where(NewsItem.asset_id == asset.id)
+        .where((NewsItem.asset_id == asset.id) | NewsItem.id.in_(tagged))
         .order_by(NewsItem.published_at.desc())
         .limit(limit)
     ).all()
+
+    # One query for the tags of everything on the page, rather than one per
+    # article: the reason each story is attributed here is worth showing, and
+    # not worth thirty round trips.
+    reasons: dict[uuid.UUID, list[NewsItemIssuer]] = {}
+    if items:
+        for tag in session.scalars(
+            select(NewsItemIssuer).where(NewsItemIssuer.news_item_id.in_([i.id for i in items]))
+        ).all():
+            reasons.setdefault(tag.news_item_id, []).append(tag)
 
     payload: list[dict] = []
     for item in items:
@@ -321,6 +344,7 @@ def list_news(
             .where(SentimentScore.news_item_id == item.id)
             .order_by(SentimentScore.created_at.desc())
         )
+        tags = reasons.get(item.id, [])
         payload.append(
             {
                 "headline": item.headline,
@@ -329,6 +353,20 @@ def list_news(
                 "published_at": item.published_at.isoformat(),
                 "summary": item.body_summary,
                 "is_indexed": item.is_indexed,
+                # Every issuer the story names, this one included. A reader
+                # looking at a sector piece under BBRI should be able to see it
+                # is also about BBCA and BMRI rather than think it is BBRI news.
+                "tickers": sorted({tag.ticker for tag in tags}),
+                # Why this article is here. A tag nobody can account for is how
+                # a wrong one survives.
+                "matched_on": next(
+                    (
+                        {"method": tag.method.value, "text": tag.matched_text}
+                        for tag in tags
+                        if tag.ticker == asset.ticker
+                    ),
+                    None,
+                ),
                 "sentiment": (
                     {"score": score.score, "rationale": score.rationale, "model": score.model_used}
                     if score

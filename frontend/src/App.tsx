@@ -64,7 +64,10 @@ export default function App() {
                     requirement. An unlinked route is still reachable by typing
                     it, so hiding the link is not the control - the backend is,
                     and this says why rather than 403ing every panel. */}
+                {/* The section is part of the address. As tab state, no admin
+                    section could be bookmarked, linked, or survive a reload. */}
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/:section" element={<Admin />} />
               </Route>
               <Route path="*" element={<Navigate to="/watchlist" replace />} />
             </Routes>

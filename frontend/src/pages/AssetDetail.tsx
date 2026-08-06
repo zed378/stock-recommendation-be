@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
@@ -319,7 +319,7 @@ function Fundamentals({ ticker }: { ticker: string }) {
 // last one back takes no timeframe at all, because the stored result is the
 // latest whatever it was run on. So the two share a query key without it.
 function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe }) {
-  const { t } = useI18n();
+  const { t, dateTime } = useI18n();
   const queryClient = useQueryClient();
 
   const existing = useQuery({
@@ -426,6 +426,55 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
     (result?.recommendation ?? {}) as unknown as Record<string, unknown>,
   );
 
+  // Fetched here as well as in the Strategy tab, because the export covers
+  // both and reaching into a sibling tab's state to get it would couple two
+  // components that have no other reason to know about each other. React Query
+  // dedupes it against the identical key, so it is one request either way.
+  const guidance = useQuery({
+    queryKey: ["guidance", ticker],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/assets/{ticker}/strategy", {
+        params: { path: { ticker } },
+      });
+      // A missing strategy is not an error here: the export simply leaves that
+      // section out rather than refusing to produce a document.
+      return error ? null : data;
+    },
+    enabled: Boolean(result),
+  });
+
+  const exportPdf = useMutation({
+    mutationFn: async () => {
+      const { buildAnalysisPdf, downloadPdf } = await import("@/export/analysisPdf");
+      const blob = await buildAnalysisPdf({
+        ticker: ticker.toUpperCase(),
+        timeframe,
+        generatedAt: dateTime(new Date().toISOString()),
+        recommendation: result?.recommendation ?? null,
+        guidance: (guidance.data ?? null) as Parameters<typeof buildAnalysisPdf>[0]["guidance"],
+        agents: (result?.agents ?? {}) as Record<string, Record<string, unknown>>,
+        labels: {
+          title: t("analysis.title"),
+          generated: t("export.generated"),
+          timeframe: t("export.timeframe"),
+          recommendation: t("rec.title"),
+          confidence: t("rec.confidence"),
+          horizon: t("rec.horizon"),
+          entry: t("export.entry"),
+          target: t("rec.target"),
+          stop: t("rec.stop"),
+          rationale: t("rec.reasoning"),
+          strategy: t("tab.strategy"),
+          agents: t("export.agents"),
+          disclaimer: t("disclaimer.title"),
+          disclaimerBody: t("disclaimer.long"),
+          page: t("export.page"),
+        },
+      });
+      downloadPdf(blob, `${ticker.toUpperCase()}-analysis.pdf`);
+    },
+  });
+
   const runButton = (
     <Button busy={running} onClick={() => start.mutate()}>
       {running ? t("analysis.running") : t("analysis.run")}
@@ -459,9 +508,24 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
               onTranslate={translation.showTranslation}
             />
           )}
+          {/* Only once there is something to export. A button that produces an
+              empty document teaches the reader it does not work. */}
+          {result && !running && (
+            <Button
+              variant="ghost"
+              busy={exportPdf.isPending}
+              onClick={() => exportPdf.mutate()}
+            >
+              {t("export.pdf")}
+            </Button>
+          )}
           {runButton}
         </div>
       </div>
+
+      {exportPdf.isError && (
+        <ErrorNote message={(exportPdf.error as Error).message} />
+      )}
 
       {running && (
         <Card>
@@ -774,28 +838,81 @@ function News({ ticker }: { ticker: string }) {
   if (query.isLoading) return <Loading />;
   if (query.isError)
     return <ErrorNote message={(query.error as Error).message} onRetry={() => query.refetch()} />;
+  // Said "No analysis for this ticker yet" on the News tab, which is a
+  // different subsystem's empty state and told the reader nothing true.
   if (!query.data?.length)
-    return <Card><Empty message={t("analysis.empty")} /></Card>;
+    return (
+      <Card>
+        <Empty message={t("news.empty")} hint={t("news.emptyHint")} />
+      </Card>
+    );
 
   return (
     <Card>
       <ul className="divide-y divide-line">
-        {query.data.map((item, index) => (
-          <li key={index} className="py-3 first:pt-0 last:pb-0">
-            <div className="flex items-baseline justify-between gap-4">
-              <p className="text-sm text-ink/90">{String(item.headline ?? "")}</p>
-              <span className="shrink-0 text-xs text-faint">
-                {dateTime(String(item.published_at ?? ""))}
-              </span>
-            </div>
-            {item.body_summary ? (
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                {String(item.body_summary)}
-              </p>
-            ) : null}
-            <p className="mt-1 font-mono text-xs text-faint">{String(item.source ?? "")}</p>
-          </li>
-        ))}
+        {query.data.map((item, index) => {
+          const others = ((item.tickers as string[]) ?? []).filter((code) => code !== ticker);
+          const matched = item.matched_on as { method: string; text: string } | null;
+          const url = String(item.source_url ?? "");
+          return (
+            <li key={index} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex items-baseline justify-between gap-4">
+                {/* Linked out. A headline with no way to reach the article is
+                    a claim the reader cannot check. */}
+                {url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-sm text-ink/90 hover:text-rise"
+                  >
+                    {String(item.headline ?? "")}
+                  </a>
+                ) : (
+                  <p className="text-sm text-ink/90">{String(item.headline ?? "")}</p>
+                )}
+                <span className="shrink-0 text-xs text-faint">
+                  {dateTime(String(item.published_at ?? ""))}
+                </span>
+              </div>
+
+              {item.summary ? (
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  {String(item.summary)}
+                </p>
+              ) : null}
+
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-mono text-xs text-faint">{String(item.source ?? "")}</span>
+
+                {/* Why this story is filed here. A tag nobody can account for
+                    is how a wrong one survives unnoticed. */}
+                {matched && (
+                  <span className="text-xs text-faint" title={matched.text}>
+                    {t(`news.matched.${matched.method}` as MessageKey)}
+                  </span>
+                )}
+
+                {/* The other issuers it names, so a sector piece reads as one
+                    rather than as news about this ticker alone. */}
+                {others.length > 0 && (
+                  <span className="flex flex-wrap items-center gap-1 text-xs text-faint">
+                    {t("news.alsoAbout")}
+                    {others.slice(0, 6).map((code) => (
+                      <Link
+                        key={code}
+                        to={`/assets/${code}`}
+                        className="font-mono text-xs text-muted hover:text-rise"
+                      >
+                        {code}
+                      </Link>
+                    ))}
+                  </span>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );

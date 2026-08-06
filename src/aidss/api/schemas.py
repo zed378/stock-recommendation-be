@@ -800,7 +800,13 @@ class IssuerResponse(BaseModel):
     sub_sector: str | None = None
     listing_board: str | None = None
     website: str | None = None
+    #: Only the extras somebody typed. The index entry and the names derived
+    #: from the registered one are not stored here.
     aliases: list[str] = Field(default_factory=list)
+    #: Everything that actually matches, index and derivation included. Without
+    #: it the panel shows an empty alias list for BBCA while "BCA" is matching
+    #: perfectly well, which reads as the feature being broken.
+    effective_aliases: list[str] = Field(default_factory=list)
     is_listed: bool
     synced_at: datetime
 

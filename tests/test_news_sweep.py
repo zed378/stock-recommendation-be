@@ -14,8 +14,9 @@ import pytest
 from sqlalchemy import select
 
 from aidss.collectors.issuers import sync_directory
-from aidss.db.models import Issuer, NewsItem, NewsItemIssuer, NewsSource, TagMethod
+from aidss.db.models import Asset, Issuer, NewsItem, NewsItemIssuer, NewsSource, TagMethod
 from aidss.news.sweep import sweep_all_sources, tag_untagged
+from aidss.news.tagging import effective_aliases
 from aidss.syndication.feeds import FeedEntry, FeedParseError
 
 #: Shaped exactly like the rows IDX's company-profile endpoint returns.
@@ -99,7 +100,13 @@ def test_the_directory_is_imported_from_the_exchange_rows(session) -> None:
     assert bbri.name == "PT Bank Rakyat Indonesia (Persero) Tbk"
     assert bbri.sector == "Keuangan"
     assert bbri.listed_on.isoformat() == "2003-11-10"
-    assert bbri.aliases, "aliases must be derived on import or nothing matches by name"
+    # Nothing is written to `aliases`: it holds only what a person types. The
+    # index entry and the derived names are resolved at match time, so a row
+    # imported today still picks up an index entry added next month.
+    assert bbri.aliases == []
+    assert "bri" in effective_aliases(bbri.name, bbri.ticker), (
+        "the effective list is what matching uses, and it must carry the index entry"
+    )
 
 
 def test_re_importing_updates_rather_than_duplicates(session) -> None:
@@ -116,19 +123,18 @@ def test_re_importing_updates_rather_than_duplicates(session) -> None:
     )
 
 
-def test_a_curated_alias_survives_the_next_synchronisation(session) -> None:
-    """Derivation cannot know that BBRI is "BRI". Somebody types it in, and the
-    next scheduled sync must not quietly throw it away - an editable field that
+def test_an_administrator_s_alias_survives_the_next_synchronisation(session) -> None:
+    """The import must not touch `aliases` at all. An editable field that
     resets on a timer is worse than no field at all."""
     sync_directory(session, IDX_ROWS)
     bbri = session.scalar(select(Issuer).where(Issuer.ticker == "BBRI"))
-    bbri.aliases = ["bri", "bank rakyat indonesia"]
+    bbri.aliases = ["kredit usaha rakyat bri"]
     session.flush()
 
     sync_directory(session, IDX_ROWS)
 
     session.refresh(bbri)
-    assert "bri" in bbri.aliases
+    assert bbri.aliases == ["kredit usaha rakyat bri"]
 
 
 def test_an_issuer_that_leaves_the_feed_is_marked_not_deleted(session) -> None:
@@ -352,3 +358,47 @@ def test_a_tagged_story_reaches_the_analysis_for_that_ticker(directory) -> None:
     assert [a["headline"] for a in context.news] == [
         "Saham BBRI dan AADI kompak menguat"
     ], "a story tagged to this issuer must reach its analysis even though no schedule fetched it"
+
+
+def test_the_news_endpoint_returns_tagged_articles(client, auth_headers) -> None:
+    """The News tab was empty for BBCA while fifty articles were tagged to it.
+
+    The endpoint filtered on `asset_id`, which records *which asset's scheduled
+    fetch retrieved an article* - and the sweep sets it to null on purpose,
+    because nothing fetched those on any asset's behalf. Asking the
+    who-fetched-it column what a story is about returned nothing, correctly and
+    uselessly.
+    """
+    from aidss.db.base import get_sessionmaker
+
+    db = get_sessionmaker()()
+    try:
+        sync_directory(db, IDX_ROWS)
+        asset = Asset(ticker="BBRI", exchange="IDX", name="Bank Rakyat Indonesia")
+        db.add(asset)
+        add_source(db, "Market Wire", "https://feed.test/all")
+        sweep_all_sources(
+            db,
+            StubFeeds(
+                {
+                    "https://feed.test/all": [
+                        entry("Saham BBRI dan AADI kompak menguat", "https://news.test/1")
+                    ]
+                }
+            ),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/assets/BBRI/news", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["headline"] for item in body] == ["Saham BBRI dan AADI kompak menguat"]
+    assert body[0]["matched_on"] == {"method": "ticker_code", "text": "BBRI"}, (
+        "the reason a story is filed here must be visible, or a wrong tag has no cause"
+    )
+    assert body[0]["tickers"] == ["AADI", "BBRI"], (
+        "a sector piece should read as one, not as news about this ticker alone"
+    )

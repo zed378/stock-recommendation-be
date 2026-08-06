@@ -53,7 +53,12 @@ from aidss.db.models import (
     UserStatus,
 )
 from aidss.jobs.queue import enqueue
-from aidss.news.tagging import MIN_ALIAS_LENGTH, is_usable_alias, normalise
+from aidss.news.tagging import (
+    MIN_ALIAS_LENGTH,
+    effective_aliases,
+    is_usable_alias,
+    normalise,
+)
 from aidss.security.rbac import Permission
 from aidss.syndication.feeds import FeedParseError
 
@@ -610,6 +615,23 @@ def retag_news(
     )
 
 
+def _issuer_payload(issuer: Issuer) -> IssuerResponse:
+    """Serialised with the effective alias list computed alongside the stored one."""
+    return IssuerResponse(
+        **{
+            field: getattr(issuer, field)
+            for field in (
+                "id", "ticker", "name", "sector", "sub_sector",
+                "listing_board", "website", "is_listed", "synced_at",
+            )
+        },
+        aliases=[str(a) for a in (issuer.aliases or [])],
+        effective_aliases=effective_aliases(
+            issuer.name, issuer.ticker, [str(a) for a in (issuer.aliases or [])]
+        ),
+    )
+
+
 @router.get("/issuers", response_model=list[IssuerResponse])
 def list_issuers(
     search: str | None = Query(default=None, description="Matches the code or the name"),
@@ -617,7 +639,7 @@ def list_issuers(
     limit: int = Query(default=100, ge=1, le=1000),
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
-) -> list[Issuer]:
+) -> list[IssuerResponse]:
     """Browse the directory. Searchable, because it holds nearly a thousand rows
     and scrolling to find one is not browsing."""
     stmt = select(Issuer)
@@ -628,7 +650,8 @@ def list_issuers(
         stmt = stmt.where(
             func.lower(Issuer.ticker).like(pattern) | func.lower(Issuer.name).like(pattern)
         )
-    return list(session.scalars(stmt.order_by(Issuer.ticker).limit(limit)).all())
+    rows = session.scalars(stmt.order_by(Issuer.ticker).limit(limit)).all()
+    return [_issuer_payload(issuer) for issuer in rows]
 
 
 @router.patch("/issuers/{issuer_id}", response_model=IssuerResponse)
@@ -637,7 +660,7 @@ def update_issuer(
     payload: IssuerUpdateRequest,
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
-) -> Issuer:
+) -> IssuerResponse:
     """Correct an issuer's aliases.
 
     Aliases are refused rather than silently dropped when they would match
@@ -673,4 +696,4 @@ def update_issuer(
 
     issuer.aliases = cleaned
     session.flush()
-    return issuer
+    return _issuer_payload(issuer)

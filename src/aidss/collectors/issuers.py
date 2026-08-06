@@ -22,7 +22,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.db.models import Issuer
-from aidss.news.tagging import derive_aliases
 
 logger = logging.getLogger("aidss.issuers")
 
@@ -76,10 +75,13 @@ def sync_directory(session: Session, rows: list[dict[str, Any]]) -> DirectorySyn
 
     Two decisions worth naming:
 
-      * **Aliases already present are kept.** They are the one part of a row a
-        person can correct, and an import that recomputed them would silently
-        discard that correction on the next scheduled run - the surest way to
-        make an editable field useless.
+      * **Aliases are never written here.** `issuers.aliases` holds only the
+        extra names a person typed; the index entry and the names derived from
+        the registered one are resolved at match time by `effective_aliases`.
+        Storing them would freeze this row at the rules that applied the day it
+        was imported - adding "Indomie" to the index would reach nobody until
+        somebody re-synchronised - and it would put an import in the position of
+        deciding whether to overwrite somebody's correction.
       * **Issuers that vanish from the feed are marked, not deleted.** Their
         news is still in the database and still refers to them. A tag pointing
         at a row that no longer exists is worse than one pointing at a company
@@ -113,18 +115,11 @@ def sync_directory(session: Session, rows: list[dict[str, Any]]) -> DirectorySyn
 
         issuer = existing.get(ticker)
         if issuer is None:
-            session.add(
-                Issuer(ticker=ticker, aliases=derive_aliases(name), **fields)
-            )
+            session.add(Issuer(ticker=ticker, aliases=[], **fields))
             report.added += 1
             continue
 
         changed = [key for key, value in fields.items() if getattr(issuer, key) != value]
-        if not issuer.aliases:
-            # Derived only when there is nothing to lose. A row whose aliases
-            # were curated keeps them.
-            issuer.aliases = derive_aliases(name)
-            changed.append("aliases")
         if changed:
             for key, value in fields.items():
                 setattr(issuer, key, value)

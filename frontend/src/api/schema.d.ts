@@ -771,6 +771,17 @@ export interface paths {
         /**
          * List News
          * @description Stored articles and their sentiment for one issuer (Section 10).
+         *
+         *     Two ways an article belongs to this ticker, and both count:
+         *
+         *       * ``asset_id`` - this asset's scheduled fetch retrieved it;
+         *       * a tag - a sweep of every feed found this issuer named in it.
+         *
+         *     Only the first was read before, which is why a ticker with fifty tagged
+         *     articles showed an empty News tab: the sweep stores with ``asset_id`` null
+         *     on purpose, because nothing fetched those articles on any asset's behalf.
+         *     Filtering on the column that records *who fetched it* to answer *what is
+         *     this about* returned nothing, correctly and uselessly.
          */
         get: operations["list_news_assets__ticker__news_get"];
         put?: never;
@@ -2163,6 +2174,8 @@ export interface components {
             website?: string | null;
             /** Aliases */
             aliases?: string[];
+            /** Effective Aliases */
+            effective_aliases?: string[];
             /** Is Listed */
             is_listed: boolean;
             /**

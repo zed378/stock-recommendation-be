@@ -27,9 +27,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from aidss.db.models import TagMethod
+from aidss.news.alias_index import curated_for
 
 #: Corporate forms and legal boilerplate. Present in nearly every Indonesian
 #: company name and carrying no identifying signal at all, so a match on one is
@@ -87,6 +89,9 @@ _TOO_COMMON = frozenset(
         "teknologi",
         "technology",
         "industri",
+        "kawasan",
+        "perusahaan",
+        "sumber",
         "industry",
         "properti",
         "property",
@@ -228,7 +233,17 @@ def derive_aliases(registered_name: str) -> list[str]:
     if len(words) >= 3:
         # "Astra Agro Lestari" -> "astra agro". Two words is usually enough to
         # be unambiguous while matching the form a headline actually uses.
-        candidates.append(" ".join(words[:2]))
+        #
+        # Unless both of them are generic, which `is_usable_alias` now permits
+        # and should not permit here. That rule was relaxed so the *index* can
+        # say "Bank Mandiri" and "Semen Indonesia" - vetted by a person who
+        # knows those are names. Derivation is not vetted by anyone, and given
+        # the same latitude it produced "kawasan industri" for KIJA, from
+        # "Kawasan Industri Jababeka". That is Indonesian for "industrial
+        # estate"; it matched a story about an estate in Madura.
+        prefix = words[:2]
+        if not all(word in _TOO_COMMON for word in prefix):
+            candidates.append(" ".join(prefix))
 
     seen: set[str] = set()
     out: list[str] = []
@@ -250,11 +265,19 @@ def is_usable_alias(alias: str) -> bool:
     if len(alias) < MIN_ALIAS_LENGTH:
         return False
     words = alias.split()
-    if len(words) == 1 and words[0] in _TOO_COMMON:
-        return False
-    # An alias made entirely of generic words is generic however many there
-    # are: "energi nusantara" identifies nothing.
-    return not all(word in _TOO_COMMON for word in words)
+
+    # Only the single-word case is refused, and the multi-word rule that used
+    # to sit here was wrong. "an alias made entirely of generic words is
+    # generic" sounds right and rejects "Bank Mandiri", "Semen Indonesia",
+    # "Kimia Farma", "Bank Raya" and "Surya Citra" - every one an everyday name
+    # for a real issuer, and for several of them *the* everyday name. The
+    # phrase it was meant to catch, "energi nusantara", costs one uncertain tag;
+    # missing Bank Mandiri costs a reader the coverage of the fourth-largest
+    # company on the exchange.
+    #
+    # Genericness is a property of a word in isolation. Two of them together
+    # are a name.
+    return not (len(words) == 1 and words[0] in _TOO_COMMON)
 
 
 #: Above this share of upper-case letters, capitalisation has stopped carrying
@@ -276,6 +299,36 @@ def shouting(text: str) -> bool:
         # ordinary.
         return False
     return sum(c.isupper() for c in letters) / len(letters) > SHOUTING_RATIO
+
+
+def effective_aliases(name: str, ticker: str, extra: Iterable[str] = ()) -> list[str]:
+    """Every name that should match this issuer, from all three sources.
+
+    Computed at match time rather than stored, and that is the point. Stored,
+    an issuer imported last month keeps whatever the rules produced last month:
+    adding "Indomie" to the index would reach nobody until somebody remembered
+    to re-synchronise, and a tightening of the derivation rules would leave the
+    aliases it was meant to remove sitting in the table.
+
+    Three sources, in descending order of how much is known about them:
+
+      * `CURATED_ALIASES` - hand-written knowledge that "BCA" means BBCA;
+      * derivation from the registered name - mechanical but conservative;
+      * `extra` - what an administrator typed for this issuer.
+
+    Order does not affect matching, only which string ends up recorded when
+    several would match the same span. Longest wins there, which is handled by
+    the matcher.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for candidate in (*curated_for(ticker), *derive_aliases(name), *extra):
+        alias = normalise(str(candidate))
+        if alias in seen or not is_usable_alias(alias):
+            continue
+        seen.add(alias)
+        out.append(alias)
+    return out
 
 
 @dataclass(frozen=True)

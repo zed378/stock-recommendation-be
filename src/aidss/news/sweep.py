@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from aidss.db.models import Issuer, NewsItem, NewsItemIssuer, NewsSource
 from aidss.domain.types import NewsArticle
 from aidss.news.collector import content_hash
-from aidss.news.tagging import IssuerMatcher, IssuerPattern
+from aidss.news.tagging import IssuerMatcher, IssuerPattern, effective_aliases
 
 logger = logging.getLogger("aidss.news")
 
@@ -78,7 +78,14 @@ def build_matcher(session: Session) -> IssuerMatcher:
                 issuer.id,
                 issuer.ticker,
                 issuer.name,
-                tuple(str(a) for a in (issuer.aliases or [])),
+                # Index plus derivation plus whatever an administrator added,
+                # resolved now rather than read from the row. An issuer
+                # imported before an index entry existed still matches on it.
+                tuple(
+                    effective_aliases(
+                        issuer.name, issuer.ticker, [str(a) for a in (issuer.aliases or [])]
+                    )
+                ),
             )
             for issuer in issuers
         ]
