@@ -47,6 +47,70 @@ class AlertKind(StrEnum):
     #: A move large relative to the asset's own recent volatility.
     UNUSUAL_MOVE = "unusual_move"
 
+    # --- price against stored levels -------------------------------------
+    #: Price came within the approach band of a stored *support* level. The
+    #: mirror of `level_approached`, which only ever fired for resistance -
+    #: so the one side people watch for a bounce was the one side never
+    #: reported.
+    SUPPORT_APPROACHED = "support_approached"
+    #: Closed above a resistance level, or below a support level. Distinct
+    #: from `level_crossed`, which is about a single trade printing through:
+    #: these are stated on the close, which is what people mean by a break.
+    RESISTANCE_BROKEN = "resistance_broken"
+    SUPPORT_BROKEN = "support_broken"
+    #: Broke a level and fell back under it within a few sessions.
+    FALSE_BREAKOUT = "false_breakout"
+
+    # --- volume ----------------------------------------------------------
+    #: Volume at or above twice its own 20-day average.
+    VOLUME_SPIKE = "volume_spike"
+    #: A volume spike while the price has not yet moved much. Reported
+    #: separately because the pairing is the point: busy *before* the move is
+    #: a different observation from busy *because of* it.
+    VOLUME_SPIKE_QUIET = "volume_spike_quiet"
+
+    # --- moving averages and momentum -------------------------------------
+    GOLDEN_CROSS = "golden_cross"
+    DEATH_CROSS = "death_cross"
+    #: The MACD line crossed its signal line. Direction carries which way.
+    MACD_CROSSED = "macd_crossed"
+    RSI_OVERSOLD = "rsi_oversold"
+    RSI_OVERBOUGHT = "rsi_overbought"
+    STOCHASTIC_OVERSOLD = "stochastic_oversold"
+    STOCHASTIC_OVERBOUGHT = "stochastic_overbought"
+
+    # --- session shape ----------------------------------------------------
+    GAP_UP = "gap_up"
+    GAP_DOWN = "gap_down"
+
+    # --- position in the year's range -------------------------------------
+    AT_52_WEEK_HIGH = "at_52_week_high"
+    AT_52_WEEK_LOW = "at_52_week_low"
+
+    # --- volatility --------------------------------------------------------
+    #: Bollinger bands narrower than they have been in months. States the
+    #: compression, not what follows it: a squeeze says the market has stopped
+    #: disagreeing about price, and nothing about which way it resolves.
+    VOLATILITY_SQUEEZE = "volatility_squeeze"
+    #: A session whose range is far wider than this issuer's average.
+    RANGE_EXPANSION = "range_expansion"
+
+    #: Distance to the nearest resistance is at least twice the distance to the
+    #: nearest support. A geometric observation about two stored levels, not a
+    #: suggestion to take the trade.
+    REWARD_TO_RISK_REACHED = "reward_to_risk_reached"
+
+    #: Price fell a set percentage from its peak since a holding was opened.
+    TRAILING_STOP_REACHED = "trailing_stop_reached"
+
+    #: Net foreign buying or selling far above its own recent average.
+    FOREIGN_FLOW_SPIKE = "foreign_flow_spike"
+
+    #: Price at a stored support level while RSI is making a higher low. A
+    #: combination rather than two alerts, because either alone says much less
+    #: than the two together.
+    SUPPORT_WITH_DIVERGENCE = "support_with_divergence"
+
 
 class AlertDirection(StrEnum):
     UP = "up"

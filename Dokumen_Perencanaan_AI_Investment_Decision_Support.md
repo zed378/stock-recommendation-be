@@ -1240,7 +1240,61 @@ Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
 
 ---
 
-## 28. Kendala Nyata Sumber Data Publik
+## 28. Konfigurasi oleh Operator
+
+Bab ini tentang satu pemindahan: keputusan yang dulu ada di environment kini ada di sistem yang sedang berjalan. `AIDSS_*` disetel oleh yang men-deploy, berlaku saat boot, dan butuh restart untuk berubah — tepat untuk URL basis data, keliru untuk keputusan yang diambil seseorang pukul sebelas malam.
+
+### 28.1 Penyedia AI
+
+**Setiap baris menjangkau endpoint-nya sendiri.** Sebelumnya semua baris dibangun dari environment, sehingga beberapa baris hanya berbeda nama model terhadap satu endpoint — itu bukan multi-penyedia, itu satu penyedia yang didaftar beberapa kali, dan rantai fallback tidak punya tempat untuk jatuh.
+
+**Kredensial disimpan terenkripsi, dan itu pertukaran yang dinyatakan terbuka.** Kunci dulu hanya hidup di environment, artinya basis data bisa di-dump tanpa membocorkan satu pun. Kini aplikasi harus bisa mendekripsinya, sehingga dump basis data **ditambah** secret aplikasi cukup untuk memulihkan semua kunci. Itu lebih lemah daripada secret manager dan lebih kuat daripada kolom polos. Harganya adalah penyedia yang bisa dikonfigurasi; mitigasinya biasa: kunci tidak pernah dikembalikan API (hanya petunjuk bertopeng), dan operator yang menginginkan sifat yang lebih kuat tetap bisa mengosongkan kolomnya dan memakai environment.
+
+**Mengganti `AIDSS_JWT_SECRET` membuat kunci tersimpan tidak terbaca, bukan diam-diam salah.** Baris yang tidak bisa didekripsi dilewati dengan peringatan dan terlihat jelas tak terpakai di layar admin — bukan diperlakukan sebagai "tanpa kunci", yang akan tampak seperti penyedia yang tiba-tiba berhenti terautentikasi.
+
+**Tiga maksud pada kolom kunci, dan ketiganya tidak bisa disatukan.** Tidak dikirim berarti pertahankan yang tersimpan; string kosong berarti hapus; sebuah nilai berarti ganti. Admin yang mengubah nama model mengharapkan yang pertama; peralihan ke model lokal tanpa kunci mengharapkan yang kedua.
+
+**PATCH benar-benar parsial.** Semula ia mengganti seluruh baris, sehingga permintaan yang membetulkan nama model diam-diam mengembalikan prioritas ke 100 dan menghapus angka biaya. Rantai fallback yang menyusun ulang dirinya karena seseorang memperbaiki salah ketik lebih buruk daripada tidak ada rantai.
+
+**Tombol uji memanggil model sungguhan dengan prompt sekecil mungkin.** Tanpa itu, URL yang salah atau kunci basi baru ketahuan dua puluh menit kemudian lewat analisis yang gagal, dengan sebabnya terkubur di log worker.
+
+### 28.2 Pendaftaran
+
+**Gerbangnya diperiksa sebelum email dicari.** 409 untuk alamat yang sudah ada dan 403 untuk yang baru akan membocorkan daftar pengguna lewat pintu yang justru sedang ditutup.
+
+**Akun pertama selalu diizinkan.** Operator yang menutup pendaftaran lalu kehilangan admin tunggalnya tidak akan punya jalan masuk selain menyunting basis data, dan sakelar yang bisa membuat platform tidak bisa dipakai adalah sakelar yang tidak pantas ditawarkan.
+
+**Admin tetap bisa membuat akun saat pintu tertutup.** Tanpa itu, satu-satunya cara menerima orang baru adalah membuka pintu untuk semua orang. Rute ini juga satu-satunya yang bisa mencetak admin, karena itu ia dijaga dan diaudit.
+
+### 28.3 Jadwal sapuan berita
+
+**Kosong berarti mati, dan itu bawaannya.** Membaca feed milik orang lain pada pewaktu yang tidak diminta siapa pun bukan hal yang pantas dilakukan secara default.
+
+**Cron divalidasi saat disetel, bukan ditemukan penjadwal pukul tiga pagi** — tempat kegagalannya berupa sapuan yang diam-diam tidak pernah berjalan.
+
+**Cron dibaca dalam waktu bursa (WIB).** Konsekuensinya wajar tapi mengejutkan: `0 */2 * * *` menyala pada jam genap Jakarta, yang berarti jam ganjil UTC.
+
+**Mengubah ekspresi menambatkan ulang waktu jatuh temponya.** Ekspresi baru tidak boleh mewarisi waktu yang dihitung dari yang lama. Dimatikan, barisnya dinonaktifkan alih-alih dihapus, sehingga menyalakannya kembali tidak kehilangan riwayat jadwalnya.
+
+---
+
+## 29. Membaca Daftar Panjang
+
+**Daftar bertumbuh tanpa batas — baris audit, job, emiten — jadi "seratus pertama, diam-diam" adalah layar yang berhenti mengatakan kebenaran pada baris keseratus satu.** Daftar telanjang berisi `limit` bukan paginasi: pemanggil tidak bisa membedakan halaman penuh dari akhir data, tidak bisa meminta berikutnya, dan tidak bisa menunjukkan ada berapa.
+
+**`total` dihitung sebelum jendela, bukan sesudah.** Hanya itu cara pembaca tahu ada lebih banyak daripada yang bisa ia lihat. Pengurutan dilepas saat menghitung: menghitung subquery terurut membuat PostgreSQL mengurutkan baris yang hanya akan dijumlah.
+
+**Ukuran halaman ditawarkan, tidak dipatok.** "Tampilkan 200" adalah keinginan yang wajar saat mencari satu baris, dan ukuran tetap mengubahnya menjadi sepuluh klik. Mengubah ukuran mengembalikan ke awal — mempertahankan offset akan mendaratkan pembaca di tengah daftar berukuran lain, pada baris yang belum pernah ia lihat.
+
+**Mengubah filter mengembalikan ke halaman pertama,** karena offset yang dibawa melintasi pencarian baru menunjuk baris yang tidak ditanyakan siapa pun.
+
+**Filter subsektor menggabungkan pilihan dengan OR.** Sebuah emiten hanya punya satu subsektor, jadi AND akan memilih nol setiap kali lebih dari satu kotak dicentang — dan mencentang lebih dari satu justru cara normal memakai multi-select.
+
+**Pilihan subsektor dibaca dari datanya, bukan dari daftar tetap.** IDX merevisi klasifikasinya, dan daftar tetap akan terus menawarkan kategori yang tidak dihuni siapa pun sambil menyembunyikan kategori tempat mereka pindah.
+
+---
+
+## 30. Kendala Nyata Sumber Data Publik
 
 Bagian ini menetapkan apa yang benar-benar tersedia secara gratis dan publik untuk pasar Indonesia. Semuanya ditetapkan dengan pengujian terhadap endpoint sungguhan, bukan dari dokumentasi, dan sebagian besar bertentangan dengan asumsi yang wajar.
 
@@ -1256,4 +1310,4 @@ Bagian ini menetapkan apa yang benar-benar tersedia secara gratis dan publik unt
 
 **Retrieval berjalan tanpa model embedding.** Banyak gateway swakelola hanya melayani model chat dan menjawab `/embeddings` dengan 404. Pencarian token eksak — kode emiten, nama metrik, rasio — tidak terpengaruh; yang hilang adalah pencocokan parafrasa.
 
-**Gateway AI swakelola punya batas waktunya sendiri.** Diukur pada satu penyebaran: prompt seukuran analyzer (1.170 token masuk, 600 token keluar) dijawab HTTP 504 pada detik ke-90, sementara permintaan 10 token dijawab dalam 16 detik. Menaikkan timeout klien tidak bisa menolong — batasnya ada di sisi gateway. Memecah pekerjaan menjadi job-job yang lebih pendek (§25.2) mengurangi paparannya; menaikkan batas itu sendiri adalah pekerjaan operator gateway.
+**Gateway AI swakelola punya batas waktunya sendiri, dan batas itu bergerak.** Pada satu pengukuran, prompt seukuran analyzer (1.170 token masuk, 600 token keluar) dijawab HTTP 504 pada detik ke-90 sementara permintaan 10 token butuh 16 detik; pada pengukuran berikutnya gateway yang sama menjawab dalam 167 milidetik. Karena itu timeout adalah kolom per penyedia, bukan konstanta: menaikkan timeout klien tidak bisa menembus batas di sisi gateway, tetapi menyamakan semua penyedia pada satu angka membuat yang cepat menunggu selama yang lambat. Memecah pekerjaan menjadi job-job yang lebih pendek (§25.2) mengurangi paparannya; menaikkan batas gateway itu sendiri adalah pekerjaan operatornya.

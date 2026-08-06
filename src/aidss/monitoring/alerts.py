@@ -32,6 +32,24 @@ from sqlalchemy.orm import Session
 
 from aidss.db.models import Alert, AlertDirection, AlertKind
 from aidss.market.idx_rules import auto_reject_band
+from aidss.monitoring.signals import (
+    EXTREME_BAND,
+    FALSE_BREAKOUT_SESSIONS,
+    FAST_MA,
+    GAP_THRESHOLD,
+    MIN_REWARD_TO_RISK,
+    QUIET_MOVE_LIMIT,
+    RANGE_EXPANSION_RATIO,
+    RSI_OVERBOUGHT,
+    RSI_OVERSOLD,
+    SLOW_MA,
+    SQUEEZE_PERCENTILE,
+    STOCH_OVERBOUGHT,
+    STOCH_OVERSOLD,
+    VOLUME_SPIKE_RATIO,
+    TechnicalSignals,
+    reward_to_risk,
+)
 
 #: How close to a level counts as "approached". Relative, so a Rp 100 stock and
 #: a Rp 10,000 one are judged the same way.
@@ -161,6 +179,26 @@ def evaluate(
                     context={"level_type": "support", "level": str(level)},
                 )
             )
+        elif level < price and level > 0:
+            # The mirror of the resistance branch above, which was the only one
+            # that existed - so approaching resistance was reported and
+            # approaching support, the side people watch for a bounce, was not.
+            distance = (price - level) / level
+            if 0 <= distance <= APPROACH_BAND:
+                candidates.append(
+                    AlertCandidate(
+                        kind=AlertKind.SUPPORT_APPROACHED,
+                        direction=AlertDirection.DOWN,
+                        message=(
+                            f"{ticker} is within {distance * 100:.1f}% of a stored support "
+                            f"level of {level:,.2f}."
+                        ),
+                        dedup_key=f"near-support:{asset_id}:{level}:{session_day}",
+                        observed_price=price,
+                        reference_price=level,
+                        context={"level_type": "support", "level": str(level)},
+                    )
+                )
 
     # --- the level a recommendation named as a stop ----------------------
     #
@@ -238,6 +276,409 @@ def evaluate(
             )
 
     return candidates
+
+
+
+def evaluate_signals(
+    *,
+    asset_id: uuid.UUID,
+    ticker: str,
+    price: Decimal,
+    signals: TechnicalSignals,
+    support_levels: list[Decimal] | None = None,
+    now: datetime | None = None,
+) -> list[AlertCandidate]:
+    """Conditions read from the stored daily bars rather than from the quote.
+
+    A second function rather than more parameters on `evaluate`, because these
+    share an input and a cadence: they all come from `TechnicalSignals`, and
+    they are all statements about a *session* - so they dedupe per session
+    while the quote rules dedupe per level or per stance.
+
+    Every rule is stated on two points in time where it can be. "RSI is below
+    30" is true on the day it crosses and every day after; "RSI crossed below
+    30" happens once. The second is an event, and only events are worth an
+    interruption.
+    """
+    now = now or datetime.now(UTC)
+    day = signals.as_of.isoformat() if signals.as_of else _session_key(now)
+    out: list[AlertCandidate] = []
+
+    def add(
+        kind: AlertKind,
+        direction: AlertDirection,
+        message: str,
+        key: str,
+        *,
+        reference: Decimal | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        out.append(
+            AlertCandidate(
+                kind=kind,
+                direction=direction,
+                message=message,
+                dedup_key=f"{key}:{asset_id}:{day}",
+                observed_price=price,
+                reference_price=reference,
+                context=context or {},
+            )
+        )
+
+    # --- volume ------------------------------------------------------------
+    ratio = signals.volume_ratio
+    if ratio is not None and ratio >= VOLUME_SPIKE_RATIO:
+        move = (
+            (price - signals.previous_close) / signals.previous_close
+            if signals.previous_close
+            else None
+        )
+        add(
+            AlertKind.VOLUME_SPIKE,
+            AlertDirection.NONE,
+            f"{ticker} traded {ratio:.1f}x its 20-day average volume this session.",
+            "volume-spike",
+            context={"volume_ratio": str(ratio.quantize(Decimal("0.01")))},
+        )
+        # The pairing, as its own observation. Busy before the price has run is
+        # a different thing to look at from busy because it already has, and a
+        # reader filtering for the first cannot get it out of the first alert.
+        if move is not None and abs(move) < QUIET_MOVE_LIMIT:
+            add(
+                AlertKind.VOLUME_SPIKE_QUIET,
+                AlertDirection.NONE,
+                (
+                    f"{ticker} traded {ratio:.1f}x its average volume while the price "
+                    f"moved {move * 100:+.1f}% - the volume is ahead of the move so far."
+                ),
+                "volume-spike-quiet",
+                reference=signals.previous_close,
+                context={
+                    "volume_ratio": str(ratio.quantize(Decimal("0.01"))),
+                    "move": str(move.quantize(Decimal("0.0001"))),
+                },
+            )
+
+    # --- moving average crossings -------------------------------------------
+    crossed_up = _crossed_above(
+        signals.previous_fast_ma, signals.previous_slow_ma, signals.fast_ma, signals.slow_ma
+    )
+    crossed_down = _crossed_above(
+        signals.previous_slow_ma, signals.previous_fast_ma, signals.slow_ma, signals.fast_ma
+    )
+    if crossed_up:
+        add(
+            AlertKind.GOLDEN_CROSS,
+            AlertDirection.UP,
+            f"{ticker}: the {FAST_MA}-day average crossed above the {SLOW_MA}-day average.",
+            "golden-cross",
+            reference=signals.slow_ma,
+            context={"fast": str(signals.fast_ma), "slow": str(signals.slow_ma)},
+        )
+    elif crossed_down:
+        add(
+            AlertKind.DEATH_CROSS,
+            AlertDirection.DOWN,
+            f"{ticker}: the {FAST_MA}-day average crossed below the {SLOW_MA}-day average.",
+            "death-cross",
+            reference=signals.slow_ma,
+            context={"fast": str(signals.fast_ma), "slow": str(signals.slow_ma)},
+        )
+
+    # --- MACD ---------------------------------------------------------------
+    macd_up = _crossed_above(
+        signals.previous_macd, signals.previous_macd_signal, signals.macd, signals.macd_signal
+    )
+    macd_down = _crossed_above(
+        signals.previous_macd_signal, signals.previous_macd, signals.macd_signal, signals.macd
+    )
+    if macd_up or macd_down:
+        add(
+            AlertKind.MACD_CROSSED,
+            AlertDirection.UP if macd_up else AlertDirection.DOWN,
+            (
+                f"{ticker}: MACD crossed {'above' if macd_up else 'below'} its signal line."
+            ),
+            f"macd-{'up' if macd_up else 'down'}",
+            context={"macd": str(signals.macd), "signal": str(signals.macd_signal)},
+        )
+
+    # --- momentum bands -----------------------------------------------------
+    #
+    # Stated on the crossing, not on the state. "RSI is below 30" stays true
+    # for as long as the condition lasts, so a rule written that way fires
+    # every session of a downtrend and stops being read.
+    for kind, direction, current, previous, threshold, name, below in (
+        (
+            AlertKind.RSI_OVERSOLD, AlertDirection.DOWN,
+            signals.rsi, signals.previous_rsi, RSI_OVERSOLD, "RSI", True,
+        ),
+        (
+            AlertKind.RSI_OVERBOUGHT, AlertDirection.UP,
+            signals.rsi, signals.previous_rsi, RSI_OVERBOUGHT, "RSI", False,
+        ),
+        (
+            AlertKind.STOCHASTIC_OVERSOLD, AlertDirection.DOWN,
+            signals.stochastic_k, signals.previous_stochastic_k, STOCH_OVERSOLD,
+            "Stochastic %K", True,
+        ),
+        (
+            AlertKind.STOCHASTIC_OVERBOUGHT, AlertDirection.UP,
+            signals.stochastic_k, signals.previous_stochastic_k, STOCH_OVERBOUGHT,
+            "Stochastic %K", False,
+        ),
+    ):
+        if current is None or previous is None:
+            continue
+        entered = (
+            previous >= threshold > current if below else previous <= threshold < current
+        )
+        if entered:
+            add(
+                kind,
+                direction,
+                (
+                    f"{ticker}: {name} fell to {current:.1f}, below the conventional "
+                    f"{threshold:.0f} line."
+                    if below
+                    else (
+                        f"{ticker}: {name} rose to {current:.1f}, above the conventional "
+                        f"{threshold:.0f} line."
+                    )
+                ),
+                kind.value.replace("_", "-"),
+                context={"value": str(current.quantize(Decimal("0.01")))},
+            )
+
+    # --- gaps ---------------------------------------------------------------
+    if signals.session_open is not None and signals.previous_close:
+        gap = (signals.session_open - signals.previous_close) / signals.previous_close
+        if abs(gap) >= GAP_THRESHOLD:
+            up = gap > 0
+            add(
+                AlertKind.GAP_UP if up else AlertKind.GAP_DOWN,
+                AlertDirection.UP if up else AlertDirection.DOWN,
+                (
+                    f"{ticker} opened {gap * 100:+.1f}% away from the previous close "
+                    f"({signals.previous_close:,.2f})."
+                ),
+                "gap-up" if up else "gap-down",
+                reference=signals.previous_close,
+                context={"gap": str(gap.quantize(Decimal("0.0001")))},
+            )
+
+    # --- a break that did not hold ------------------------------------------
+    if signals.failed_breakout_level is not None:
+        level = signals.failed_breakout_level
+        add(
+            AlertKind.FALSE_BREAKOUT,
+            AlertDirection.DOWN,
+            (
+                f"{ticker} traded above {level:,.2f} within the last "
+                f"{FALSE_BREAKOUT_SESSIONS} sessions and has closed back below it."
+            ),
+            "false-breakout",
+            reference=level,
+            context={"level": str(level)},
+        )
+
+    # --- position in the year's range ----------------------------------------
+    for level, kind, direction, word in (
+        (signals.year_high, AlertKind.AT_52_WEEK_HIGH, AlertDirection.UP, "high"),
+        (signals.year_low, AlertKind.AT_52_WEEK_LOW, AlertDirection.DOWN, "low"),
+    ):
+        if level is None or level <= 0:
+            continue
+        distance = abs(price - level) / level
+        if distance <= EXTREME_BAND:
+            add(
+                kind,
+                direction,
+                (
+                    f"{ticker} is within {distance * 100:.1f}% of its 52-week {word} "
+                    f"of {level:,.2f}."
+                ),
+                f"52w-{word}",
+                reference=level,
+                context={"level": str(level)},
+            )
+
+    # --- volatility ----------------------------------------------------------
+    #
+    # The squeeze states the compression and stops there. "Bands are narrow" is
+    # an observation; "a big move is coming" is a forecast, and the direction of
+    # the resolution is precisely what a squeeze does not tell anybody.
+    if signals.bandwidth_percentile is not None and (
+        signals.bandwidth_percentile <= SQUEEZE_PERCENTILE
+    ):
+        add(
+            AlertKind.VOLATILITY_SQUEEZE,
+            AlertDirection.NONE,
+            (
+                f"{ticker}: Bollinger bands are narrower than on "
+                f"{(1 - signals.bandwidth_percentile) * 100:.0f}% of recent sessions."
+            ),
+            "squeeze",
+            context={
+                "bandwidth": str(signals.bandwidth),
+                "percentile": str(signals.bandwidth_percentile),
+            },
+        )
+
+    if signals.range_ratio is not None and signals.range_ratio >= RANGE_EXPANSION_RATIO:
+        add(
+            AlertKind.RANGE_EXPANSION,
+            AlertDirection.NONE,
+            (
+                f"{ticker} traded a range {signals.range_ratio:.1f}x its average true "
+                f"range this session."
+            ),
+            "range-expansion",
+            context={"range_ratio": str(signals.range_ratio.quantize(Decimal("0.01")))},
+        )
+
+    # --- support with a higher low on RSI ------------------------------------
+    #
+    # One alert rather than two, because either half alone says much less than
+    # the pair. "Near support" is a location; "RSI made a higher low" is a
+    # measurement; together they are the setup people actually watch for.
+    if signals.bullish_divergence:
+        near = _nearest_support_within_band(price, support_levels)
+        if near is not None:
+            add(
+                AlertKind.SUPPORT_WITH_DIVERGENCE,
+                AlertDirection.NONE,
+                (
+                    f"{ticker} is near a stored support level of {near:,.2f} while RSI "
+                    f"has made a higher low than its previous one."
+                ),
+                "support-divergence",
+                reference=near,
+                context={"level": str(near), "divergence": "bullish"},
+            )
+
+    return out
+
+
+def evaluate_geometry(
+    *,
+    asset_id: uuid.UUID,
+    ticker: str,
+    price: Decimal,
+    support_levels: list[Decimal] | None,
+    resistance_levels: list[Decimal] | None,
+    now: datetime | None = None,
+) -> list[AlertCandidate]:
+    """Where price sits between the nearest stored levels.
+
+    Its own function because it needs both sides, which none of the other rules
+    do. Stated as a measurement - "twice as far up as down" - and not as a
+    suggestion to take the trade: the ratio is arithmetic on two levels, and it
+    knows nothing about whether either will hold.
+    """
+    now = now or datetime.now(UTC)
+    computed = reward_to_risk(price, support_levels, resistance_levels)
+    if computed is None:
+        return []
+
+    ratio, support, resistance = computed
+    if ratio < MIN_REWARD_TO_RISK:
+        return []
+
+    return [
+        AlertCandidate(
+            kind=AlertKind.REWARD_TO_RISK_REACHED,
+            direction=AlertDirection.NONE,
+            message=(
+                f"{ticker} at {price:,.2f} sits {ratio:.1f}x further from the nearest "
+                f"stored resistance ({resistance:,.2f}) than from the nearest stored "
+                f"support ({support:,.2f})."
+            ),
+            dedup_key=f"reward-risk:{asset_id}:{support}:{resistance}:{_session_key(now)}",
+            observed_price=price,
+            reference_price=support,
+            context={
+                "ratio": str(ratio.quantize(Decimal("0.01"))),
+                "support": str(support),
+                "resistance": str(resistance),
+            },
+        )
+    ]
+
+
+def evaluate_trailing_stop(
+    *,
+    asset_id: uuid.UUID,
+    ticker: str,
+    price: Decimal,
+    peak_since_entry: Decimal | None,
+    drop_fraction: Decimal,
+    now: datetime | None = None,
+) -> list[AlertCandidate]:
+    """Price fell a set distance from its peak since a holding was opened.
+
+    Per user rather than per asset, and that is the whole reason it is separate:
+    the peak is measured from *their* entry, so two people holding the same
+    issuer since different dates are watching different numbers.
+
+    Named "reached", like the suggested stop: nothing is triggered, because
+    nothing here can act.
+    """
+    now = now or datetime.now(UTC)
+    if peak_since_entry is None or peak_since_entry <= 0 or drop_fraction <= 0:
+        return []
+
+    drop = (peak_since_entry - price) / peak_since_entry
+    if drop < drop_fraction:
+        return []
+
+    return [
+        AlertCandidate(
+            kind=AlertKind.TRAILING_STOP_REACHED,
+            direction=AlertDirection.DOWN,
+            message=(
+                f"{ticker} is {drop * 100:.1f}% below its peak of {peak_since_entry:,.2f} "
+                f"since you recorded the holding."
+            ),
+            dedup_key=f"trailing:{asset_id}:{peak_since_entry}:{_session_key(now)}",
+            observed_price=price,
+            reference_price=peak_since_entry,
+            context={
+                "peak": str(peak_since_entry),
+                "drop": str(drop.quantize(Decimal("0.0001"))),
+                "threshold": str(drop_fraction),
+            },
+        )
+    ]
+
+
+def _crossed_above(
+    previous_a: Decimal | None,
+    previous_b: Decimal | None,
+    current_a: Decimal | None,
+    current_b: Decimal | None,
+) -> bool:
+    """Whether A went from at-or-below B to above it.
+
+    All four values are required. A crossing needs two points in time, and
+    treating a missing previous value as "was below" would report a cross on
+    the first session there was enough history to compute either line - which
+    is a property of the data starting, not of the market.
+    """
+    if None in (previous_a, previous_b, current_a, current_b):
+        return False
+    return previous_a <= previous_b and current_a > current_b  # type: ignore[operator]
+
+
+def _nearest_support_within_band(
+    price: Decimal, support_levels: list[Decimal] | None
+) -> Decimal | None:
+    for level in sorted(support_levels or [], reverse=True):
+        if level <= 0 or level > price:
+            continue
+        if (price - level) / level <= APPROACH_BAND:
+            return level
+    return None
 
 
 def record(

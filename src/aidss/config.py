@@ -198,6 +198,11 @@ class Settings(BaseSettings):
     #: roughly fifteen minutes, so polling faster asks the same stale number
     #: more often. Five minutes keeps alerts responsive without pretending to a
     #: freshness nothing here has. Set to 0 to stop monitoring entirely.
+    #: How far below its peak a holding must fall before it is reported.
+    #: A platform-wide default rather than a per-user field, for now: the
+    #: alert states the distance it used, so a reader can tell what they were
+    #: told about even before it is theirs to set.
+    trailing_stop_drop: float = 0.10
     monitoring_interval_seconds: int = 300
 
     #: Ceiling on how many assets one scheduler tick may queue for refresh.
