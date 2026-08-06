@@ -776,7 +776,6 @@ def update_platform_settings(
                 detail=f"Not a usable cron expression: {exc}",
             ) from exc
 
-    before = all_settings(session)
     cron = None if payload.news_sweep_cron is None else payload.news_sweep_cron.strip()
     for key, value in ((REGISTRATION_OPEN, payload.registration_open), (NEWS_SWEEP_CRON, cron)):
         if value is not None:
@@ -789,7 +788,6 @@ def update_platform_settings(
         action="platform_settings.update",
         entity="platform_settings",
         entity_id="-",
-        before=before,
         after=after,
     )
     return PlatformSettingsResponse(**after)
@@ -837,7 +835,6 @@ def create_user(
         action="user.create",
         entity="users",
         entity_id=str(user.id),
-        before=None,
         after={"email": user.email, "role": user.role.value},
     )
     return _to_user_response(user)
@@ -883,7 +880,6 @@ def create_ai_provider(
         action="ai_provider.create",
         entity="ai_providers",
         entity_id=str(row.id),
-        before=None,
         after=_provider_audit(row),
     )
     return row
@@ -900,7 +896,6 @@ def update_ai_provider(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
     _check_adapter(payload.adapter_name)
-    before = _provider_audit(row)
     _apply_provider(row, payload)
     session.flush()
     _audit(
@@ -909,7 +904,6 @@ def update_ai_provider(
         action="ai_provider.update",
         entity="ai_providers",
         entity_id=str(row.id),
-        before=before,
         after=_provider_audit(row),
     )
     return row
@@ -930,7 +924,6 @@ def delete_ai_provider(
         action="ai_provider.delete",
         entity="ai_providers",
         entity_id=str(row.id),
-        before=_provider_audit(row),
         after=None,
     )
     session.delete(row)

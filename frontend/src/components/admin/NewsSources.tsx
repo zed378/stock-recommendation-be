@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
+import { Pager, type PageState } from "@/components/Pager";
 import {
   Button,
   Card,
@@ -97,15 +98,18 @@ export function NewsSourcesPanel() {
   const [tested, setTested] = useState<{ source: Source; result: TestResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+  const [page, setPage] = useState<PageState>({ limit: 50, offset: 0 });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
   const sources = useQuery({
-    queryKey: ["news-sources"],
+    queryKey: ["news-sources", page],
     queryFn: async () => {
-      const { data, error: failed } = await api.GET("/admin/news-sources");
+      const { data, error: failed } = await api.GET("/admin/news-sources", {
+        params: { query: { limit: page.limit, offset: page.offset } },
+      });
       if (failed) throw new Error(errorMessage(failed, t("common.error")));
-      return data ?? [];
+      return data ?? { items: [], total: 0, limit: page.limit, offset: page.offset };
     },
   });
 
@@ -226,7 +230,7 @@ export function NewsSourcesPanel() {
   });
 
   const visible = useMemo(
-    () => (sources.data ?? []).filter((source) => matches(source, query, filter)),
+    () => (sources.data?.items ?? []).filter((source) => matches(source, query, filter)),
     [sources.data, query, filter],
   );
 
@@ -248,7 +252,7 @@ export function NewsSourcesPanel() {
             size="sm"
             variant="ghost"
             onClick={() => sweep.mutate()}
-            disabled={sweep.isPending || (sources.data?.length ?? 0) === 0}
+            disabled={sweep.isPending || (sources.data?.items.length ?? 0) === 0}
             title={t("admin.news.sweepHint")}
           >
             {sweep.isPending ? t("admin.news.sweeping") : t("admin.news.sweep")}
@@ -268,7 +272,7 @@ export function NewsSourcesPanel() {
       {/* Filtered here rather than on the server. The whole list arrives in one
           request and an admin has tens of these, not thousands - a round trip
           per keystroke would make it slower, not faster. */}
-      {(sources.data?.length ?? 0) > 0 && (
+      {(sources.data?.items.length ?? 0) > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <input
             className={`${inputClass} min-w-48 flex-1`}
@@ -280,7 +284,7 @@ export function NewsSourcesPanel() {
           />
           <div role="group" aria-label={t("admin.news.filter")} className="flex gap-1">
             {FILTERS.map((option) => {
-              const count = (sources.data ?? []).filter((source) =>
+              const count = (sources.data?.items ?? []).filter((source) =>
                 matches(source, "", option.id),
               ).length;
               return (
@@ -310,7 +314,7 @@ export function NewsSourcesPanel() {
           message={(sources.error as Error).message}
           onRetry={() => sources.refetch()}
         />
-      ) : !sources.data?.length ? (
+      ) : !sources.data?.items.length ? (
         <Empty
           message={t("admin.news.empty")}
           hint={t("admin.news.emptyHint")}
@@ -403,6 +407,13 @@ export function NewsSourcesPanel() {
           ))}
         </div>
       )}
+
+      <Pager
+        total={sources.data?.total ?? 0}
+        shown={visible.length}
+        page={page}
+        onChange={setPage}
+      />
 
       <Caveat>{t("admin.news.caveat")}</Caveat>
 

@@ -132,7 +132,13 @@ export function StockPicks() {
               <Empty message={t("picks.empty")} hint={t("picks.emptyHint")} />
             </Card>
           ) : (
-            <div className="space-y-3">
+            /* Two columns on a wide screen, one below. A screener is read by
+               scanning, and a single column of cards on a 1600px display puts
+               four candidates on screen where eight fit - so the comparison the
+               list exists for happens by scrolling and remembering. `items-start`
+               so a card with six met conditions does not stretch its neighbour
+               with two. */
+            <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
               {picks.map((pick) => (
                 <Card key={pick.ticker}>
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">

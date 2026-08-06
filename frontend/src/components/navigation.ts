@@ -59,6 +59,7 @@ const ADMINISTRATION: Group = {
     { to: "/admin/issuers", label: "admin.tab.issuers" },
     { to: "/admin/queue", label: "admin.tab.queue" },
     { to: "/admin/providers", label: "admin.tab.providers" },
+    { to: "/admin/settings", label: "admin.tab.settings" },
     { to: "/admin/budget", label: "admin.tab.budget" },
     { to: "/admin/audit", label: "admin.tab.audit" },
   ],

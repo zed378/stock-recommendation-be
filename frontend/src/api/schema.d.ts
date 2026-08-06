@@ -101,7 +101,20 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register */
+        /**
+         * Register
+         * @description Create an account, if the operator currently allows it.
+         *
+         *     The gate is checked before anything else and before the email is looked
+         *     up, so a closed instance cannot be used to find out which addresses are
+         *     registered - a 409 for an existing email and a 403 for a new one would
+         *     enumerate the user list through a door that is supposed to be shut.
+         *
+         *     The very first account is always allowed through. An operator who closes
+         *     registration and then loses their only admin would otherwise have no way
+         *     back in short of editing the database, and a switch that can brick the
+         *     platform is a switch nobody should be offered.
+         */
         post: operations["register_auth_register_post"];
         delete?: never;
         options?: never;
@@ -1389,7 +1402,20 @@ export interface paths {
         /** List Users */
         get: operations["list_users_admin_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User
+         * @description Create an account on somebody's behalf.
+         *
+         *     Exists because registration can be closed, and an operator who closed it
+         *     still needs to onboard people. Without this the only ways in are reopening
+         *     the door for everyone or editing the database.
+         *
+         *     Unlike self-registration this may set a role, which makes it the one route
+         *     that can mint an admin. It is guarded by `MANAGE_PROVIDERS` - so only an
+         *     existing admin can - and audited, because "who made this account an admin"
+         *     is a question that gets asked exactly once, urgently.
+         */
+        post: operations["create_user_admin_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1673,15 +1699,240 @@ export interface paths {
         patch: operations["update_issuer_admin_issuers__issuer_id__patch"];
         trace?: never;
     };
+    "/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Platform Settings */
+        get: operations["read_platform_settings_admin_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Platform Settings
+         * @description Change operator settings. Only the keys sent are touched.
+         *
+         *     Both are audited. Closing registration and changing when the platform reads
+         *     the news are the kind of decisions someone asks about a month later, and an
+         *     audit row is the only answer that does not depend on memory.
+         */
+        patch: operations["update_platform_settings_admin_settings_patch"];
+        trace?: never;
+    };
+    "/admin/ai-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ai Providers
+         * @description Every configured provider, in fallback order.
+         *
+         *     Not paginated, unlike the other admin lists: the point of this screen is
+         *     seeing the chain, and a chain split across pages is not a chain anybody can
+         *     read.
+         */
+        get: operations["list_ai_providers_admin_ai_providers_get"];
+        put?: never;
+        /** Create Ai Provider */
+        post: operations["create_ai_provider_admin_ai_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/ai-providers/{provider_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Ai Provider */
+        delete: operations["delete_ai_provider_admin_ai_providers__provider_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Ai Provider */
+        patch: operations["update_ai_provider_admin_ai_providers__provider_id__patch"];
+        trace?: never;
+    };
+    "/admin/ai-providers/{provider_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Ai Provider
+         * @description Ask this provider one trivial question, now.
+         *
+         *     Without it, a wrong URL or a stale key is discovered by an analysis failing
+         *     twenty minutes later, with the reason buried in a worker log. The prompt is
+         *     deliberately tiny: this establishes reachability and authentication, not
+         *     that the model is any good.
+         */
+        post: operations["test_ai_provider_admin_ai_providers__provider_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AIProviderResponse
+         * @description A configured provider, without its credential.
+         *
+         *     `api_key_hint` is what the interface shows: enough to recognise which key
+         *     is stored, never enough to use it. The value itself is not returned by any
+         *     endpoint - not to admins, not on the row that was just written.
+         */
+        AIProviderResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Adapter Name */
+            adapter_name: string;
+            /** Base Url */
+            base_url?: string | null;
+            /** Default Model */
+            default_model?: string | null;
+            /** Role */
+            role: string;
+            /** Priority */
+            priority: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Self Hosted */
+            self_hosted: boolean;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Api Key Hint */
+            api_key_hint?: string | null;
+            /** Input Cost Per 1K */
+            input_cost_per_1k?: string | null;
+            /** Output Cost Per 1K */
+            output_cost_per_1k?: string | null;
+            /** Last Status */
+            last_status?: string | null;
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Checked At */
+            last_checked_at?: string | null;
+        };
+        /**
+         * AIProviderTestResponse
+         * @description What the provider answered, just now.
+         */
+        AIProviderTestResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Reply */
+            reply?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * AIProviderWrite
+         * @description Creating or updating a provider.
+         *
+         *     `api_key` is write-only and optional on update: omitting it keeps the key
+         *     already stored, which is what an admin editing the model name expects.
+         *     Sending an empty string clears it, which is what a switch to a local model
+         *     needing no key expects. Those are different intents and are kept apart.
+         */
+        AIProviderWrite: {
+            /** Name */
+            name: string;
+            /**
+             * Adapter Name
+             * @default openai_compatible
+             */
+            adapter_name: string;
+            /** Base Url */
+            base_url?: string | null;
+            /** Default Model */
+            default_model?: string | null;
+            /**
+             * Role
+             * @default general
+             */
+            role: string;
+            /**
+             * Priority
+             * @default 100
+             */
+            priority: number;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Self Hosted
+             * @default false
+             */
+            self_hosted: boolean;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Input Cost Per 1K */
+            input_cost_per_1k?: number | string | null;
+            /** Output Cost Per 1K */
+            output_cost_per_1k?: number | string | null;
+        };
+        /**
          * ActorType
          * @enum {string}
          */
         ActorType: "user" | "ai" | "system";
+        /**
+         * AdminUserCreate
+         * @description An account created by an administrator rather than by its owner.
+         *
+         *     A password is required rather than generated: a generated one has to be
+         *     transmitted somehow, and every convenient channel for that is a worse place
+         *     for a credential than wherever the admin was going to type it anyway.
+         */
+        AdminUserCreate: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /** Full Name */
+            full_name?: string | null;
+            /** @default investor */
+            role: components["schemas"]["UserRole"];
+        };
         /** AdminUserResponse */
         AdminUserResponse: {
             /**
@@ -2526,6 +2777,86 @@ export interface components {
          * @enum {string}
          */
         OutputLanguage: "id" | "en";
+        /** Page[AdminUserResponse] */
+        Page_AdminUserResponse_: {
+            /** Items */
+            items: components["schemas"]["AdminUserResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[AuditLogResponse] */
+        Page_AuditLogResponse_: {
+            /** Items */
+            items: components["schemas"]["AuditLogResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[IssuerResponse] */
+        Page_IssuerResponse_: {
+            /** Items */
+            items: components["schemas"]["IssuerResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[JobResponse] */
+        Page_JobResponse_: {
+            /** Items */
+            items: components["schemas"]["JobResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[NewsSourceResponse] */
+        Page_NewsSourceResponse_: {
+            /** Items */
+            items: components["schemas"]["NewsSourceResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * PlatformSettingsResponse
+         * @description Operator choices that apply without a redeploy.
+         */
+        PlatformSettingsResponse: {
+            /** Registration Open */
+            registration_open: boolean;
+            /** News Sweep Cron */
+            news_sweep_cron: string;
+        };
+        /**
+         * PlatformSettingsUpdate
+         * @description Only the keys sent are changed; omitted keys keep their value.
+         *
+         *     `None` rather than a default, so "leave this alone" and "set it to false"
+         *     are different requests. A partial update that silently reset the keys it
+         *     did not mention would close registration every time somebody changed the
+         *     news schedule.
+         */
+        PlatformSettingsUpdate: {
+            /** Registration Open */
+            registration_open?: boolean | null;
+            /** News Sweep Cron */
+            news_sweep_cron?: string | null;
+        };
         /** PortfolioAnalysisResponse */
         PortfolioAnalysisResponse: {
             /** Portfolio */
@@ -4638,6 +4969,7 @@ export interface operations {
                 entity?: string | null;
                 actor_type?: components["schemas"]["ActorType"] | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -4651,7 +4983,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuditLogResponse"][];
+                    "application/json": components["schemas"]["Page_AuditLogResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -4735,6 +5067,7 @@ export interface operations {
                 status?: components["schemas"]["JobStatus"] | null;
                 job_type?: string | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -4748,7 +5081,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobResponse"][];
+                    "application/json": components["schemas"]["Page_JobResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -5102,6 +5435,7 @@ export interface operations {
                 q?: string | null;
                 role?: components["schemas"]["UserRole"] | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -5115,7 +5449,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUserResponse"][];
+                    "application/json": components["schemas"]["Page_AdminUserResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_user_admin_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5296,7 +5663,10 @@ export interface operations {
     };
     list_news_sources_admin_news_sources_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5309,7 +5679,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NewsSourceResponse"][];
+                    "application/json": components["schemas"]["Page_NewsSourceResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5512,6 +5891,7 @@ export interface operations {
                 search?: string | null;
                 listed_only?: boolean;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -5525,7 +5905,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssuerResponse"][];
+                    "application/json": components["schemas"]["Page_IssuerResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -5561,6 +5941,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssuerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_platform_settings_admin_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_platform_settings_admin_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ai_providers_admin_ai_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProviderResponse"][];
+                };
+            };
+        };
+    };
+    create_ai_provider_admin_ai_providers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIProviderWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProviderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_ai_provider_admin_ai_providers__provider_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_ai_provider_admin_ai_providers__provider_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIProviderWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProviderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_ai_provider_admin_ai_providers__provider_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProviderTestResponse"];
                 };
             };
             /** @description Validation Error */

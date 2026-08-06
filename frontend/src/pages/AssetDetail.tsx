@@ -430,8 +430,8 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   // both and reaching into a sibling tab's state to get it would couple two
   // components that have no other reason to know about each other. React Query
   // dedupes it against the identical key, so it is one request either way.
-  const guidance = useQuery({
-    queryKey: ["guidance", ticker],
+  const strategy = useQuery({
+    queryKey: ["strategy", ticker],
     queryFn: async () => {
       const { data, error } = await api.GET("/assets/{ticker}/strategy", {
         params: { path: { ticker } },
@@ -451,7 +451,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
         timeframe,
         generatedAt: dateTime(new Date().toISOString()),
         recommendation: result?.recommendation ?? null,
-        guidance: (guidance.data ?? null) as Parameters<typeof buildAnalysisPdf>[0]["guidance"],
+        strategy: strategy.data ?? null,
         agents: (result?.agents ?? {}) as Record<string, Record<string, unknown>>,
         labels: {
           title: t("analysis.title"),
@@ -465,6 +465,10 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
           stop: t("rec.stop"),
           rationale: t("rec.reasoning"),
           strategy: t("tab.strategy"),
+          notHolding: t("strategy.notHolding"),
+          holding: t("strategy.holding"),
+          conditions: t("strategy.conditions"),
+          invalidatedIf: t("strategy.invalidatedIf"),
           agents: t("export.agents"),
           disclaimer: t("disclaimer.title"),
           disclaimerBody: t("disclaimer.long"),

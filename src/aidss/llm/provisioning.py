@@ -55,8 +55,12 @@ def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN20
     a row that only overrides the model still works on a deployment that
     configured its endpoint the old way.
     """
-    cls = get_plugin_class("ai", row.adapter_name)
-    if not hasattr(cls, "__init__") or row.adapter_name not in {"openai_compatible"}:
+    # Defaulted here rather than relied on from the column: a row that has not
+    # been flushed yet has no column defaults applied, and this builder is used
+    # on unsaved rows by the provider test endpoint.
+    adapter_name = row.adapter_name or "openai_compatible"
+    cls = get_plugin_class("ai", adapter_name)
+    if adapter_name != "openai_compatible":
         # Adapters without a URL/key shape (the fixture) are built the plain
         # way; there is nothing per-row to give them.
         factory = getattr(cls, "from_settings", None)
@@ -98,7 +102,7 @@ def _binding_from_row(row: AIProviderConfig, settings: Settings) -> ProviderBind
         model=row.default_model or settings.ai_chat_model,
         handles=_ROLE_HANDLES.get(row.role, _ROLE_HANDLES["general"]),
         priority=row.priority,
-        self_hosted=row.adapter_name in SELF_HOSTED_ADAPTERS
+        self_hosted=(row.adapter_name or "openai_compatible") in SELF_HOSTED_ADAPTERS
         or bool(row.base_url and _is_local(row.base_url))
         or row.self_hosted,
         input_cost_per_1k=row.input_cost_per_1k or Decimal("0"),

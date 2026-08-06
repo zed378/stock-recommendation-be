@@ -72,8 +72,34 @@ def test_the_export_covers_the_recommendation_and_the_strategy() -> None:
     source = read(EXPORT)
 
     assert "input.recommendation" in source
-    assert "input.guidance" in source
+    assert "input.strategy" in source
     assert "input.agents" in source, "the evidence beneath the conclusion, too"
+
+
+def test_the_export_prints_both_sides_of_the_strategy() -> None:
+    """The asymmetry is the product. An asset worth keeping but not worth
+    buying today is a real and common situation, and a document showing only
+    the reader's own side hides exactly that - which is also why the screen
+    shows both. A PDF is read by people other than whoever exported it, and
+    their positions are not the same."""
+    source = read(EXPORT)
+
+    assert "not_holding" in source and "holding" in source
+    for part in ("conditions", "invalidated_if", "reference_levels"):
+        assert part in source, (
+            f"{part} must reach the document; a stance with no stated way to be "
+            "wrong is the kind people hold longest"
+        )
+
+
+def test_a_stance_is_printed_as_words_rather_than_as_its_enum_value() -> None:
+    """`entry_candidate` is a value, not a phrase. The naming rule that keeps
+    it from reading as "buy" only holds if the document spells it out the same
+    careful way the screen does."""
+    source = read(EXPORT)
+
+    assert "STANCE_LABELS" in source
+    assert "no_basis_to_enter" in source, "the stance the whole distinction rests on"
 
 
 def test_the_export_writes_text_rather_than_an_image() -> None:
@@ -132,5 +158,14 @@ def test_every_admin_section_has_an_address() -> None:
     routes = read(FRONTEND / "App.tsx")
 
     assert '"/admin/:section"' in routes, "the admin section must be part of the route"
-    for section in ("users", "news", "issuers", "queue", "providers", "budget", "audit"):
+    for section in (
+        "users",
+        "news",
+        "issuers",
+        "queue",
+        "providers",
+        "settings",
+        "budget",
+        "audit",
+    ):
         assert f'"/admin/{section}"' in navigation, f"/admin/{section} is not linked"

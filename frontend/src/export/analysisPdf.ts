@@ -18,14 +18,14 @@ import type { components } from "@/api/schema";
  */
 
 type Recommendation = components["schemas"]["RecommendationResponse"];
-type Guidance = components["schemas"]["GuidanceResponse"];
+type Strategy = components["schemas"]["StrategyResponse"];
 
 export type ExportInput = {
   ticker: string;
   timeframe: string;
   generatedAt: string;
   recommendation?: Recommendation | null;
-  guidance?: Guidance | null;
+  strategy?: Strategy | null;
   agents: Record<string, Record<string, unknown>>;
   /** Rendered in the reader's current language, so the file matches the screen. */
   labels: PdfLabels;
@@ -43,6 +43,10 @@ export type PdfLabels = {
   stop: string;
   rationale: string;
   strategy: string;
+  notHolding: string;
+  holding: string;
+  conditions: string;
+  invalidatedIf: string;
   agents: string;
   disclaimer: string;
   disclaimerBody: string;
@@ -67,6 +71,26 @@ const PROSE_ORDER = [
   "risk_factors",
   "watch_items",
 ];
+
+/** The stance vocabulary of Section 21, written out.
+ *
+ * Mapped rather than printed raw. `entry_candidate` is a value, not a phrase,
+ * and the naming rule that keeps it from reading as "buy" only holds if the
+ * document spells it the same careful way the screen does. */
+const STANCE_LABELS: Record<string, string> = {
+  entry_candidate: "Entry candidate",
+  add_candidate: "Add candidate",
+  wait_for_level: "Wait for level",
+  no_basis_to_enter: "No basis to enter",
+  maintain: "Maintain",
+  reduce_candidate: "Reduce candidate",
+  exit_candidate: "Exit candidate",
+  avoid: "Avoid",
+};
+
+function stanceLabel(stance: string): string {
+  return STANCE_LABELS[stance] ?? label(stance);
+}
 
 function label(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -172,16 +196,48 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
     }
   }
 
-  // --- strategy -------------------------------------------------------------
-  if (input.guidance) {
+  // --- strategy, both sides -------------------------------------------------
+  //
+  // Both are printed whatever the reader holds, for the same reason the screen
+  // shows both: an asset worth keeping but not worth buying today is a real
+  // and common situation, and a document showing only one side hides exactly
+  // that asymmetry. A PDF is also read by people other than whoever exported
+  // it, and their positions are not the same.
+  if (input.strategy) {
     heading(L.strategy);
-    const g = input.guidance as unknown as Record<string, unknown>;
-    for (const key of PROSE_ORDER) {
-      const lines = asLines(g[key]);
-      if (!lines.length) continue;
-      write(label(key), 10, "bold");
-      for (const line of lines) write(line, 10);
-      y += 2;
+    for (const [side, guidance] of [
+      [L.notHolding, input.strategy.not_holding],
+      [L.holding, input.strategy.holding],
+    ] as const) {
+      if (!guidance) continue;
+      breakIfNeeded(LINE * 4);
+      write(side, 11, "bold");
+      // The stance, then what it rests on. Never the other way round: a list
+      // of conditions read before the stance they qualify is a list of
+      // unattached facts.
+      write(stanceLabel(guidance.stance), 10, "bold");
+      if (guidance.rationale) write(String(guidance.rationale), 10);
+
+      for (const [name, values] of [
+        [L.conditions, guidance.conditions],
+        // Never omitted, even when empty. A stance with no stated way to be
+        // wrong is the kind people hold longest, and Section 21 requires every
+        // one of them to say what would invalidate it.
+        [L.invalidatedIf, guidance.invalidated_if],
+      ] as const) {
+        const lines = asLines(values);
+        if (!lines.length) continue;
+        y += 2;
+        write(name, 9, "bold");
+        for (const line of lines) write(line, 9);
+      }
+
+      const levels = Object.entries(guidance.reference_levels ?? {});
+      if (levels.length) {
+        y += 2;
+        write(levels.map(([key, value]) => `${label(key)}: ${value}`).join("    "), 9);
+      }
+      y += 8;
     }
   }
 

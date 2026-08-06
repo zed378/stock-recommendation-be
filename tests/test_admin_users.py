@@ -63,7 +63,7 @@ def test_the_listing_reports_the_status_the_auth_gate_enforces(
     victim.suspended_until = datetime.now(UTC) - timedelta(hours=1)
     session.commit()
 
-    rows = client.get("/admin/users", headers=admin_headers).json()
+    rows = client.get("/admin/users", headers=admin_headers).json()["items"]
     row = next(r for r in rows if r["email"] == "victim@example.com")
     assert row["status"] == "suspended"
     assert row["effective_status"] == "active"

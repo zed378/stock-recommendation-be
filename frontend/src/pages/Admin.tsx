@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { Pager, type PageState } from "@/components/Pager";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/context";
@@ -16,6 +17,8 @@ import {
 import { UsersPanel } from "@/components/admin/Users";
 import { NewsSourcesPanel } from "@/components/admin/NewsSources";
 import { IssuersPanel } from "@/components/admin/Issuers";
+import { AIProvidersPanel } from "@/components/admin/AIProviders";
+import { PlatformSettingsPanel } from "@/components/admin/PlatformSettings";
 
 type Tab =
   | "overview"
@@ -24,6 +27,7 @@ type Tab =
   | "issuers"
   | "queue"
   | "providers"
+  | "settings"
   | "budget"
   | "audit";
 
@@ -34,6 +38,7 @@ const TABS: Tab[] = [
   "issuers",
   "queue",
   "providers",
+  "settings",
   "budget",
   "audit",
 ];
@@ -79,7 +84,17 @@ export function Admin() {
       {tab === "news" && <NewsSourcesPanel />}
       {tab === "issuers" && <IssuersPanel />}
       {tab === "queue" && <Queue />}
-      {tab === "providers" && <Providers />}
+      {/* Two different things, deliberately on one screen. `AIProvidersPanel`
+          is what an operator configures; `Providers` is which adapters this
+          build actually registered - and "the model I added is not being used"
+          is usually answered by the second. */}
+      {tab === "providers" && (
+        <div className="space-y-6">
+          <AIProvidersPanel />
+          <Providers />
+        </div>
+      )}
+      {tab === "settings" && <PlatformSettingsPanel />}
       {tab === "budget" && <Budget />}
       {tab === "audit" && <AuditLog />}
     </div>
@@ -349,6 +364,7 @@ function Queue() {
   const { t, n, dateTime } = useI18n();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [page, setPage] = useState<PageState>({ limit: 25, offset: 0 });
 
   const stats = useQuery({
     queryKey: ["admin-queue"],
@@ -363,17 +379,19 @@ function Queue() {
   });
 
   const jobs = useQuery({
-    queryKey: ["admin-jobs", statusFilter],
+    queryKey: ["admin-jobs", statusFilter, page],
     queryFn: async () => {
       const { data, error } = await api.GET("/jobs", {
         params: {
-          query: statusFilter
-            ? { status: statusFilter as "pending", limit: 50 }
-            : { limit: 50 },
+          query: {
+            ...(statusFilter ? { status: statusFilter as "pending" } : {}),
+            limit: page.limit,
+            offset: page.offset,
+          },
         },
       });
       if (error) throw new Error(errorMessage(error, t("common.error")));
-      return data ?? [];
+      return data ?? { items: [], total: 0, limit: page.limit, offset: page.offset };
     },
     refetchInterval: 15_000,
   });
@@ -454,7 +472,7 @@ function Queue() {
           <Loading />
         ) : jobs.isError ? (
           <ErrorNote message={(jobs.error as Error).message} onRetry={() => jobs.refetch()} />
-        ) : !jobs.data?.length ? (
+        ) : !jobs.data?.items.length ? (
           <Empty message={t("admin.jobsEmpty")} />
         ) : (
           <div className="overflow-x-auto">
@@ -469,7 +487,7 @@ function Queue() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {jobs.data.map((job) => (
+                {jobs.data.items.map((job) => (
                   <tr key={job.id}>
                     <td className="py-2 pr-4 font-mono text-xs text-ink/90">{job.job_type}</td>
                     <td className="py-2 pr-4">
@@ -503,6 +521,12 @@ function Queue() {
                 ))}
               </tbody>
             </table>
+            <Pager
+              total={jobs.data?.total ?? 0}
+              shown={jobs.data?.items.length ?? 0}
+              page={page}
+              onChange={setPage}
+            />
           </div>
         )}
       </Card>
@@ -634,15 +658,18 @@ function Budget() {
 function AuditLog() {
   const { t, dateTime } = useI18n();
   const [entity, setEntity] = useState("");
+  const [page, setPage] = useState<PageState>({ limit: 50, offset: 0 });
 
   const query = useQuery({
-    queryKey: ["admin-audit", entity],
+    queryKey: ["admin-audit", entity, page],
     queryFn: async () => {
       const { data, error } = await api.GET("/audit-logs", {
-        params: { query: entity ? { entity, limit: 100 } : { limit: 100 } },
+        params: {
+          query: { ...(entity ? { entity } : {}), limit: page.limit, offset: page.offset },
+        },
       });
       if (error) throw new Error(errorMessage(error, t("common.error")));
-      return data ?? [];
+      return data ?? { items: [], total: 0, limit: page.limit, offset: page.offset };
     },
   });
 
@@ -662,7 +689,7 @@ function AuditLog() {
         <Loading />
       ) : query.isError ? (
         <ErrorNote message={(query.error as Error).message} onRetry={() => query.refetch()} />
-      ) : !query.data?.length ? (
+      ) : !query.data?.items.length ? (
         <Empty message={t("admin.audit.empty")} />
       ) : (
         <div className="overflow-x-auto">
@@ -677,7 +704,7 @@ function AuditLog() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {query.data.map((entry) => (
+              {query.data.items.map((entry) => (
                 <tr key={entry.id}>
                   <td className="py-2 pr-4 whitespace-nowrap text-xs text-faint">
                     {dateTime(entry.created_at)}
@@ -698,6 +725,12 @@ function AuditLog() {
               ))}
             </tbody>
           </table>
+          <Pager
+            total={query.data?.total ?? 0}
+            shown={query.data?.items.length ?? 0}
+            page={page}
+            onChange={setPage}
+          />
         </div>
       )}
     </Card>

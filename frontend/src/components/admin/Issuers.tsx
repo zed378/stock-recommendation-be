@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
+import { Pager, type PageState } from "@/components/Pager";
 import {
   Button,
   Card,
@@ -51,15 +52,19 @@ export function IssuersPanel() {
   const [listedOnly, setListedOnly] = useState(true);
   const [editing, setEditing] = useState<Issuer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<PageState>({ limit: 50, offset: 0 });
 
   const issuers = useQuery({
-    queryKey: ["issuers", search, listedOnly],
+    queryKey: ["issuers", search, listedOnly, page],
     queryFn: async () => {
       const { data, error: failed } = await api.GET("/admin/issuers", {
         params: { query: { search: search.trim() || undefined, listed_only: listedOnly, limit: 200 } },
       });
       if (failed) throw new Error(errorMessage(failed, t("common.error")));
-      return (data ?? []).map(normalised);
+      return {
+        items: (data?.items ?? []).map(normalised),
+        total: data?.total ?? 0,
+      };
     },
   });
 
@@ -113,7 +118,10 @@ export function IssuersPanel() {
         <input
           className={`${inputClass} min-w-48 flex-1`}
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage((current) => ({ ...current, offset: 0 }));
+          }}
           placeholder={t("admin.issuers.searchPlaceholder")}
           aria-label={t("common.search")}
         />
@@ -135,7 +143,7 @@ export function IssuersPanel() {
           message={(issuers.error as Error).message}
           onRetry={() => issuers.refetch()}
         />
-      ) : !issuers.data?.length ? (
+      ) : !issuers.data?.items.length ? (
         <Empty
           message={t("admin.issuers.empty")}
           hint={t("admin.issuers.emptyHint")}
@@ -158,7 +166,7 @@ export function IssuersPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {issuers.data.map((issuer) => (
+              {issuers.data.items.map((issuer) => (
                 <tr key={issuer.id}>
                   <td className="py-2.5 pr-4 font-mono text-xs text-ink">{issuer.ticker}</td>
                   <td className="py-2.5 pr-4 text-ink/85">
@@ -204,6 +212,12 @@ export function IssuersPanel() {
               ))}
             </tbody>
           </table>
+          <Pager
+            total={issuers.data?.total ?? 0}
+            shown={issuers.data?.items.length ?? 0}
+            page={page}
+            onChange={setPage}
+          />
         </div>
       )}
 

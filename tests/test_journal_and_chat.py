@@ -257,7 +257,7 @@ def test_registration_is_recorded(client, admin_headers) -> None:
         "/auth/register",
         json={"email": "audited@example.com", "password": "correct-horse-battery"},
     )
-    body = client.get("/audit-logs?entity=users", headers=admin_headers).json()
+    body = client.get("/audit-logs?entity=users", headers=admin_headers).json()["items"]
     assert any(row["action"] == "register" for row in body)
 
 
@@ -266,7 +266,7 @@ def test_the_audit_log_can_be_filtered_by_actor(client, admin_headers) -> None:
         "/auth/register",
         json={"email": "audited2@example.com", "password": "correct-horse-battery"},
     )
-    body = client.get("/audit-logs?actor_type=user", headers=admin_headers).json()
+    body = client.get("/audit-logs?actor_type=user", headers=admin_headers).json()["items"]
     assert all(row["actor_type"] == "user" for row in body)
 
 

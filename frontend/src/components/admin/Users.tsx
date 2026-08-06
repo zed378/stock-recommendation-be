@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/context";
 import { useI18n, type MessageKey } from "@/i18n/context";
+import { Pager, type PageState } from "@/components/Pager";
+import { useToast } from "@/components/toastContext";
 import {
   Button,
   Card,
@@ -17,6 +19,9 @@ import {
 import type { components } from "@/api/schema";
 
 type AdminUser = components["schemas"]["AdminUserResponse"];
+
+/** What an in-flight or failed query renders as, so the table has one shape. */
+const EMPTY_PAGE = { items: [] as AdminUser[], total: 0, limit: 50, offset: 0 };
 type Role = components["schemas"]["UserRole"];
 
 /** Preset lengths, because "three days" is what an admin actually decides. */
@@ -123,20 +128,30 @@ export function UsersPanel() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  // Reset to the first page whenever the filter changes: an offset kept
+  // across a new search lands on rows the reader never asked about.
+  const [page, setPage] = useState<PageState>({ limit: 50, offset: 0 });
+  const [creating, setCreating] = useState(false);
 
   const users = useQuery({
-    queryKey: ["admin-users", query],
+    queryKey: ["admin-users", query, page],
     queryFn: async () => {
       const { data, error: failed } = await api.GET("/admin/users", {
-        params: { query: query.trim() ? { q: query.trim() } : {} },
+        params: {
+          query: {
+            ...(query.trim() ? { q: query.trim() } : {}),
+            limit: page.limit,
+            offset: page.offset,
+          },
+        },
       });
       if (failed) throw new Error(errorMessage(failed, t("common.error")));
-      return data ?? [];
+      return data ?? EMPTY_PAGE;
     },
     placeholderData: (previous) => previous,
   });
 
-  const rows = useMemo(() => users.data ?? [], [users.data]);
+  const rows = useMemo(() => users.data?.items ?? [], [users.data]);
 
   /**
    * Own account excluded from selection entirely.
@@ -215,11 +230,21 @@ export function UsersPanel() {
   };
 
   return (
-    <Card title={t("admin.users.title")}>
+    <Card
+      title={t("admin.users.title")}
+      action={
+        <Button size="sm" variant="ghost" onClick={() => setCreating(true)}>
+          {t("admin.users.create")}
+        </Button>
+      }
+    >
       <input
         className={inputClass}
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setPage((current) => ({ ...current, offset: 0 }));
+        }}
         placeholder={t("admin.users.searchPlaceholder")}
         aria-label={t("common.search")}
         type="search"
@@ -377,6 +402,12 @@ export function UsersPanel() {
               })}
             </tbody>
           </table>
+          <Pager
+            total={users.data?.total ?? 0}
+            shown={rows.length}
+            page={page}
+            onChange={setPage}
+          />
         </div>
       )}
 
@@ -423,7 +454,130 @@ export function UsersPanel() {
       {outcomes && (
         <OutcomeDialog outcomes={outcomes.rows} onClose={() => setOutcomes(null)} />
       )}
+      {creating && (
+        <CreateUserDialog
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+          }}
+        />
+      )}
     </Card>
+  );
+}
+
+/**
+ * An account created by an administrator rather than by its owner.
+ *
+ * Exists because registration can be closed, and an operator who closed it
+ * still needs to onboard people - otherwise the only ways in are reopening the
+ * door for everyone or editing the database.
+ *
+ * The password is typed rather than generated. A generated one has to reach
+ * the person somehow, and every convenient channel for that is a worse place
+ * for a credential than wherever the admin was going to type it anyway.
+ */
+function CreateUserDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "investor" as Role,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const { error: failed } = await api.POST("/admin/users", {
+        body: {
+          email: form.email.trim(),
+          password: form.password,
+          full_name: form.full_name.trim() || null,
+          role: form.role,
+        },
+      });
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+    },
+    onSuccess: () => {
+      toast.show({ title: t("admin.users.created"), tone: "success" });
+      onCreated();
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
+  return (
+    <Modal
+      title={t("admin.users.createTitle")}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            busy={create.isPending}
+            disabled={!form.email.trim() || form.password.length < 8}
+            onClick={() => create.mutate()}
+          >
+            {t("common.save")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {error && <ErrorNote message={error} />}
+        <p className="text-xs text-faint">{t("admin.users.createHint")}</p>
+
+        <Field label={t("auth.email")}>
+          <input
+            type="email"
+            className={inputClass}
+            value={form.email}
+            onChange={(event) => setForm({ ...form, email: event.target.value })}
+          />
+        </Field>
+
+        <Field label={t("auth.password")}>
+          <input
+            type="password"
+            className={inputClass}
+            value={form.password}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+          />
+        </Field>
+
+        <Field label={t("auth.fullName")}>
+          <input
+            className={inputClass}
+            value={form.full_name}
+            onChange={(event) => setForm({ ...form, full_name: event.target.value })}
+          />
+        </Field>
+
+        <Field label={t("admin.users.role")}>
+          <select
+            className={inputClass}
+            value={form.role}
+            onChange={(event) => setForm({ ...form, role: event.target.value as Role })}
+          >
+            {(["viewer", "investor", "admin"] as const).map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+    </Modal>
   );
 }
 
