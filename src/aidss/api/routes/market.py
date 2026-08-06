@@ -18,11 +18,13 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
+    AlertBatchRequest,
+    AlertBatchResponse,
     AlertResponse,
     QuoteSnapshotResponse,
     StockPickResponse,
@@ -287,6 +289,93 @@ def list_alerts(
         )
         for alert in alerts
     ]
+
+
+@router.post("/alerts/acknowledge", response_model=AlertBatchResponse)
+def acknowledge_alerts(
+    payload: AlertBatchRequest,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> AlertBatchResponse:
+    """Acknowledge several alerts at once.
+
+    One statement rather than one request per alert. A client loop over fifty
+    alerts is fifty round trips that can fail in the middle, leaving the list
+    half-acknowledged with nothing recording where it stopped.
+
+    Scoped by user id in the same WHERE clause as the ids: an id is a bearer
+    token for the row it names, so filtering by ownership afterwards - or not
+    at all - is how one account acknowledges another's alerts.
+    """
+    now = datetime.now(UTC)
+    affected = session.execute(
+        update(Alert)
+        .where(
+            Alert.id.in_(payload.ids),
+            Alert.user_id == user.id,
+            # Already-acknowledged alerts are skipped rather than re-stamped,
+            # so the timestamp keeps meaning "when this was first seen".
+            Alert.acknowledged_at.is_(None),
+        )
+        .values(acknowledged_at=now)
+    ).rowcount
+    session.flush()
+    return AlertBatchResponse(affected=affected or 0)
+
+
+@router.post("/alerts/acknowledge-all", response_model=AlertBatchResponse)
+def acknowledge_all_alerts(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> AlertBatchResponse:
+    """Acknowledge every unacknowledged alert this user has.
+
+    A separate endpoint from the one taking ids, deliberately. Folding it in as
+    "an empty list means all" makes the destructive scope depend on whether a
+    client's selection happened to be empty.
+    """
+    affected = session.execute(
+        update(Alert)
+        .where(Alert.user_id == user.id, Alert.acknowledged_at.is_(None))
+        .values(acknowledged_at=datetime.now(UTC))
+    ).rowcount
+    session.flush()
+    return AlertBatchResponse(affected=affected or 0)
+
+
+@router.post("/alerts/delete", response_model=AlertBatchResponse)
+def delete_alerts(
+    payload: AlertBatchRequest,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> AlertBatchResponse:
+    """Delete several alerts.
+
+    POST rather than DELETE with a body: request bodies on DELETE are permitted
+    but widely dropped by proxies, and a delete that silently becomes a
+    delete-nothing is a bad way to find that out.
+    """
+    affected = session.execute(
+        delete(Alert).where(Alert.id.in_(payload.ids), Alert.user_id == user.id)
+    ).rowcount
+    session.flush()
+    return AlertBatchResponse(affected=affected or 0)
+
+
+@router.post("/alerts/delete-all", response_model=AlertBatchResponse)
+def delete_all_alerts(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> AlertBatchResponse:
+    """Delete every alert this user has.
+
+    Only this user's. The clause is not a filter that could be relaxed later;
+    it is the whole difference between clearing your own list and clearing
+    everybody's.
+    """
+    affected = session.execute(delete(Alert).where(Alert.user_id == user.id)).rowcount
+    session.flush()
+    return AlertBatchResponse(affected=affected or 0)
 
 
 @router.post("/alerts/{alert_id}/acknowledge", status_code=status.HTTP_204_NO_CONTENT)

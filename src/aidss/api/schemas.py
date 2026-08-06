@@ -830,3 +830,27 @@ class NewsTagResponse(BaseModel):
     ticker: str
     method: str
     matched_text: str
+
+
+class AlertBatchRequest(BaseModel):
+    """The alerts a batch action applies to.
+
+    Non-empty by construction. The alternative - an empty list meaning "all" -
+    puts the difference between "acknowledge these three" and "delete
+    everything" in whether a client's filter happened to return anything, which
+    is not a distinction to leave to a bug upstream. Acting on everything has
+    its own endpoint, with the scope written in the URL.
+    """
+
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+class AlertBatchResponse(BaseModel):
+    """How many alerts the action actually changed.
+
+    Reported rather than assumed equal to what was asked for: ids belonging to
+    somebody else, or already acknowledged, are skipped, and a caller that
+    selected five and changed three should be able to tell.
+    """
+
+    affected: int

@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
+import { useToast } from "@/components/toastContext";
 import {
   Button,
   Card,
   Caveat,
+  ConfirmDialog,
   Empty,
   ErrorNote,
   Loading,
@@ -24,6 +26,14 @@ export function Monitoring() {
   const { t, money, dateTime, n } = useI18n();
   const queryClient = useQueryClient();
   const [unreadOnly, setUnreadOnly] = useState(false);
+  // A Set of ids rather than a flag per alert: the list is refetched on every
+  // change, so a selection keyed to array positions would silently point at
+  // different rows after a poll.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchError, setBatchError] = useState<string | null>(null);
+  // Deleting is not undoable, so it asks. Acknowledging is, so it does not.
+  const [confirming, setConfirming] = useState<"delete" | "delete-all" | null>(null);
+  const toast = useToast();
 
   const quotes = useQuery({
     queryKey: ["monitoring-quotes"],
@@ -59,6 +69,64 @@ export function Monitoring() {
       queryClient.invalidateQueries({ queryKey: ["monitoring-quotes"] });
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
     },
+  });
+
+  const visibleAlerts = alerts.data ?? [];
+  const unacknowledgedCount = visibleAlerts.filter((a) => !a.acknowledged_at).length;
+  const allVisibleSelected =
+    visibleAlerts.length > 0 && visibleAlerts.every((a) => selected.has(a.id));
+
+  const toggleSelected = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  /**
+   * The four batch actions, through one mutation.
+   *
+   * One server call each, rather than a loop of per-alert requests. Fifty
+   * round trips can fail in the middle and leave the list half-acted-on with
+   * nothing recording where it stopped; one statement either applies or does
+   * not.
+   *
+   * The count comes back from the server rather than being assumed equal to
+   * the selection: ids that were already acknowledged, or that the list has
+   * since moved past, are skipped, and saying "3 marked read" when five were
+   * ticked is the honest report.
+   */
+  const batch = useMutation({
+    mutationFn: async (input: {
+      action: "acknowledge" | "acknowledge-all" | "delete" | "delete-all";
+      ids?: string[];
+    }) => {
+      const path = `/alerts/${input.action}` as
+        | "/alerts/acknowledge"
+        | "/alerts/acknowledge-all"
+        | "/alerts/delete"
+        | "/alerts/delete-all";
+      const { data, error } = await api.POST(
+        path,
+        input.ids ? { body: { ids: input.ids } } : {},
+      );
+      if (error) throw new Error(errorMessage(error, t("common.error")));
+      return data;
+    },
+    onSuccess: (result) => {
+      // Cleared unconditionally. After a delete the ids no longer exist, and
+      // after an acknowledge keeping them ticked invites pressing the same
+      // button again on rows that have already changed.
+      setSelected(new Set());
+      setBatchError(null);
+      toast.show({
+        title: t("alerts.batchDone", { count: String(result?.affected ?? 0) }),
+        tone: "success",
+      });
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+    },
+    onError: (caught: Error) => setBatchError(caught.message),
   });
 
   const acknowledge = useMutation({
@@ -166,17 +234,101 @@ export function Monitoring() {
       <Card
         title={t("alerts.title")}
         action={
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            <input
-              type="checkbox"
-              checked={unreadOnly}
-              onChange={(e) => setUnreadOnly(e.target.checked)}
-              className="accent-rise"
-            />
-            {t("alerts.unacknowledgedOnly")}
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={unreadOnly}
+                onChange={(e) => setUnreadOnly(e.target.checked)}
+                className="accent-rise"
+              />
+              {t("alerts.unacknowledgedOnly")}
+            </label>
+            {/* The two whole-list actions live here rather than in the
+                selection bar, because they do not act on the selection and a
+                button that ignores what is ticked should not sit among the
+                ones that do not. */}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!unacknowledgedCount || batch.isPending}
+              onClick={() => batch.mutate({ action: "acknowledge-all" })}
+            >
+              {t("alerts.readAll")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!visibleAlerts.length || batch.isPending}
+              onClick={() => setConfirming("delete-all")}
+            >
+              {t("alerts.deleteAll")}
+            </Button>
+          </div>
         }
       >
+        {/* Only rendered when something is ticked. A bar of disabled buttons
+            occupying the top of the list permanently is noise for the far more
+            common case of reading alerts rather than managing them. */}
+        {selected.size > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-raised/60 p-2">
+            <span className="text-xs text-muted">
+              {t("alerts.selectedCount", { count: String(selected.size) })}
+            </span>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                busy={batch.isPending && batch.variables?.action === "acknowledge"}
+                onClick={() => batch.mutate({ action: "acknowledge", ids: [...selected] })}
+              >
+                {t("alerts.readSelected")}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                busy={batch.isPending && batch.variables?.action === "delete"}
+                onClick={() => setConfirming("delete")}
+              >
+                {t("alerts.deleteSelected")}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                {t("alerts.clearSelection")}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {batchError && (
+          <div className="mb-3">
+            <ErrorNote message={batchError} onRetry={() => setBatchError(null)} />
+          </div>
+        )}
+
+        {visibleAlerts.length > 0 && (
+          <label className="mb-2 flex items-center gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              className="accent-rise"
+              checked={allVisibleSelected}
+              // Indeterminate cannot be expressed as a boolean prop; without
+              // it a partial selection renders as "none selected" and clicking
+              // twice is the only way to work out which way it will go.
+              ref={(node) => {
+                if (node) {
+                  node.indeterminate = selected.size > 0 && !allVisibleSelected;
+                }
+              }}
+              onChange={(event) =>
+                setSelected(
+                  event.target.checked ? new Set(visibleAlerts.map((a) => a.id)) : new Set(),
+                )
+              }
+            />
+            {t("alerts.selectAll")}
+          </label>
+        )}
+
         {alerts.isLoading ? (
           <Loading />
         ) : alerts.isError ? (
@@ -191,6 +343,13 @@ export function Monitoring() {
             {alerts.data.map((alert) => (
               <li key={alert.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <input
+                    type="checkbox"
+                    className="accent-rise"
+                    checked={selected.has(alert.id)}
+                    onChange={() => toggleSelected(alert.id)}
+                    aria-label={t("alerts.selectOne", { ticker: alert.ticker })}
+                  />
                   <Link
                     to={`/assets/${alert.ticker}`}
                     className="font-mono text-sm text-ink hover:text-rise"
@@ -243,6 +402,38 @@ export function Monitoring() {
         )}
         <Caveat>{t("alerts.note")}</Caveat>
       </Card>
+
+      {/* Deleting alerts is not undoable and "delete all" is the one action
+          whose scope is not visible from what is ticked, so both ask first.
+          Acknowledging does not: it is reversible by the filter and asking
+          about it would train people to dismiss the dialog that matters. */}
+      {confirming && (
+        <ConfirmDialog
+          destructive
+          busy={batch.isPending}
+          title={
+            confirming === "delete-all"
+              ? t("alerts.deleteAllTitle")
+              : t("alerts.deleteSelectedTitle")
+          }
+          message={
+            confirming === "delete-all"
+              ? t("alerts.deleteAllBody")
+              : t("alerts.deleteSelectedBody", { count: String(selected.size) })
+          }
+          confirmLabel={t("common.delete")}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const action = confirming;
+            setConfirming(null);
+            batch.mutate(
+              action === "delete-all"
+                ? { action: "delete-all" }
+                : { action: "delete", ids: [...selected] },
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

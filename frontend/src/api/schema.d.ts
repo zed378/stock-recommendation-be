@@ -1251,6 +1251,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge Alerts
+         * @description Acknowledge several alerts at once.
+         *
+         *     One statement rather than one request per alert. A client loop over fifty
+         *     alerts is fifty round trips that can fail in the middle, leaving the list
+         *     half-acknowledged with nothing recording where it stopped.
+         *
+         *     Scoped by user id in the same WHERE clause as the ids: an id is a bearer
+         *     token for the row it names, so filtering by ownership afterwards - or not
+         *     at all - is how one account acknowledges another's alerts.
+         */
+        post: operations["acknowledge_alerts_alerts_acknowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/acknowledge-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge All Alerts
+         * @description Acknowledge every unacknowledged alert this user has.
+         *
+         *     A separate endpoint from the one taking ids, deliberately. Folding it in as
+         *     "an empty list means all" makes the destructive scope depend on whether a
+         *     client's selection happened to be empty.
+         */
+        post: operations["acknowledge_all_alerts_alerts_acknowledge_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Alerts
+         * @description Delete several alerts.
+         *
+         *     POST rather than DELETE with a body: request bodies on DELETE are permitted
+         *     but widely dropped by proxies, and a delete that silently becomes a
+         *     delete-nothing is a bad way to find that out.
+         */
+        post: operations["delete_alerts_alerts_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/delete-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete All Alerts
+         * @description Delete every alert this user has.
+         *
+         *     Only this user's. The clause is not a filter that could be relaxed later;
+         *     it is the whole difference between clearing your own list and clearing
+         *     everybody's.
+         */
+        post: operations["delete_all_alerts_alerts_delete_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alerts/{alert_id}/acknowledge": {
         parameters: {
             query?: never;
@@ -1606,6 +1706,32 @@ export interface components {
             agent: string;
             /** Reason */
             reason: string;
+        };
+        /**
+         * AlertBatchRequest
+         * @description The alerts a batch action applies to.
+         *
+         *     Non-empty by construction. The alternative - an empty list meaning "all" -
+         *     puts the difference between "acknowledge these three" and "delete
+         *     everything" in whether a client's filter happened to return anything, which
+         *     is not a distinction to leave to a bug upstream. Acting on everything has
+         *     its own endpoint, with the scope written in the URL.
+         */
+        AlertBatchRequest: {
+            /** Ids */
+            ids: string[];
+        };
+        /**
+         * AlertBatchResponse
+         * @description How many alerts the action actually changed.
+         *
+         *     Reported rather than assumed equal to what was asked for: ids belonging to
+         *     somebody else, or already acknowledged, are skipped, and a caller that
+         *     selected five and changed three should be able to tell.
+         */
+        AlertBatchResponse: {
+            /** Affected */
+            affected: number;
         };
         /** AlertResponse */
         AlertResponse: {
@@ -4817,6 +4943,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_alerts_alerts_acknowledge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_all_alerts_alerts_acknowledge_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertBatchResponse"];
+                };
+            };
+        };
+    };
+    delete_alerts_alerts_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_all_alerts_alerts_delete_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertBatchResponse"];
                 };
             };
         };

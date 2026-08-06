@@ -1100,6 +1100,38 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 ---
 
+## 23c. Direktori Emiten & Penandaan Berita
+
+**Pipeline berita berjalan per emiten, dan itu punya lantai yang tidak bisa ditembus.** Untuk tiap emiten yang dipantau seseorang, feed dicari. Artinya sebuah berita hanya pernah terlihat kalau ada emiten yang mencarinya: liputan atas perusahaan yang tidak dipantau siapa pun bukan sekadar tak tertandai, ia tidak pernah diambil. Feed umum juga dibaca ulang sekali per emiten, dan setiap kali seluruh isinya yang tidak cocok dibuang.
+
+**Sapuan membalik arahnya.** Setiap feed aktif dibaca sekali, semua isinya disimpan, lalu atribusi dilakukan setelahnya terhadap direktori emiten penuh. Berita yang menyebut enam bank ditandai ke enam bank, bukan diarsipkan di bawah satu yang kebetulan mengambilnya. Keduanya hidup berdampingan: jadwal tetap menjamin kesegaran untuk emiten yang dipantau, sapuan mengisi seluruh sisanya.
+
+**Direktori adalah tabel tersendiri, bukan baris di `assets`.** `Asset` adalah instrumen yang datanya dimiliki platform dan bisa dianalisis. Memasukkan 962 perusahaan tercatat ke sana mengiklankan 962 instrumen yang bisa dianalisis dengan harga yang hanya ada untuk segelintir. Ini data referensi, dan justru lengkap karena tidak mengaku lebih dari itu. Sumbernya endpoint profil perusahaan IDX sendiri — asal publik yang sama yang sudah dibaca adapter fundamental.
+
+**Tanda disimpan di tabel relasi, bukan kolom.** Satu berita rutin membahas beberapa perusahaan, dan `news_items.asset_id` hanya memuat satu. Kolom itu tetap dengan artinya semula: pengambilan terjadwal milik emiten mana yang mengambil artikel tersebut — fakta yang berbeda dari siapa yang dibicarakan artikel itu, dan mencampur keduanya adalah cara sebuah berita sektor berakhir diarsipkan di bawah emiten mana pun yang kebetulan menemukannya.
+
+**Kecocokan disimpan bersama tandanya** — metodenya dan teks yang cocok. Tanda yang keliru dengan demikian menyebut sebabnya sendiri, dan alias di baliknya bisa diperbaiki; tanpa itu ia hanya asosiasi yang tidak bisa dipertanggungjawabkan siapa pun.
+
+**Kode dicocokkan peka huruf besar, dan itu diukur bukan diasumsikan.** `BANK`, `LABA`, `AGRO`, dan `RAYA` semuanya kode emiten sungguhan sekaligus kata Indonesia biasa. Dicocokkan tanpa memperhatikan kapitalisasi, "bank sentral menaikkan suku bunga" menandai Bank Aladin dan "laba bersih" menandai Ladangbaja. Terhadap judul sungguhan itu bukan kasus pinggiran, itu mayoritas kalimat.
+
+**Judul yang seluruhnya kapital tidak dicocokkan pada kode sama sekali.** Kapitalisasi adalah satu-satunya sinyal yang memisahkan kode dari kata, jadi teks yang seluruhnya kapital tidak membawa sinyal itu. Namanya tetap dicocokkan; tanda yang hilang berbiaya lebih kecil daripada tanda yang salah.
+
+**Inisial tidak diturunkan, dan ini pelajaran yang dibayar.** Mengambil huruf pertama tampak seperti aturan yang menghasilkan "BRI" dari "Bank Rakyat Indonesia" — dan memang begitu. Dijalankan atas direktori 962 emiten sungguhan terhadap satu hari feed pasar Indonesia, ia juga menghasilkan `bps` untuk HOKI (cocok dengan Badan Pusat Statistik di 17 berita ekonomi), `bagi` untuk INPC, `siap` untuk INET, `apa` untuk NASA, `sri` untuk SRIL (cocok dengan Sri Mulyani), dan `mei` untuk MEDC. Satu benar berbanding delapan salah. Tidak ada dalam susunan hurufnya yang memisahkan "bni" dari "apa", jadi aturan itu tidak bisa diperbaiki dengan diperketat — hanya dihapus, dan kasus yang berguna diketik oleh orang yang memang tahu.
+
+**Alias hasil turunan bisa disunting, dan suntingan itu bertahan.** Sinkronisasi berikutnya memperbarui semua kolom dari bursa tetapi tidak menyentuh alias yang sudah terisi. Kolom yang bisa disunting lalu direset oleh penjadwal lebih buruk daripada tidak ada kolomnya sama sekali.
+
+**Alias yang terlalu umum ditolak saat disimpan, bukan didiamkan.** "Bank" sebagai alias bukan satu tanda sempit, melainkan beberapa ratus tanda yang salah. Administrator yang mengetiknya berhak diberi tahu saat itu juga, bukan menemukannya seminggu kemudian di dalam tanda-tanda.
+
+**Nama yang dimiliki dua emiten tidak dimiliki keduanya.** Ambiguitas tidak bisa diselesaikan dengan memilih salah satu, jadi aliasnya dibuang. Tanda hasil tebakan lebih buruk daripada tanda yang tidak ada: ia memasukkan berita perusahaan lain ke dalam bukti yang dijadikan dasar penalaran sebuah analisis.
+
+**Berita yang menyebut belasan emiten tidak ditandai ke satu pun.** Itu daftar — rekap indeks, tabel teraktif — bukan liputan tentang siapa pun, dan menandainya ke lima puluh perusahaan membuat feed masing-masing tidak berguna.
+
+**Menandai ulang mengganti, bukan menambah.** Justru itu gunanya bisa memperbaiki alias: koreksi harus mampu membatalkan tanda salah yang disebabkannya, bukan hanya berlaku untuk yang datang besok.
+
+**Satu feed mati tidak menghilangkan berita sembilan belas lainnya.** Perilaku yang membuat kesunyian subsistem ini dulu begitu sulit disadari adalah kegagalan yang menghentikan semuanya dan tidak melaporkan apa pun.
+
+---
+
 ## 23a. Sumber Berita & Administrasi Akun
 
 **Pipeline berita berjalan hijau selama berminggu-minggu tanpa menyimpan apa pun yang ditulis manusia.** Satu-satunya `NewsProvider` di pohon kode adalah fixture yang mengarang judul berita untuk keperluan tes — dan fixture itu juga yang menjadi provider default. Jadwal berjalan, handler sukses, laporan hijau, `news_items` kosong. Tiga sebab menumpuk: tidak ada adapter sungguhan, konfigurasinya menunjuk fixture, dan nol jadwal pernah dibuat sehingga adapter yang bekerja pun tak akan pernah dipanggil.
