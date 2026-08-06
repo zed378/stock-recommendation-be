@@ -91,6 +91,15 @@ RANGE_EXPANSION_RATIO = Decimal("2.0")
 #: nearest resistance as to the nearest support.
 MIN_REWARD_TO_RISK = Decimal("2.0")
 
+#: Net foreign flow at or beyond this multiple of its own recent average
+#: absolute flow is a spike. Measured against the issuer's own history because
+#: a hundred billion rupiah is a quiet day in BBCA and an impossible one in a
+#: small cap.
+FOREIGN_FLOW_RATIO = Decimal("2.5")
+
+#: Sessions of foreign flow the baseline is taken over.
+FOREIGN_FLOW_LOOKBACK = 20
+
 #: The fast and slow averages whose crossing is called golden or death. Ten and
 #: fifty because that is the pair the request named; the engine's own snapshot
 #: carries 20/50/200, so these are computed here rather than read from it.
@@ -343,3 +352,24 @@ def reward_to_risk(
     if risk <= 0:
         return None
     return (resistance - price) / risk, support, resistance
+
+
+def foreign_flow_ratio(history: list[Decimal]) -> tuple[Decimal, Decimal] | None:
+    """The latest net foreign flow against the typical size of recent ones.
+
+    `history` is newest first. The baseline is the mean *absolute* flow of the
+    preceding sessions, not the mean signed flow: a name that alternates large
+    buying and large selling has a signed average near zero, and dividing by
+    that would make every ordinary session look like a spike.
+
+    Returns `(ratio, latest)` where the ratio is signed - so the caller can
+    tell accumulation from distribution without recomputing anything.
+    """
+    if len(history) < 6:
+        return None
+
+    latest, *earlier = history[:FOREIGN_FLOW_LOOKBACK]
+    baseline = sum(abs(value) for value in earlier) / len(earlier)
+    if baseline <= 0:
+        return None
+    return latest / baseline, latest

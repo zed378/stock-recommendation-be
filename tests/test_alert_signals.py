@@ -478,3 +478,87 @@ def test_no_alert_kind_names_an_instruction() -> None:
         if word in kind.value.split("_")
     ]
     assert not offenders, offenders
+
+
+def test_every_alert_kind_has_a_label_in_both_languages() -> None:
+    """The interface resolves each kind through the message table, so a kind
+    with no entry
+    reaches the reader as its own raw enum value - `volume_spike_quiet` in the
+    middle of a sentence. Adding a member and forgetting the labels is one
+    commit, and nothing else would notice.
+    """
+    import re
+    from pathlib import Path
+
+    messages = (
+        Path(__file__).resolve().parents[1] / "frontend" / "src" / "i18n" / "messages.ts"
+    ).read_text(encoding="utf-8")
+
+    for kind in AlertKind:
+        # Twice: the file holds one table per language.
+        found = len(re.findall(rf'"alert\.{kind.value}":', messages))
+        assert found == 2, (
+            f"alert.{kind.value} appears {found} times; it needs an entry in both "
+            "the Indonesian and English tables"
+        )
+
+
+# --- foreign participation ---------------------------------------------------
+
+
+def flow(*values: str) -> list[Decimal]:
+    """Net foreign flow, newest first."""
+    return [Decimal(v) for v in values]
+
+
+def foreign(history: list[Decimal]):
+    from aidss.monitoring.alerts import evaluate_foreign_flow
+
+    return evaluate_foreign_flow(
+        asset_id=ASSET, ticker="BBRI", price=Decimal("3020"), history=history
+    )
+
+
+def test_a_large_net_sale_is_reported_as_distribution() -> None:
+    candidates = foreign(flow("-150", "10", "-12", "8", "-9", "11"))
+
+    assert [c.kind for c in candidates] == [AlertKind.FOREIGN_FLOW_SPIKE]
+    assert candidates[0].direction is AlertDirection.DOWN
+    assert candidates[0].context["side"] == "sell"
+
+
+def test_a_large_net_purchase_is_reported_as_accumulation() -> None:
+    candidates = foreign(flow("150", "10", "-12", "8", "-9", "11"))
+
+    assert candidates[0].direction is AlertDirection.UP
+    assert candidates[0].context["side"] == "buy"
+
+
+def test_an_ordinary_session_is_not_a_spike() -> None:
+    assert not foreign(flow("11", "10", "-12", "8", "-9", "11"))
+
+
+def test_the_baseline_uses_absolute_flow_not_signed() -> None:
+    """A name that alternates large buying and large selling has a signed
+    average near zero. Dividing by that would make every ordinary session look
+    like a spike - which is the failure mode this issuer type would hit first.
+    """
+    alternating = flow("100", "-100", "100", "-100", "100", "-100")
+
+    assert not foreign(alternating), "±100 against a ±100 history is not unusual"
+
+
+def test_too_little_history_says_nothing() -> None:
+    """A newly listed issuer, or one the summary importer has not reached yet.
+    Silence rather than a ratio computed from two data points."""
+    assert not foreign(flow("500", "1"))
+
+
+def test_the_message_does_not_claim_to_know_who_or_why() -> None:
+    """The data is two numbers from the exchange. Which broker, which
+    institution, and what they intend are none of them in it - and all of them
+    are what a reader seeing the words "smart money" would assume it knew."""
+    message = foreign(flow("-150", "10", "-12", "8", "-9", "11"))[0].message.lower()
+
+    for claim in ("smart money", "bandar", "institution", "accumulat", "distribut"):
+        assert claim not in message, message

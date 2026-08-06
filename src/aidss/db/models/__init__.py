@@ -24,6 +24,7 @@ from aidss.db.models.analysis import (
 )
 from aidss.db.models.asset import (
     Asset,
+    DailyTradingSummary,
     FeatureSnapshot,
     FundamentalMetric,
     HistoricalPrice,
@@ -83,6 +84,7 @@ __all__ = [
     "FeatureSnapshot",
     "FundamentalMetric",
     "HistoricalPrice",
+    "DailyTradingSummary",
     "Issuer",
     "HoldingInputMethod",
     "InvestmentHorizon",

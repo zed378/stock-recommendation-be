@@ -36,6 +36,7 @@ from aidss.monitoring.signals import (
     EXTREME_BAND,
     FALSE_BREAKOUT_SESSIONS,
     FAST_MA,
+    FOREIGN_FLOW_RATIO,
     GAP_THRESHOLD,
     MIN_REWARD_TO_RISK,
     QUIET_MOVE_LIMIT,
@@ -48,6 +49,7 @@ from aidss.monitoring.signals import (
     STOCH_OVERSOLD,
     VOLUME_SPIKE_RATIO,
     TechnicalSignals,
+    foreign_flow_ratio,
     reward_to_risk,
 )
 
@@ -647,6 +649,57 @@ def evaluate_trailing_stop(
                 "peak": str(peak_since_entry),
                 "drop": str(drop.quantize(Decimal("0.0001"))),
                 "threshold": str(drop_fraction),
+            },
+        )
+    ]
+
+
+def evaluate_foreign_flow(
+    *,
+    asset_id: uuid.UUID,
+    ticker: str,
+    price: Decimal,
+    history: list[Decimal],
+    now: datetime | None = None,
+) -> list[AlertCandidate]:
+    """Net foreign buying or selling far above this issuer's own recent size.
+
+    Its own function because its input is a different dataset - the exchange's
+    end-of-session record rather than the price bars - and because it is the
+    one alert here that can be absent for an ordinary reason: IDX publishes no
+    foreign figures for some sessions, and a name with too little history
+    simply produces nothing.
+
+    States the flow and its size. It does not say who was buying, which broker,
+    or what they intend - none of which is in the data, and all of which is
+    what somebody reading the words "smart money" would assume it knew.
+    """
+    now = now or datetime.now(UTC)
+    computed = foreign_flow_ratio(history)
+    if computed is None:
+        return []
+
+    ratio, latest = computed
+    if abs(ratio) < FOREIGN_FLOW_RATIO:
+        return []
+
+    accumulating = latest > 0
+    return [
+        AlertCandidate(
+            kind=AlertKind.FOREIGN_FLOW_SPIKE,
+            direction=AlertDirection.UP if accumulating else AlertDirection.DOWN,
+            message=(
+                f"{ticker} recorded net foreign "
+                f"{'buying' if accumulating else 'selling'} of "
+                f"{abs(latest):,.0f} shares, about {abs(ratio):.1f}x the size of its "
+                f"recent sessions."
+            ),
+            dedup_key=f"foreign-flow:{asset_id}:{_session_key(now)}",
+            observed_price=price,
+            context={
+                "net_foreign": str(latest),
+                "ratio": str(ratio.quantize(Decimal("0.01"))),
+                "side": "buy" if accumulating else "sell",
             },
         )
     ]

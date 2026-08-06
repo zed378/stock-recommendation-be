@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.collectors.market_data import load_candles
+from aidss.collectors.trading_summary import foreign_flow_history
 from aidss.config import get_settings
 from aidss.db.models import (
     Alert,
@@ -42,6 +43,7 @@ from aidss.indicators.features import compute_features
 from aidss.monitoring.alerts import (
     AlertCandidate,
     evaluate,
+    evaluate_foreign_flow,
     evaluate_geometry,
     evaluate_signals,
     evaluate_trailing_stop,
@@ -293,6 +295,17 @@ def poll_watched_assets(
             price=quote.price,
             support_levels=support,
             resistance_levels=resistance,
+            now=now,
+        )
+
+        # Foreign participation, from the exchange's own session record rather
+        # than from the price bars. Absent for issuers nobody has imported a
+        # summary for, which produces nothing rather than an error.
+        candidates += evaluate_foreign_flow(
+            asset_id=asset_id,
+            ticker=asset.ticker,
+            price=quote.price,
+            history=foreign_flow_history(session, asset.ticker),
             now=now,
         )
 

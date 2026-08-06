@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import case, func, select
@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from aidss.agents.engine import AnalysisEngine
 from aidss.collectors.issuers import sync_directory
 from aidss.collectors.market_data import FundamentalCollector, MarketDataCollector, load_candles
+from aidss.collectors.trading_summary import sync_summaries
 from aidss.config import get_settings
 from aidss.db.base import get_sessionmaker
 from aidss.db.models import (
@@ -287,6 +288,33 @@ def backfill_news_tags(session: Session, payload: dict[str, Any]) -> dict[str, A
 # ---------------------------------------------------------------------------
 # The listed-company directory
 # ---------------------------------------------------------------------------
+
+
+@register("market.trading_summary")
+def sync_trading_summary(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Store one session's exchange record for every issuer.
+
+    One request covers all 963, so this is a single job rather than one per
+    watched ticker - and it means the foreign-flow history exists for a name
+    before anybody starts watching it, which is when that history is worth
+    having.
+
+    A date with no rows is a weekend or a holiday, not a failure. Reported as
+    such rather than retried: the queue would otherwise spend its attempts on
+    a day the market was shut.
+    """
+    from aidss.plugins.adapters.market_idx import IDXMarketDataProvider
+
+    raw = payload.get("date")
+    on_date = date.fromisoformat(str(raw)) if raw else datetime.now(UTC).date()
+
+    provider = IDXMarketDataProvider.from_settings(get_settings())
+    rows = provider.daily_trading_summary(on_date)
+    if not rows:
+        return {"session_date": on_date.isoformat(), "added": 0, "updated": 0, "closed": True}
+
+    report = sync_summaries(session, rows)
+    return {**report.as_payload(), "closed": False}
 
 
 @register("issuers.sync")
@@ -561,6 +589,34 @@ def due_news_schedules(
             )
         ).all()
     )
+
+
+def enqueue_daily_trading_summary(
+    session: Session, *, now: datetime | None = None
+) -> dict[str, Any]:
+    """Queue today's exchange summary once per day.
+
+    Deduplicated on the date rather than on a time bucket, because the record
+    is published once per session and re-importing it is only useful when the
+    exchange revises it - which one retry a day covers.
+
+    Queued unconditionally rather than gated on a market calendar this platform
+    does not have: a weekend returns no rows and the handler reports the day as
+    closed, which is cheaper than being wrong about a public holiday.
+    """
+    now = now or datetime.now(UTC)
+    on_date = now.date().isoformat()
+    result = queue.enqueue(
+        session,
+        "market.trading_summary",
+        {"date": on_date},
+        dedup_key=f"trading-summary:{on_date}",
+    )
+    return {
+        "enqueued": 1 if result.created else 0,
+        "already_queued": 0 if result.created else 1,
+        "date": on_date,
+    }
 
 
 def enqueue_due_news_sweep(session: Session, *, now: datetime | None = None) -> dict[str, Any]:

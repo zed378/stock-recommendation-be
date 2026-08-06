@@ -331,6 +331,31 @@ class IDXMarketDataProvider(MarketDataProvider):
             )
         return [row for row in rows if isinstance(row, dict) and row.get("EfekEmiten_Saham")]
 
+    def daily_trading_summary(self, on_date: date) -> list[dict[str, Any]]:
+        """The exchange's end-of-session record for every issuer on one date.
+
+        Carries what no price feed does: foreign buy and foreign sell value,
+        and the transaction count. That is the only free, public basis for
+        asking whether foreign money is accumulating or distributing a name.
+
+        A non-trading day returns an empty list rather than an error - the
+        endpoint answers 200 with no rows for a weekend or a holiday, and a
+        caller walking back through dates should read that as "nothing traded",
+        not as a failure.
+        """
+        payload = self._get(
+            "/TradingSummary/GetStockSummary",
+            {"length": 2000, "start": 0, "date": on_date.strftime("%Y%m%d")},
+            referer="https://www.idx.co.id/en/market-data/trading-summary/stock-summary/",
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise ProviderUnavailableError(
+                self.name,
+                f"trading summary had an unexpected shape: {type(payload).__name__}",
+                retryable=False,
+            )
+        return [row for row in payload["data"] if isinstance(row, dict)]
+
     # --- fundamentals ----------------------------------------------------
 
     def get_fundamentals(self, ticker: str) -> list[FundamentalPoint]:

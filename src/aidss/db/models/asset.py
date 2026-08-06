@@ -182,3 +182,52 @@ class Issuer(Base):
 
     synced_at: Mapped[datetime] = mapped_column(default=utcnow)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class DailyTradingSummary(Base):
+    """One session's exchange-published trading summary for one issuer.
+
+    Separate from `historical_prices`, which holds OHLCV normalised across
+    several providers. This is IDX's own end-of-session record and carries
+    things no price feed does - foreign buy and sell value, and the number of
+    transactions - which is the whole reason it exists.
+
+    Keyed by ticker rather than by asset, because the exchange publishes all
+    963 issuers whether or not this platform tracks them. Making the row wait
+    for an `Asset` would mean the history only starts when somebody adds the
+    ticker to a watchlist, which is exactly when it is least useful.
+    """
+
+    __tablename__ = "daily_trading_summaries"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    ticker: Mapped[str] = mapped_column(String(20), index=True)
+    session_date: Mapped[date] = mapped_column(index=True)
+
+    close: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
+    previous_close: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
+    volume: Mapped[Decimal | None] = mapped_column(Numeric(28, 2), default=None)
+    value: Mapped[Decimal | None] = mapped_column(Numeric(28, 2), default=None)
+    #: Number of transactions. A daily count, not the per-minute frequency an
+    #: unusual-activity screen would want - the exchange does not publish that
+    #: for free, and this is what it does publish.
+    frequency: Mapped[int | None] = mapped_column(default=None)
+
+    #: Foreign participation, as reported. Stored as the two sides rather than
+    #: their difference: a small net on huge two-way flow and a small net on
+    #: almost no flow are different sessions, and the difference alone cannot
+    #: tell them apart.
+    foreign_buy: Mapped[Decimal | None] = mapped_column(Numeric(28, 2), default=None)
+    foreign_sell: Mapped[Decimal | None] = mapped_column(Numeric(28, 2), default=None)
+
+    fetched_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    @property
+    def net_foreign(self) -> Decimal | None:
+        if self.foreign_buy is None or self.foreign_sell is None:
+            return None
+        return self.foreign_buy - self.foreign_sell
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "session_date", name="uq_trading_summary_session"),
+    )

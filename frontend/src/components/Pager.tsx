@@ -16,7 +16,7 @@ import { Button, inputClass } from "@/components/primitives";
 export type PageState = { limit: number; offset: number };
 
 /** Offered sizes. Small enough to render fast, large enough to scan. */
-const SIZES = [25, 50, 100, 200];
+const SIZES = [5, 10, 25, 50, 100, 200];
 
 export function Pager({
   total,
@@ -45,7 +45,11 @@ export function Pager({
       <span className="text-xs text-muted">
         {total === 0
           ? t("pager.none")
-          : t("pager.range", { first: n(first, 0), last: n(last, 0), total: n(total, 0) })}
+          : t("pager.range", {
+              first: n(first, 0),
+              last: n(last, 0),
+              total: n(total, 0),
+            })}
       </span>
 
       <label className="flex items-center gap-1.5 text-xs text-faint">
@@ -56,7 +60,9 @@ export function Pager({
           // Back to the start on resize. Keeping the offset would land the
           // reader in the middle of a differently-sized list, at rows they
           // have not seen and cannot place.
-          onChange={(event) => onChange({ limit: Number(event.target.value), offset: 0 })}
+          onChange={(event) =>
+            onChange({ limit: Number(event.target.value), offset: 0 })
+          }
         >
           {SIZES.map((size) => (
             <option key={size} value={size}>
@@ -71,7 +77,9 @@ export function Pager({
           size="sm"
           variant="ghost"
           disabled={!hasPrevious}
-          onClick={() => onChange({ ...page, offset: Math.max(0, page.offset - page.limit) })}
+          onClick={() =>
+            onChange({ ...page, offset: Math.max(0, page.offset - page.limit) })
+          }
         >
           {t("pager.previous")}
         </Button>
@@ -79,7 +87,9 @@ export function Pager({
           size="sm"
           variant="ghost"
           disabled={!hasNext}
-          onClick={() => onChange({ ...page, offset: page.offset + page.limit })}
+          onClick={() =>
+            onChange({ ...page, offset: page.offset + page.limit })
+          }
         >
           {t("pager.next")}
         </Button>

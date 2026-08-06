@@ -33,6 +33,7 @@ from aidss.jobs.handlers import (
     JobDeferred,
     PermanentJobError,
     due_news_schedules,
+    enqueue_daily_trading_summary,
     enqueue_due_fundamentals,
     enqueue_due_news_sweep,
     enqueue_monitoring_pass,
@@ -312,6 +313,10 @@ class Scheduler:
             # operator set from the admin screen. Off unless they set one.
             news_sweep = enqueue_due_news_sweep(session, now=now)
 
+            # The exchange's own session record, which carries the foreign
+            # participation no price feed does. Once a day, all issuers.
+            trading_summary = enqueue_daily_trading_summary(session, now=now)
+
             session.commit()
             return {
                 "leader": True,
@@ -324,6 +329,7 @@ class Scheduler:
                 "already_queued": skipped,
                 "fundamentals": fundamentals,
                 "news_sweep": news_sweep,
+                "trading_summary": trading_summary,
                 "monitoring": monitoring,
                 "total_enqueued": (
                     enqueued + fundamentals["enqueued"] + monitoring["enqueued"]
