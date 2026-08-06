@@ -48,7 +48,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setExpiredNotice(true);
     };
     window.addEventListener(SESSION_EXPIRED, onExpired);
-    return () => window.removeEventListener(SESSION_EXPIRED, onExpired);
+
+    // Periodically check if the token expires while the user is idle
+    const checkExpiry = () => {
+      storedToken();
+    };
+    const interval = setInterval(checkExpiry, 5000);
+
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED, onExpired);
+      clearInterval(interval);
+    };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {

@@ -487,6 +487,7 @@ export const id = {
     "Alert menyatakan apa yang terjadi, bukan apa yang harus dilakukan. Sikap dan " +
     "confidence-nya ada di layar analisis, lengkap dengan faktor yang bertentangan.",
   "alert.level_approached": "Mendekati level",
+  "alert.resistance_approached": "Mendekati resisten",
   "alert.level_crossed": "Menembus level",
   "alert.stance_changed": "Sikap berubah",
   "alert.limit_proximity": "Mendekati batas ARA",
@@ -1256,6 +1257,7 @@ export const en: Record<MessageKey, string> = {
     "An alert states what happened, not what to do about it. The stance and its confidence " +
     "live on the analysis screen, with the factors arguing against it.",
   "alert.level_approached": "Level approached",
+  "alert.resistance_approached": "Resistance approached",
   "alert.level_crossed": "Level crossed",
   "alert.stance_changed": "Stance changed",
   "alert.limit_proximity": "Near the auto-reject ceiling",

@@ -365,7 +365,16 @@ export function Monitoring() {
                           : "border-line text-muted"
                     }`}
                   >
-                    {t(`alert.${alert.kind}` as MessageKey)}
+                    {(() => {
+                      let key = `alert.${alert.kind}`;
+                      if (alert.kind === "level_approached") {
+                        key = "alert.resistance_approached";
+                      } else if (alert.kind === "level_crossed") {
+                        if (alert.direction === "up") key = "alert.resistance_broken";
+                        else if (alert.direction === "down") key = "alert.support_broken";
+                      }
+                      return t(key as MessageKey);
+                    })()}
                   </span>
                   <span className="ml-auto text-xs text-faint">
                     {dateTime(alert.triggered_at)}

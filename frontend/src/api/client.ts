@@ -23,6 +23,7 @@ export function storedToken(): string | null {
   const expiresAt = localStorage.getItem(TOKEN_EXPIRY_KEY);
   if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
     clearToken();
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED));
     return null;
   }
   return token;
