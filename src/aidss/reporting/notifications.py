@@ -34,6 +34,11 @@ class NotificationEvent(StrEnum):
     """
 
     ANALYSIS_READY = "analysis_ready"
+    #: The other language finished rendering, after the analysis it belongs to
+    #: was already readable. A separate event because it is a separate arrival:
+    #: the reader has had the analysis for a while by the time this fires, and
+    #: folding it into ANALYSIS_READY would announce the same analysis twice.
+    TRANSLATION_READY = "translation_ready"
     RECOMMENDATION_UPDATED = "recommendation_updated"
     #: Monitoring observed one of the conditions someone asked to be told
     #: about. Named for the observation, not for what to do about it - the
@@ -51,6 +56,7 @@ class NotificationEvent(StrEnum):
 #: can read as a prompt to transact.
 SUBJECTS: dict[NotificationEvent, str] = {
     NotificationEvent.ANALYSIS_READY: "New analysis available",
+    NotificationEvent.TRANSLATION_READY: "The other language is ready",
     NotificationEvent.RECOMMENDATION_UPDATED: "Recommendation updated",
     NotificationEvent.MONITORING_ALERT: "Monitoring raised an alert",
     NotificationEvent.NEWS_INGESTED: "New coverage collected",

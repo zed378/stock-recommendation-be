@@ -1072,9 +1072,27 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 - **Penjaga bahasa-eksekusi berlaku pada keluarannya.** Sumber yang lolos dalam Bahasa Indonesia bisa kembali sebagai "buy now" dalam Bahasa Inggris; aturan yang hanya ditegakkan pada aslinya akan berlubang selebar fitur ini.
 - **Refleksi jurnal melewati jalur sensitif**, karena catatan pribadi tidak boleh sampai ke penyedia yang analisisnya sendiri akan ditolak ke sana.
 
-**Bahasa Inggris adalah bahasa utama.** Model yang tersedia di sini bernalar lebih andal di dalamnya, dan setiap aturan yang menguji keluaran — terutama penjaga bahasa-eksekusi — ditulis dan diuji terhadap teks Inggris. Bahasa Indonesia dirender darinya dalam run yang sama dan disimpan berdampingan, sehingga pembaca Indonesia tidak menunggu apa pun.
+**Bahasa Inggris adalah bahasa utama.** Model yang tersedia di sini bernalar lebih andal di dalamnya, dan setiap aturan yang menguji keluaran — terutama penjaga bahasa-eksekusi — ditulis dan diuji terhadap teks Inggris.
 
-**Kedua bahasa disimpan untuk setiap agen, bukan hanya untuk rekomendasi.** Tab analisis menampilkan temuan tiap agen, dan sakelar yang menerjemahkan kesimpulannya saja akan meninggalkan bukti di bawahnya dalam bahasa yang tidak diminta pembaca. Dirender sekali saat analisis berjalan: pembaca sudah menunggu satu kali, dan alternatifnya adalah membayar panggilan model setiap kali seseorang menekan sakelar atas teks yang tidak bisa berubah. Analisis jadi lebih lama; notifikasi sudah ada untuk memberi tahu kapan selesai.
+**Kedua bahasa disimpan untuk setiap agen, bukan hanya untuk rekomendasi.** Tab analisis menampilkan temuan tiap agen, dan sakelar yang menerjemahkan kesimpulannya saja akan meninggalkan bukti di bawahnya dalam bahasa yang tidak diminta pembaca. Dirender sekali dan disimpan, bukan dipanggil ulang tiap kali sakelar ditekan atas teks yang tidak bisa berubah.
+
+---
+
+## 23b. Respons Bertahap
+
+**Terjemahan adalah job kedua, bukan tahap akhir job pertama.** Dirender di dalam run analisis, ia menggandakan waktu sebelum pembaca punya apa pun — untuk bahasa yang mungkin tidak pernah ia buka. Yang lebih menentukan: setiap detik tambahan di dalam satu job adalah detik tambahan yang harus dilewati **tanpa satu pun panggilan model gagal**. Pekerjaan yang lebih panjang tidak sekadar terasa lambat, ia lebih mungkin tidak selesai sama sekali, dan saat gagal ia membuang analisis yang sudah berhasil bersama terjemahan yang belum.
+
+**Dipecah, kegagalan menjadi parsial alih-alih total.** Terjemahan yang gagal meninggalkan analisis Inggris yang utuh dan terbaca. Ini bentuk yang sama dengan aturan di §23 — terjemahan gagal tidak boleh merusak aslinya — hanya ditegakkan pada tingkat job, bukan pada tingkat payload.
+
+**Di-enqueue di transaksi yang sama dengan penyimpanan hasilnya,** dengan `dedup_key` per `analysis_result_id`. Commit yang sama yang membuat analisis ada juga membuat terjemahannya terantre; tidak ada jendela di mana hasil tersimpan tanpa pekerjaan lanjutan yang menemaninya. Kunci dedup berarti percobaan ulang tidak membayar render kedua atas teks yang sudah dirender.
+
+**Kedua rute — sinkron maupun antrean — berperilaku sama.** Endpoint sinkron masih ada untuk skrip, dan bila ia menerjemahkan inline sementara jalur antrean tidak, sistem akan punya dua bentuk hasil yang berbeda tergantung siapa yang memanggilnya. Ia menyimpan Inggris dan meng-enqueue lanjutan yang persis sama.
+
+**Sakelar bahasa baru muncul setelah bahasa kedua benar-benar ada.** Ditawarkan lebih awal, ia berpindah ke tempat kosong: pembaca menekannya, tidak terjadi apa-apa, dan kontrol itu telah mengajari mereka untuk tidak mempercayainya. Gerbangnya adalah isi datanya, bukan tebakan atas waktu.
+
+**Event `translation_ready` memicu render ulang, bukan permintaan muat ulang.** Halaman yang sudah terbuka mengambil ulang analisisnya dan sakelarnya muncul sendiri.
+
+**Toast dan notifikasi, keduanya, untuk event yang sama.** Notifikasi adalah catatan: ia bertahan, ia terhitung di lencana, dan ia masih ada besok — untuk pembaca yang sudah beranjak. Toast adalah interupsi bagi yang masih menatap halamannya saat itu. Keduanya perlu, karena keduanya adalah orang yang berbeda. Tidak ada informasi yang hanya hidup di toast; yang terlewat sekilas tetap tercatat di tempat lain.
 
 **Satu panggilan per agen, bukan satu panggilan untuk semuanya.** Membatch lebih murah, tetapi `translate` menolak respons yang menjatuhkan satu kunci — dan dengan seluruh agen dalam satu payload, satu kelalaian akan membuang seluruh himpunan. Per agen, kegagalan hanya membebani render agen itu.
 

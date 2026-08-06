@@ -308,3 +308,117 @@ def test_the_summary_agents_lists_are_translated() -> None:
 
     for field in ("summary", "agreements", "disagreements", "watch_items", "risk_factors"):
         assert field in TRANSLATABLE_KEYS, field
+
+
+# --- translation as its own job ---------------------------------------------
+
+
+def _stored_analysis(session):
+    """One persisted analysis, English only, exactly as `analysis.run` leaves it."""
+    from aidss.agents.engine import AnalysisEngine
+    from aidss.collectors.market_data import MarketDataCollector
+    from aidss.config import Settings
+    from aidss.db.models import AnalysisResult
+    from aidss.domain.types import Timeframe
+    from aidss.plugins.registry import get_market_data_provider
+    from tests.test_agents import make_gateway
+
+    collector = MarketDataCollector(
+        get_market_data_provider(Settings(market_data_provider="fixture"))
+    )
+    asset = collector.get_or_create_asset(session, "ANTM", sector="Mining")
+    end = datetime(2025, 6, 1, tzinfo=UTC)
+    collector.collect(session, asset, Timeframe.D1, end - timedelta(days=400), end)
+
+    run = AnalysisEngine(session, make_gateway()).analyze(
+        asset, Timeframe.D1, translate_output=False
+    )
+    return run, session.get(AnalysisResult, run.analysis_result_id)
+
+
+def _stub_translate(monkeypatch, calls=None):
+    from aidss.prompts import translation as translation_module
+
+    def fake(gateway, payload, target, **kwargs):  # noqa: ANN001, ANN202, ARG001
+        fields = translation_module.translatable_fields(payload)
+        if calls is not None:
+            calls.append(kwargs.get("agent", "?"))
+        return translation_module.Translation(
+            language=target,
+            fields={k: f"[{target.value}] {v}" for k, v in fields.items()},
+            model="stub-translator",
+        )
+
+    monkeypatch.setattr("aidss.agents.engine.translate", fake)
+    monkeypatch.setattr("aidss.recommendations.rendering.translate", fake)
+
+
+def test_the_analysis_job_stores_one_language(session) -> None:
+    """Translating inline made a slow run far slower for no benefit to the
+    person waiting - and a gateway that gave up part-way took the finished
+    analysis with it."""
+    run, result = _stored_analysis(session)
+
+    agents = result.context_snapshot["result"]["agents"]
+    assert agents, "the analysis produced nothing to check"
+    assert all(not a.get("translations") for a in agents.values())
+
+
+def test_the_translation_job_fills_in_the_other_language(session, monkeypatch) -> None:
+    from aidss.agents.engine import AnalysisEngine
+    from aidss.prompts.translation import translatable_fields
+    from tests.test_agents import make_gateway
+
+    run, result = _stored_analysis(session)
+    _stub_translate(monkeypatch)
+
+    report = AnalysisEngine(session, make_gateway()).translate_stored(result)
+    target = report["language"]
+
+    assert report["agents"], "no agent was rendered"
+    session.refresh(result)
+    agents = result.context_snapshot["result"]["agents"]
+    for name in report["agents"]:
+        rendered = agents[name]["translations"][target]["fields"]
+        assert set(rendered) == set(translatable_fields(agents[name])), name
+
+
+def test_re_running_the_translation_pays_for_nothing_twice(session, monkeypatch) -> None:
+    """A retry after a partial failure must not re-render what already
+    succeeded; those tokens are spent."""
+    from aidss.agents.engine import AnalysisEngine
+    from tests.test_agents import make_gateway
+
+    run, result = _stored_analysis(session)
+
+    first: list[str] = []
+    _stub_translate(monkeypatch, first)
+    AnalysisEngine(session, make_gateway()).translate_stored(result)
+    assert first, "the first pass rendered nothing"
+
+    session.refresh(result)
+    second: list[str] = []
+    _stub_translate(monkeypatch, second)
+    report = AnalysisEngine(session, make_gateway()).translate_stored(result)
+
+    assert report["agents"] == [], "an already-rendered agent was translated again"
+
+
+def test_a_failed_translation_leaves_the_analysis_readable(session, monkeypatch) -> None:
+    """The analysis is the product; this is a convenience over it."""
+    from aidss.agents.engine import AnalysisEngine
+    from tests.test_agents import make_gateway
+
+    run, result = _stored_analysis(session)
+
+    def explode(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise ValueError("the gateway gave up")
+
+    monkeypatch.setattr("aidss.agents.engine.translate", explode)
+    monkeypatch.setattr("aidss.recommendations.rendering.translate", explode)
+
+    report = AnalysisEngine(session, make_gateway()).translate_stored(result)
+
+    assert report["agents"] == []
+    session.refresh(result)
+    assert result.context_snapshot["result"]["agents"], "the analysis itself must survive"

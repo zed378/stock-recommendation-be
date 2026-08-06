@@ -62,11 +62,19 @@ def run_analysis(
     session: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
 ) -> AnalysisResponse:
-    """Run the multi-agent flow over one asset.
+    """Run the multi-agent flow over one asset and wait for it.
 
-    Synchronous, which is fine for a single asset. Section 2.6 puts deep
-    research and backfills on the job queue; a handful of agent calls does not
-    need that machinery.
+    Kept for scripts and for callers that genuinely want the result in the
+    response, but the interface no longer uses it: a full run outlives the
+    request timeout of anything sitting in front of the server, and behind a
+    proxy that limit is not ours to raise. `POST .../analysis/background` is
+    what the button calls.
+
+    Translation is not done inline here either, for the same reason it is not
+    done inline in the job: it doubles the time before the reader has anything,
+    to render a language they may never switch to. The follow-up job is queued
+    exactly as the background path queues it, so both routes leave the system
+    in the same state.
     """
     asset = _resolve_asset(session, ticker, payload.exchange)
 
@@ -85,7 +93,24 @@ def run_analysis(
         payload.timeframe,
         user_id=user.id,
         include_recommendation=payload.include_recommendation,
+        translate_output=False,
     )
+
+    if run.runs and run.analysis_result_id is not None:
+        # Same follow-up the queued path enqueues, so one route does not quietly
+        # produce a bilingual analysis while the other produces a monolingual
+        # one. Deduplicated per analysis, so a caller that also queues it gets
+        # the job that already exists.
+        enqueue(
+            session,
+            "analysis.translate",
+            {
+                "analysis_result_id": str(run.analysis_result_id),
+                "user_id": str(user.id),
+                "ticker": run.asset_ticker,
+            },
+            dedup_key=f"translate:{run.analysis_result_id}",
+        )
 
     if not run.runs:
         # Every agent skipped or failed. Reporting 200 with an empty body would

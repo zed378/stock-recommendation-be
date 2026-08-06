@@ -79,3 +79,32 @@ def test_an_html_error_body_is_not_shown_as_the_message() -> None:
         "the markup check must guard the string branch, which is where a proxy's "
         "HTML page arrives"
     )
+
+
+def test_the_language_switch_waits_for_both_languages() -> None:
+    """Translation runs as a job *after* the analysis, so for a stretch there is
+    exactly one language. A switch offered then would change to nothing - the
+    reader presses it, nothing happens, and the control has taught them not to
+    trust it."""
+    source = read(ASSET_DETAIL)
+
+    assert "bothLanguagesReady" in source, (
+        "the language switch must be gated on a second language actually existing"
+    )
+    assert re.search(r"bothLanguagesReady\s*&&\s*\(\s*\n\s*<LanguageSwitch", source), (
+        "the gate must guard the switch itself, not merely be computed"
+    )
+
+
+def test_a_finished_translation_re_renders_rather_than_needing_a_reload() -> None:
+    """The event is what makes the switch appear on a page already open."""
+    source = read(FRONTEND / "realtime" / "useEvents.ts")
+
+    assert "translation_ready" in source, "the translation event must be handled"
+    # Matched to the end of the line rather than to the first `]`, which is the
+    # end of the *first* query key rather than the end of the list.
+    match = re.search(r"^\s*translation_ready:\s*(.+)$", source, re.M)
+    assert match and '["analysis"]' in match.group(1), (
+        "translation_ready must invalidate the analysis query, or the page keeps "
+        "showing the version it fetched before the rendering existed"
+    )

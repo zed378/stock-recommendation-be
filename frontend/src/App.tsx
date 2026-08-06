@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/context";
 import { I18nProvider } from "@/i18n";
 import { Layout } from "@/components/Layout";
 import { Loading } from "@/components/primitives";
+import { ToastProvider } from "@/components/Toasts";
 import { Login } from "@/pages/Login";
 import { Watchlist } from "@/pages/Watchlist";
 import { AssetDetail } from "@/pages/AssetDetail";
@@ -47,6 +48,7 @@ export default function App() {
     <I18nProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <ToastProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Public />} />
@@ -67,6 +69,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/watchlist" replace />} />
             </Routes>
           </BrowserRouter>
+          </ToastProvider>
         </AuthProvider>
       </QueryClientProvider>
     </I18nProvider>

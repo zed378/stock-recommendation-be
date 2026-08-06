@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { storedToken } from "@/api/client";
+import { useToast } from "@/components/toastContext";
+import { useI18n } from "@/i18n/context";
 
 /**
  * One socket for the whole session, turning server events into refetches.
@@ -34,6 +36,10 @@ type ServerEvent = {
 /** Which cached queries each event invalidates. */
 const INVALIDATES: Record<string, string[][]> = {
   analysis_ready: [["analysis"], ["strategy"], ["notifications"], ["notifications-unread-count"]],
+  // The rendering landed on an analysis the reader may already be looking at.
+  // Invalidating `analysis` is what makes the language switch appear without a
+  // reload - it only shows once both languages exist.
+  translation_ready: [["analysis"], ["notifications"], ["notifications-unread-count"]],
   recommendation_updated: [["analysis"], ["strategy"]],
   monitoring_alert: [["alerts"], ["monitoring-quotes"], ["notifications"], ["notifications-unread-count"]],
   news_ingested: [["news"], ["notifications"], ["notifications-unread-count"]],
@@ -50,6 +56,8 @@ function socketUrl(): string {
 
 export function useEvents(enabled: boolean): { connected: boolean } {
   const queryClient = useQueryClient();
+  const { show } = useToast();
+  const { t } = useI18n();
   const [connected, setConnected] = useState(false);
   //: Kept in a ref so the reconnect loop can be torn down from the effect
   //: cleanup without the socket itself being a dependency.
@@ -101,6 +109,18 @@ export function useEvents(enabled: boolean): { connected: boolean } {
         for (const key of INVALIDATES[parsed.event] ?? []) {
           queryClient.invalidateQueries({ queryKey: key });
         }
+
+        // A toast as well as the notification, not instead of it. The reader
+        // who walked away needs the record; the one still watching the analysis
+        // needs to know the switch has just become useful.
+        if (parsed.event === "translation_ready") {
+          const ticker = String(parsed.data?.ticker ?? "");
+          show({
+            tone: "success",
+            title: t("toast.translationReady"),
+            body: ticker ? t("toast.translationReadyFor", { ticker }) : undefined,
+          });
+        }
       };
 
       socket.onclose = () => {
@@ -125,7 +145,7 @@ export function useEvents(enabled: boolean): { connected: boolean } {
       socketRef.current = null;
       setConnected(false);
     };
-  }, [enabled, queryClient]);
+  }, [enabled, queryClient, show, t]);
 
   return { connected };
 }

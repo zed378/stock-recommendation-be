@@ -23,7 +23,7 @@ from aidss.agents.engine import AnalysisEngine
 from aidss.collectors.market_data import FundamentalCollector, MarketDataCollector, load_candles
 from aidss.config import get_settings
 from aidss.db.base import get_sessionmaker
-from aidss.db.models import Asset, FundamentalMetric, TickerNewsSchedule
+from aidss.db.models import AnalysisResult, Asset, FundamentalMetric, TickerNewsSchedule
 from aidss.domain.types import Timeframe
 from aidss.indicators.engine import IndicatorEngine
 from aidss.indicators.features import persist_features
@@ -34,6 +34,7 @@ from aidss.news.collector import NewsCollector, NewsScheduler
 from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.registry import get_market_data_provider, get_news_provider
 from aidss.rag.provisioning import build_rag
+from aidss.reporting.notifications import NotificationEvent, NotificationService
 
 Handler = Callable[[Session, dict[str, Any]], dict[str, Any]]
 
@@ -227,7 +228,18 @@ def run_news_schedule(session: Session, payload: dict[str, Any]) -> dict[str, An
 
 @register("analysis.run")
 def run_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
-    """Run the multi-agent analysis off the request thread."""
+    """Run the multi-agent analysis off the request thread.
+
+    Translation is *not* done here. It used to be, and it made a slow job far
+    slower for no benefit to the person waiting: the analysis was finished and
+    readable while five more model calls rendered a language they might never
+    switch to. Worse, a gateway that gives up part-way through took the whole
+    run with it - including the analysis that had already succeeded.
+
+    So this stores the analysis and queues the rendering behind it. The reader
+    gets the result as soon as it exists, and the other language arrives when
+    it arrives.
+    """
     asset = _asset(session, payload)
     timeframe = Timeframe(payload.get("timeframe", Timeframe.D1.value))
     user_id = payload.get("user_id")
@@ -238,6 +250,7 @@ def run_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         timeframe,
         user_id=uuid.UUID(str(user_id)) if user_id else None,
         include_recommendation=bool(payload.get("include_recommendation", True)),
+        translate_output=False,
     )
 
     if not run.runs:
@@ -248,6 +261,23 @@ def run_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             + "; ".join(f"{s.agent}: {s.reason}" for s in run.skipped)
         )
 
+    translation_job: str | None = None
+    if run.analysis_result_id is not None:
+        # Enqueued in the same transaction as the analysis it renders. There is
+        # no window where the analysis is stored and its rendering was never
+        # asked for.
+        queued = queue.enqueue(
+            session,
+            "analysis.translate",
+            {
+                "analysis_result_id": str(run.analysis_result_id),
+                "user_id": str(user_id) if user_id else None,
+                "ticker": run.asset_ticker,
+            },
+            dedup_key=f"translate:{run.analysis_result_id}",
+        )
+        translation_job = str(queued.job.id)
+
     return {
         "ticker": run.asset_ticker,
         "analysis_result_id": str(run.analysis_result_id) if run.analysis_result_id else None,
@@ -256,7 +286,48 @@ def run_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             run.recommendation.as_payload()["label"] if run.recommendation else None
         ),
         "failed": [{"agent": f.agent, "reason": f.reason} for f in run.failed],
+        "translation_job_id": translation_job,
     }
+
+
+@register("analysis.translate")
+def translate_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Render a stored analysis in the other language.
+
+    A separate job because it is separate work: the analysis is the product and
+    this is a convenience over it. Failing here leaves a complete analysis in
+    one language, which is a smaller loss than the alternative and is what the
+    interface already knows how to show.
+    """
+    raw_id = payload.get("analysis_result_id")
+    if not raw_id:
+        raise PermanentJobError("payload is missing analysis_result_id")
+
+    result = session.get(AnalysisResult, uuid.UUID(str(raw_id)))
+    if result is None:
+        raise PermanentJobError(f"analysis {raw_id} no longer exists")
+
+    engine = AnalysisEngine(session, build_gateway(session))
+    report = engine.translate_stored(result)
+
+    user_id = payload.get("user_id")
+    if user_id and (report["agents"] or report["recommendation"]):
+        # Announced only when something was actually rendered. Telling somebody
+        # a translation is ready and then offering them nothing to switch to is
+        # worse than staying quiet.
+        NotificationService(session).notify(
+            uuid.UUID(str(user_id)),
+            NotificationEvent.TRANSLATION_READY,
+            f"The other language is ready for {payload.get('ticker', 'this analysis')}.",
+            context={
+                "ticker": payload.get("ticker"),
+                "analysis_result_id": str(result.id),
+                "language": report["language"],
+                "agents": report["agents"],
+            },
+        )
+
+    return report
 
 
 def _runner(session: Session):

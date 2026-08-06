@@ -635,6 +635,8 @@ export const id = {
   "notif.body.analysis_ready": "Analisis {ticker} selesai — {agents} agen melapor.",
   "notif.body.monitoring_alert": "Pantauan menemukan {count} hal pada {tickers}.",
 
+  "toast.translationReady": "Terjemahan siap",
+  "toast.translationReadyFor": "Analisis {ticker} kini tersedia dalam dua bahasa.",
   "notif.title": "Notifikasi",
   "notif.open": "Buka notifikasi",
   "notif.unread": "{count} belum dibaca",
@@ -1264,6 +1266,8 @@ export const en: Record<MessageKey, string> = {
   "notif.body.analysis_ready": "Analysis for {ticker} finished — {agents} agent(s) reporting.",
   "notif.body.monitoring_alert": "Monitoring observed {count} thing(s) on {tickers}.",
 
+  "toast.translationReady": "Translation ready",
+  "toast.translationReadyFor": "The {ticker} analysis is now available in both languages.",
   "notif.title": "Notifications",
   "notif.open": "Open notifications",
   "notif.unread": "{count} unread",

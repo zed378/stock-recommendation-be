@@ -403,6 +403,18 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   const running = start.isPending || jobId !== null;
   const result = existing.data;
 
+  // Whether there is a second language to switch *to*. Read off what was
+  // actually stored rather than off a flag, so a partial rendering - some
+  // agents translated, some not - is judged on what a reader would see.
+  const bothLanguagesReady = useMemo(() => {
+    const agents = (result?.agents ?? {}) as Record<string, AgentPayload>;
+    const entries = Object.values(agents);
+    if (!entries.length) return false;
+    const source = entries[0]?.language ?? "en";
+    const target = source === "id" ? "en" : "id";
+    return entries.some((agent) => agent?.translations?.[target]?.fields);
+  }, [result]);
+
   // One hook for the whole tab, driven by the recommendation because that is
   // the payload with a fetch fallback for analyses stored before renderings
   // were kept. The agents follow whatever it decides, so the evidence and the
@@ -431,7 +443,13 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
               reading a single analysis in the other language meant finding and
               flipping each of them - which also let the agents and the
               conclusion sit in different languages at the same time. */}
-          {result && !running && (
+          {/* Only once both languages exist. Translation is a job that runs
+              after the analysis, so for a stretch there is exactly one language
+              and a switch would offer to change to nothing - the reader presses
+              it, nothing happens, and the control has taught them not to trust
+              it. It appears by itself when the rendering lands, because the
+              event invalidates this query. */}
+          {result && !running && bothLanguagesReady && (
             <LanguageSwitch
               showing={translation.showing}
               isPending={translation.isPending}

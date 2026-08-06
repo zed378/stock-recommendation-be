@@ -18,12 +18,14 @@ than accidents:
 
 from __future__ import annotations
 
+import copy
 import logging
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.agents.analyzers import (
@@ -278,6 +280,87 @@ class AnalysisEngine:
                 "analysis stored but not announced",
                 extra={"ticker": asset.ticker, "user_id": str(user_id)},
             )
+
+    def translate_stored(self, result: AnalysisResult) -> dict[str, Any]:
+        """Render an already-stored analysis in the other language.
+
+        Runs as its own job, after the analysis is readable. Doing it inline
+        made a slow run far slower for no benefit to the person waiting: the
+        result existed and was being withheld while five more model calls
+        rendered a language they might never switch to - and a gateway that
+        gave up part-way took the finished analysis down with it.
+
+        Reads the stored snapshot rather than a live `AnalysisRun`, because by
+        now the run that produced it is long gone.
+        """
+        # Deep-copied, and that is load-bearing. A shallow copy shares every
+        # nested dict with the instance the ORM is holding, so editing an
+        # agent's payload edits what SQLAlchemy believes is already stored -
+        # and the assignment at the end then compares equal to the old value
+        # and emits no UPDATE at all. The work happens, costs tokens, and is
+        # silently discarded on commit.
+        snapshot = copy.deepcopy(dict(result.context_snapshot or {}))
+        payload = snapshot.get("result") or {}
+        agents = payload.get("agents") or {}
+
+        language = next(
+            (a.get("language") for a in agents.values() if a.get("language")),
+            self._composer.language.value,
+        )
+        target = other_language(language)
+
+        translated_agents: list[str] = []
+        for name, agent_payload in agents.items():
+            fields = translatable_fields(agent_payload)
+            if not fields:
+                continue
+            if (agent_payload.get("translations") or {}).get(target.value):
+                # Already rendered by an earlier attempt. A retry must not pay
+                # for the same tokens twice.
+                continue
+            try:
+                rendered = translate(
+                    self._gateway, agent_payload, target, agent=f"translate:{name}"
+                )
+            except (GatewayError, ValueError) as exc:
+                logger.warning(
+                    "agent output stored without its translation",
+                    extra={"agent": name, "error": f"{type(exc).__name__}: {exc}"},
+                )
+                continue
+
+            agent_payload.setdefault("translations", {})[target.value] = {
+                "fields": rendered.fields,
+                "model": rendered.model,
+                "is_machine_translation": True,
+            }
+            translated_agents.append(name)
+
+        recommendation_done = False
+        row = self._session.scalar(
+            select(Recommendation).where(Recommendation.analysis_result_id == result.id)
+        )
+        if row is not None:
+            recommendation_done = render_translation(
+                self._session, self._gateway, row.id
+            )
+            if recommendation_done and payload.get("recommendation"):
+                payload["recommendation"]["translations"] = dict(row.translations or {})
+                payload["recommendation"]["language"] = row.language
+
+        if translated_agents or recommendation_done:
+            # Reassigned rather than mutated: SQLAlchemy does not track in-place
+            # edits to a JSON column, so the work would be silently discarded.
+            payload["agents"] = agents
+            snapshot["result"] = payload
+            result.context_snapshot = snapshot
+            self._session.flush()
+
+        return {
+            "language": target.value,
+            "agents": translated_agents,
+            "recommendation": recommendation_done,
+        }
 
     def _render_other_language(self, run: AnalysisRun) -> None:
         """Produce the other language for everything a reader will look at.
