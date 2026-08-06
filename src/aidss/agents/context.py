@@ -26,7 +26,13 @@ from sqlalchemy.orm import Session
 
 from aidss.agents.memory import InvestorMemory, MemoryManager
 from aidss.collectors.market_data import load_candles
-from aidss.db.models import Asset, FundamentalMetric, NewsItem, SentimentScore
+from aidss.db.models import (
+    Asset,
+    FundamentalMetric,
+    NewsItem,
+    NewsItemIssuer,
+    SentimentScore,
+)
 from aidss.domain.types import Candle, Timeframe
 from aidss.indicators.engine import IndicatorEngine
 from aidss.indicators.features import compute_features
@@ -129,7 +135,7 @@ class ContextBuilder:
             context.features = compute_features(candles)
 
         context.fundamentals = self._load_fundamentals(asset.id)
-        context.news = self._load_news(asset.id)
+        context.news = self._load_news(asset.id, asset.ticker)
         return context
 
     def _load_fundamentals(self, asset_id: uuid.UUID) -> list[dict[str, Any]]:
@@ -150,11 +156,28 @@ class ContextBuilder:
             for row in rows
         ]
 
-    def _load_news(self, asset_id: uuid.UUID) -> list[dict[str, Any]]:
+    def _load_news(self, asset_id: uuid.UUID, ticker: str) -> list[dict[str, Any]]:
+        """Coverage of this issuer in the recent past.
+
+        Two ways an article gets here, unioned rather than one replacing the
+        other:
+
+          * ``asset_id`` - this asset's scheduled fetch retrieved it;
+          * a tag - a sweep of every feed found this issuer named in it.
+
+        The second is what makes a sector story about six banks reach all six
+        rather than only whichever one's schedule happened to pull it. Both are
+        needed: the schedules still cover tickers whose news arrives through a
+        templated search URL the sweep cannot use.
+        """
         since = self._clock() - timedelta(days=NEWS_WINDOW_DAYS)
+        tagged = select(NewsItemIssuer.news_item_id).where(NewsItemIssuer.ticker == ticker)
         rows = self._session.scalars(
             select(NewsItem)
-            .where(NewsItem.asset_id == asset_id, NewsItem.published_at >= since)
+            .where(
+                (NewsItem.asset_id == asset_id) | NewsItem.id.in_(tagged),
+                NewsItem.published_at >= since,
+            )
             .order_by(NewsItem.published_at.desc())
             .limit(40)
         ).all()

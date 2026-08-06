@@ -311,3 +311,44 @@ def test_re_tagging_removes_a_tag_a_corrected_alias_no_longer_justifies(director
     session.flush()
 
     assert session.scalars(select(NewsItemIssuer)).all() == []
+
+
+def test_a_tagged_story_reaches_the_analysis_for_that_ticker(directory) -> None:
+    """The point of tagging. A sector story naming six banks was previously
+    filed under whichever one's schedule happened to fetch it, and was invisible
+    to the other five - so five analyses reasoned without evidence that was
+    already in the database."""
+    from aidss.agents.context import ContextBuilder
+    from aidss.collectors.market_data import MarketDataCollector
+    from aidss.config import Settings
+    from aidss.domain.types import Timeframe
+    from aidss.plugins.registry import get_market_data_provider
+
+    session = directory
+    collector = MarketDataCollector(
+        get_market_data_provider(Settings(market_data_provider="fixture"))
+    )
+    asset = collector.get_or_create_asset(session, "BBRI")
+
+    add_source(session, "Market Wire", "https://feed.test/all")
+    sweep_all_sources(
+        session,
+        StubFeeds(
+            {
+                "https://feed.test/all": [
+                    entry(
+                        "Saham BBRI dan AADI kompak menguat",
+                        "https://news.test/sector",
+                    )
+                ]
+            }
+        ),
+    )
+
+    context = ContextBuilder(session, now=datetime(2026, 8, 2, tzinfo=UTC)).build(
+        asset, Timeframe.D1
+    )
+
+    assert [a["headline"] for a in context.news] == [
+        "Saham BBRI dan AADI kompak menguat"
+    ], "a story tagged to this issuer must reach its analysis even though no schedule fetched it"
