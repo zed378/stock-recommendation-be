@@ -173,3 +173,31 @@ def test_punctuation_and_case_do_not_change_a_name() -> None:
 
 def test_matching_is_unaffected_by_punctuation(matcher) -> None:
     assert tickers(matcher, "PT. Adaro Andalan Indonesia, Tbk. melaporkan") == {"AADI"}
+
+
+def test_initialisms_are_not_derived() -> None:
+    """Measured, not assumed. Deriving first letters produces "BRI" from "Bank
+    Rakyat Indonesia" - and, over the real directory and a day of real feeds,
+    also produced "bps" for HOKI (matching Badan Pusat Statistik in 17 economics
+    stories), "bagi" for INPC, "siap" for INET, "apa" for NASA, "sri" for SRIL
+    (matching Sri Mulyani) and "mei" for MEDC. One right, eight wrong.
+
+    Nothing in the letters separates "bni" from "apa", so the rule cannot be
+    tightened into correctness - it can only be removed and the useful cases
+    typed in by someone who knows them.
+    """
+    for name, accident in [
+        ("PT Buyung Poetra Sembada Tbk", "bps"),
+        ("PT Bank Artha Graha Internasional Tbk", "bagi"),
+        ("PT Sri Rejeki Isman Tbk", "sri"),
+        ("PT Medco Energi Internasional Tbk", "mei"),
+    ]:
+        assert accident not in derive_aliases(name), f"{name} derived {accident!r}"
+
+
+def test_a_curated_initialism_still_matches() -> None:
+    """Removing the derivation must not remove the capability: "BRI" typed in
+    by hand has to work, or the reason for dropping the rule collapses."""
+    bbri = IssuerPattern("BBRI", "BBRI", "PT Bank Rakyat Indonesia (Persero) Tbk", ("bri",))
+    matcher = IssuerMatcher([bbri])
+    assert {t.ticker for t in matcher.match("BRI salurkan kredit UMKM")} == {"BBRI"}

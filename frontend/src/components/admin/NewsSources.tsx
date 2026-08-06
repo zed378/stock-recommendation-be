@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
+import { useToast } from "@/components/toastContext";
 import {
   Button,
   Card,
@@ -95,6 +96,7 @@ export function NewsSourcesPanel() {
   const [deleting, setDeleting] = useState<Source | null>(null);
   const [tested, setTested] = useState<{ source: Source; result: TestResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -182,6 +184,47 @@ export function NewsSourcesPanel() {
     onError: (caught: Error) => setError(caught.message),
   });
 
+  /**
+   * Read every feed now, rather than waiting for a schedule.
+   *
+   * Queued, not awaited: twenty feeds over the open internet does not fit in a
+   * request, and the reply here is an acknowledgement that the work started.
+   * The notification and the socket event are what report the outcome.
+   */
+  const sweep = useMutation({
+    mutationFn: async () => {
+      const { data, error: failed } = await api.POST("/admin/news-sources/fetch-all", {});
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data;
+    },
+    onSuccess: (job) => {
+      toast.show({
+        title: t("admin.news.sweepQueued"),
+        body: job?.note ?? undefined,
+        tone: "success",
+      });
+      invalidate();
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
+  /** Refresh the issuer directory that tagging matches stories against. */
+  const syncIssuers = useMutation({
+    mutationFn: async () => {
+      const { data, error: failed } = await api.POST("/admin/issuers/sync", {});
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data;
+    },
+    onSuccess: (job) => {
+      toast.show({
+        title: t("admin.news.issuerSyncQueued"),
+        body: job?.note ?? undefined,
+        tone: "success",
+      });
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
   const visible = useMemo(
     () => (sources.data ?? []).filter((source) => matches(source, query, filter)),
     [sources.data, query, filter],
@@ -191,9 +234,29 @@ export function NewsSourcesPanel() {
     <Card
       title={t("admin.news.title")}
       action={
-        <Button size="sm" variant="ghost" onClick={() => setEditing("new")}>
-          {t("admin.news.add")}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => syncIssuers.mutate()}
+            disabled={syncIssuers.isPending}
+            title={t("admin.news.issuerSyncHint")}
+          >
+            {t("admin.news.issuerSync")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => sweep.mutate()}
+            disabled={sweep.isPending || (sources.data?.length ?? 0) === 0}
+            title={t("admin.news.sweepHint")}
+          >
+            {sweep.isPending ? t("admin.news.sweeping") : t("admin.news.sweep")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing("new")}>
+            {t("admin.news.add")}
+          </Button>
+        </div>
       }
     >
       {error && (

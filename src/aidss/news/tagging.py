@@ -194,9 +194,26 @@ def derive_aliases(registered_name: str) -> list[str]:
 
       * the trading name itself;
       * its first two words, when the rest is generic decoration ("Astra Agro"
-        for "Astra Agro Lestari");
-      * an initialism, when the name has enough words to make one that is not
-        an accident.
+        for "Astra Agro Lestari").
+
+    **Initialisms are not derived, and that was measured rather than assumed.**
+    Taking first letters looks like the rule that produces "BRI" from "Bank
+    Rakyat Indonesia", and it does. Run over the real 962-issuer directory
+    against a day of Indonesian market feeds, it also produced:
+
+        HOKI  <- "bps"   (Buyung Poetra Sembada; matched Badan Pusat Statistik,
+                          which appears in every economics story - 17 hits)
+        INPC  <- "bagi"  (an ordinary Indonesian word - 12 hits)
+        INET  <- "siap"  (likewise - 7)
+        NASA  <- "apa"   (likewise - 7)
+        SRIL  <- "sri"   (matched Sri Mulyani - 5)
+        MEDC  <- "mei"   (the month - 4)
+
+    One correct alias for eight wrong ones. Nothing in the letters distinguishes
+    "bni" from "apa", so the rule cannot be repaired by tightening it - only by
+    knowing which initialisms a company is actually called, which is knowledge
+    derivation does not have and a person does. That is what the editable
+    alias field is for.
 
     Anything that reduces to a single common word is dropped, because "Bank"
     and "Energi" are not names.
@@ -212,13 +229,6 @@ def derive_aliases(registered_name: str) -> list[str]:
         # "Astra Agro Lestari" -> "astra agro". Two words is usually enough to
         # be unambiguous while matching the form a headline actually uses.
         candidates.append(" ".join(words[:2]))
-
-    if len(words) >= 3:
-        # An initialism only from three or more words: two-letter ones are
-        # noise, and this is the shape "BRI" and "BCA" have.
-        initials = "".join(w[0] for w in words if w)
-        if len(initials) >= MIN_ALIAS_LENGTH:
-            candidates.append(initials)
 
     seen: set[str] = set()
     out: list[str] = []
