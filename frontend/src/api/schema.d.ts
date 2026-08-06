@@ -282,11 +282,19 @@ export interface paths {
         put?: never;
         /**
          * Run Analysis
-         * @description Run the multi-agent flow over one asset.
+         * @description Run the multi-agent flow over one asset and wait for it.
          *
-         *     Synchronous, which is fine for a single asset. Section 2.6 puts deep
-         *     research and backfills on the job queue; a handful of agent calls does not
-         *     need that machinery.
+         *     Kept for scripts and for callers that genuinely want the result in the
+         *     response, but the interface no longer uses it: a full run outlives the
+         *     request timeout of anything sitting in front of the server, and behind a
+         *     proxy that limit is not ours to raise. `POST .../analysis/background` is
+         *     what the button calls.
+         *
+         *     Translation is not done inline here either, for the same reason it is not
+         *     done inline in the job: it doubles the time before the reader has anything,
+         *     to render a language they may never switch to. The follow-up job is queued
+         *     exactly as the background path queues it, so both routes leave the system
+         *     in the same state.
          */
         post: operations["run_analysis_assets__ticker__analysis_post"];
         delete?: never;
@@ -1439,6 +1447,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/news-sources/fetch-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch All News Sources
+         * @description Read every active feed now and store everything in it.
+         *
+         *     Queued rather than run here. Twenty feeds over the open internet is not
+         *     work that fits in a request, and holding it on one is how the analysis
+         *     ended up returning proxy timeouts.
+         *
+         *     Deduplicated per minute: this is a button, and a button gets pressed twice.
+         */
+        post: operations["fetch_all_news_sources_admin_news_sources_fetch_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/issuers/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Issuers
+         * @description Refresh the IDX company directory that news tagging matches against.
+         */
+        post: operations["sync_issuers_admin_issuers_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/news/retag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retag News
+         * @description Attribute stories already stored that carry no tags.
+         *
+         *     The reason a correction is worth making: an alias fixed today should be
+         *     able to reach the archive, not only whatever arrives tomorrow.
+         */
+        post: operations["retag_news_admin_news_retag_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/issuers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Issuers
+         * @description Browse the directory. Searchable, because it holds nearly a thousand rows
+         *     and scrolling to find one is not browsing.
+         */
+        get: operations["list_issuers_admin_issuers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/issuers/{issuer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Issuer
+         * @description Correct an issuer's aliases.
+         *
+         *     Aliases are refused rather than silently dropped when they would match
+         *     everything: "Bank" as an alias is not a narrow tag, it is several hundred
+         *     wrong ones, and an administrator who typed it deserves to be told so rather
+         *     than to discover it in the tags a week later.
+         */
+        patch: operations["update_issuer_admin_issuers__issuer_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1886,6 +2009,57 @@ export interface components {
          * @enum {string}
          */
         InvestmentHorizon: "short" | "medium" | "long";
+        /**
+         * IssuerResponse
+         * @description One listed company from the IDX directory.
+         *
+         *     The aliases are included because they are the editable part: when a story
+         *     is tagged to the wrong company, the alias that matched is what has to
+         *     change, and it cannot be corrected if it cannot be seen.
+         */
+        IssuerResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ticker */
+            ticker: string;
+            /** Name */
+            name: string;
+            /** Sector */
+            sector?: string | null;
+            /** Sub Sector */
+            sub_sector?: string | null;
+            /** Listing Board */
+            listing_board?: string | null;
+            /** Website */
+            website?: string | null;
+            /** Aliases */
+            aliases?: string[];
+            /** Is Listed */
+            is_listed: boolean;
+            /**
+             * Synced At
+             * Format: date-time
+             */
+            synced_at: string;
+        };
+        /**
+         * IssuerUpdateRequest
+         * @description Corrections to an issuer. Only the aliases are editable.
+         *
+         *     Everything else comes from the exchange and would be overwritten by the
+         *     next synchronisation, so offering it as a field would be offering an edit
+         *     that silently expires.
+         */
+        IssuerUpdateRequest: {
+            /**
+             * Aliases
+             * @description Names this company is known by in the press. Matched case-insensitively on word boundaries, so keep them distinctive: a single common word will tag hundreds of unrelated stories.
+             */
+            aliases: string[];
+        };
         /** JobAcceptedResponse */
         JobAcceptedResponse: {
             /**
@@ -5013,6 +5187,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NewsSourceTestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fetch_all_news_sources_admin_news_sources_fetch_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+        };
+    };
+    sync_issuers_admin_issuers_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+        };
+    };
+    retag_news_admin_news_retag_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+        };
+    };
+    list_issuers_admin_issuers_get: {
+        parameters: {
+            query?: {
+                /** @description Matches the code or the name */
+                search?: string | null;
+                listed_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_issuer_admin_issuers__issuer_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issuer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssuerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerResponse"];
                 };
             };
             /** @description Validation Error */

@@ -31,6 +31,9 @@ from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AdminUserResponse,
     BanRequest,
+    IssuerResponse,
+    IssuerUpdateRequest,
+    JobAcceptedResponse,
     NewsSourceCreate,
     NewsSourceResponse,
     NewsSourceTestResponse,
@@ -39,7 +42,18 @@ from aidss.api.schemas import (
     SuspendRequest,
 )
 from aidss.collectors.normalization import normalize_ticker
-from aidss.db.models import ActorType, Asset, AuditLog, NewsSource, User, UserRole, UserStatus
+from aidss.db.models import (
+    ActorType,
+    Asset,
+    AuditLog,
+    Issuer,
+    NewsSource,
+    User,
+    UserRole,
+    UserStatus,
+)
+from aidss.jobs.queue import enqueue
+from aidss.news.tagging import MIN_ALIAS_LENGTH, is_usable_alias, normalise
 from aidss.security.rbac import Permission
 from aidss.syndication.feeds import FeedParseError
 
@@ -496,3 +510,167 @@ def test_news_source(
         sample=[e.title for e in entries[:5]],
         newest_published_at=newest,
     )
+
+
+# ---------------------------------------------------------------------------
+# The listed-company directory, and reading every feed at once
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/news-sources/fetch-all",
+    response_model=JobAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def fetch_all_news_sources(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Read every active feed now and store everything in it.
+
+    Queued rather than run here. Twenty feeds over the open internet is not
+    work that fits in a request, and holding it on one is how the analysis
+    ended up returning proxy timeouts.
+
+    Deduplicated per minute: this is a button, and a button gets pressed twice.
+    """
+    minute = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+    result = enqueue(
+        session,
+        "news.sweep",
+        {"user_id": str(user.id)},
+        dedup_key=f"news-sweep:{minute}",
+    )
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="news.sweep",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note=(
+            "A sweep is already running; this returns that job."
+            if result.deduplicated
+            else "Reading every active feed. You will be notified when it finishes."
+        ),
+    )
+
+
+@router.post(
+    "/issuers/sync", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def sync_issuers(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Refresh the IDX company directory that news tagging matches against."""
+    minute = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+    result = enqueue(
+        session,
+        "issuers.sync",
+        {"user_id": str(user.id)},
+        dedup_key=f"issuers-sync:{minute}",
+    )
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="issuers.sync",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note=(
+            "A synchronisation is already running; this returns that job."
+            if result.deduplicated
+            else "Reading the IDX company directory."
+        ),
+    )
+
+
+@router.post(
+    "/news/retag", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def retag_news(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Attribute stories already stored that carry no tags.
+
+    The reason a correction is worth making: an alias fixed today should be
+    able to reach the archive, not only whatever arrives tomorrow.
+    """
+    minute = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+    result = enqueue(
+        session,
+        "news.tag_backfill",
+        {"user_id": str(user.id)},
+        dedup_key=f"news-retag:{minute}",
+    )
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="news.tag_backfill",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note="Tagging stories that have no issuer yet.",
+    )
+
+
+@router.get("/issuers", response_model=list[IssuerResponse])
+def list_issuers(
+    search: str | None = Query(default=None, description="Matches the code or the name"),
+    listed_only: bool = Query(default=True),
+    limit: int = Query(default=100, ge=1, le=1000),
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> list[Issuer]:
+    """Browse the directory. Searchable, because it holds nearly a thousand rows
+    and scrolling to find one is not browsing."""
+    stmt = select(Issuer)
+    if listed_only:
+        stmt = stmt.where(Issuer.is_listed.is_(True))
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            func.lower(Issuer.ticker).like(pattern) | func.lower(Issuer.name).like(pattern)
+        )
+    return list(session.scalars(stmt.order_by(Issuer.ticker).limit(limit)).all())
+
+
+@router.patch("/issuers/{issuer_id}", response_model=IssuerResponse)
+def update_issuer(
+    issuer_id: uuid.UUID,
+    payload: IssuerUpdateRequest,
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> Issuer:
+    """Correct an issuer's aliases.
+
+    Aliases are refused rather than silently dropped when they would match
+    everything: "Bank" as an alias is not a narrow tag, it is several hundred
+    wrong ones, and an administrator who typed it deserves to be told so rather
+    than to discover it in the tags a week later.
+    """
+    issuer = session.get(Issuer, issuer_id)
+    if issuer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issuer not found")
+
+    cleaned: list[str] = []
+    refused: list[str] = []
+    for raw in payload.aliases:
+        alias = normalise(str(raw))
+        if not alias:
+            continue
+        if not is_usable_alias(alias):
+            refused.append(str(raw))
+            continue
+        if alias not in cleaned:
+            cleaned.append(alias)
+
+    if refused:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"These are too general to use as aliases: {refused}. An alias must be "
+                f"at least {MIN_ALIAS_LENGTH} characters and must not be a single "
+                "ordinary word - it would tag every story containing it."
+            ),
+        )
+
+    issuer.aliases = cleaned
+    session.flush()
+    return issuer

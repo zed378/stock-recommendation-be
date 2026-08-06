@@ -781,3 +781,52 @@ class BudgetStatusResponse(BaseModel):
 class ProviderInventoryResponse(BaseModel):
     registered: dict[str, list[str]]
     active: dict[str, str]
+
+
+class IssuerResponse(BaseModel):
+    """One listed company from the IDX directory.
+
+    The aliases are included because they are the editable part: when a story
+    is tagged to the wrong company, the alias that matched is what has to
+    change, and it cannot be corrected if it cannot be seen.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    ticker: str
+    name: str
+    sector: str | None = None
+    sub_sector: str | None = None
+    listing_board: str | None = None
+    website: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    is_listed: bool
+    synced_at: datetime
+
+
+class IssuerUpdateRequest(BaseModel):
+    """Corrections to an issuer. Only the aliases are editable.
+
+    Everything else comes from the exchange and would be overwritten by the
+    next synchronisation, so offering it as a field would be offering an edit
+    that silently expires.
+    """
+
+    aliases: list[str] = Field(
+        description=(
+            "Names this company is known by in the press. Matched case-insensitively "
+            "on word boundaries, so keep them distinctive: a single common word will "
+            "tag hundreds of unrelated stories."
+        )
+    )
+
+
+class NewsTagResponse(BaseModel):
+    """An issuer a story was attributed to, and why."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    ticker: str
+    method: str
+    matched_text: str
