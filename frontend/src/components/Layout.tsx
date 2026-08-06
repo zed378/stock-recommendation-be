@@ -35,8 +35,9 @@ export function Layout() {
         <div className="sticky top-0 flex h-screen flex-col overflow-y-auto px-2">
           <NavLink
             to="/watchlist"
-            className="flex items-baseline gap-2 px-3 pb-1 pt-4 text-sm font-semibold tracking-tight text-ink"
+            className="flex items-center gap-2 px-3 pb-1 pt-4 text-sm font-semibold tracking-tight text-ink"
           >
+            <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />
             {t("app.shortName")}
           </NavLink>
           <SidebarNav />
@@ -68,8 +69,9 @@ export function Layout() {
 
             <NavLink
               to="/watchlist"
-              className="text-sm font-semibold tracking-tight text-ink lg:hidden"
+              className="flex items-center gap-2 text-sm font-semibold tracking-tight text-ink lg:hidden"
             >
+              <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />
               {t("app.shortName")}
             </NavLink>
 

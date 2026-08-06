@@ -104,10 +104,13 @@ export function Login() {
 
       <div className="flex items-center justify-center px-4 py-12 lg:px-8">
         <div className="w-full max-w-sm">
+          <img src="/logo-symbol.svg" alt="" className="mb-4 h-40 w-40" />
           <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-semibold text-ink">{t("app.name")}</h1>
-              <p className="mt-1 text-xs text-faint">{t("app.tagline")}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-lg font-semibold text-ink">{t("app.name")}</h1>
+                <p className="mt-1 text-xs text-faint">{t("app.tagline")}</p>
+              </div>
             </div>
             <LocaleSwitch />
           </div>
@@ -121,80 +124,80 @@ export function Login() {
             </p>
           </div>
 
-        {expiredNotice && (
-          <p className="mb-4 rounded-md border border-watch/30 bg-watch/5 px-3 py-2 text-xs text-watch">
-            {t("auth.sessionExpired")}
-          </p>
-        )}
+          {expiredNotice && (
+            <p className="mb-4 rounded-md border border-watch/30 bg-watch/5 px-3 py-2 text-xs text-watch">
+              {t("auth.sessionExpired")}
+            </p>
+          )}
 
-        <form
-          onSubmit={submit}
-          className="space-y-4 rounded-lg border border-line bg-raised p-5"
-        >
-          {mode === "signUp" && (
-            <Field label={`${t("auth.fullName")} (${t("common.optional")})`}>
+          <form
+            onSubmit={submit}
+            className="space-y-4 rounded-lg border border-line bg-raised p-5"
+          >
+            {mode === "signUp" && (
+              <Field label={`${t("auth.fullName")} (${t("common.optional")})`}>
+                <input
+                  className={inputClass}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  autoComplete="name"
+                />
+              </Field>
+            )}
+
+            <Field label={t("auth.email")}>
               <input
                 className={inputClass}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
               />
             </Field>
-          )}
 
-          <Field label={t("auth.email")}>
-            <input
-              className={inputClass}
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-            />
-          </Field>
+            <Field
+              label={t("auth.password")}
+              hint={mode === "signUp" ? t("auth.passwordHint") : undefined}
+            >
+              <input
+                className={inputClass}
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "signIn" ? "current-password" : "new-password"}
+              />
+            </Field>
 
-          <Field
-            label={t("auth.password")}
-            hint={mode === "signUp" ? t("auth.passwordHint") : undefined}
-          >
-            <input
-              className={inputClass}
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === "signIn" ? "current-password" : "new-password"}
-            />
-          </Field>
+            {error && (
+              <p className="rounded-md border border-fall/25 bg-fall/5 px-3 py-2 text-xs text-fall/90">
+                {error}
+              </p>
+            )}
 
-          {error && (
-            <p className="rounded-md border border-fall/25 bg-fall/5 px-3 py-2 text-xs text-fall/90">
-              {error}
-            </p>
-          )}
+            <Button type="submit" busy={busy} className="w-full">
+              {busy
+                ? t(mode === "signIn" ? "auth.signingIn" : "auth.signingUp")
+                : t(mode === "signIn" ? "auth.signIn" : "auth.signUp")}
+            </Button>
 
-          <Button type="submit" busy={busy} className="w-full">
-            {busy
-              ? t(mode === "signIn" ? "auth.signingIn" : "auth.signingUp")
-              : t(mode === "signIn" ? "auth.signIn" : "auth.signUp")}
-          </Button>
-
-          {registrationOpen && (
-            <p className="text-center text-xs text-faint">
-              {t(mode === "signIn" ? "auth.noAccount" : "auth.haveAccount")}{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode(mode === "signIn" ? "signUp" : "signIn");
-                  setError(null);
-                }}
-                className="text-rise hover:underline"
-              >
-                {t(mode === "signIn" ? "auth.signUp" : "auth.signIn")}
-              </button>
-            </p>
-          )}
-        </form>
+            {registrationOpen && (
+              <p className="text-center text-xs text-faint">
+                {t(mode === "signIn" ? "auth.noAccount" : "auth.haveAccount")}{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === "signIn" ? "signUp" : "signIn");
+                    setError(null);
+                  }}
+                  className="text-rise hover:underline"
+                >
+                  {t(mode === "signIn" ? "auth.signUp" : "auth.signIn")}
+                </button>
+              </p>
+            )}
+          </form>
 
           <p className="mt-6 text-center text-xs leading-relaxed text-faint">
             {t("disclaimer.short")}
@@ -225,9 +228,8 @@ function LocaleSwitch() {
           type="button"
           onClick={() => setLocale(option)}
           aria-pressed={locale === option}
-          className={`px-2 py-1 text-xs uppercase transition-colors ${
-            locale === option ? "bg-hover text-ink" : "text-faint hover:text-muted"
-          }`}
+          className={`px-2 py-1 text-xs uppercase transition-colors ${locale === option ? "bg-hover text-ink" : "text-faint hover:text-muted"
+            }`}
         >
           {option}
         </button>
