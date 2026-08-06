@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
+from aidss.api.deps import CommitBeforeResponse
 from aidss.api.middleware import (
     RateLimitMiddleware,
     RequestContextMiddleware,
@@ -78,6 +79,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         docs_url="/docs",
     )
+
+    # Set before any router is included, because a router copies the route
+    # class in effect when it is added. Applied to every HTTP route so the
+    # guarantee is a property of the API rather than of the endpoints somebody
+    # remembered to write it into.
+    app.router.route_class = CommitBeforeResponse
 
     # Load every bundled adapter into the plugin registry. Importing for the
     # side effect is deliberate: adapters self-register via @register.
