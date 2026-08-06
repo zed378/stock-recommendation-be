@@ -19,7 +19,7 @@ from aidss.security.tokens import TokenError, decode_access_token
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_db(request: Request | None = None) -> Iterator[Session]:
+def get_db(request: Request) -> Iterator[Session]:
     """The request-scoped session.
 
     The commit here is a backstop, not the normal path. FastAPI closes the
@@ -32,8 +32,7 @@ def get_db(request: Request | None = None) -> Iterator[Session]:
     normally nothing left to write.
     """
     session = get_sessionmaker()()
-    if request is not None:
-        request.state.db_session = session
+    request.state.db_session = session
     try:
         yield session
         session.commit()
