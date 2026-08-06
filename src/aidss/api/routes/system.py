@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import BudgetStatusResponse, ProviderInventoryResponse
 from aidss.config import Settings, get_settings
 from aidss.db.models import User
@@ -15,7 +15,7 @@ from aidss.observability.metrics import registry
 from aidss.plugins.registry import registry_snapshot
 from aidss.security.rbac import Permission
 
-router = APIRouter(tags=["system"])
+router = APIRouter(tags=["system"], route_class=CommitBeforeResponse)
 
 
 @router.get("/health")

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss.agents.base import AgentRunner
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     CronPresetResponse,
     KnowledgeDocumentCreate,
@@ -38,7 +38,7 @@ from aidss.rag.engine import RAGEngine
 from aidss.rag.provisioning import build_rag
 from aidss.security.rbac import Permission
 
-router = APIRouter(tags=["knowledge"])
+router = APIRouter(tags=["knowledge"], route_class=CommitBeforeResponse)
 
 
 def _rag(session: Session) -> RAGEngine:

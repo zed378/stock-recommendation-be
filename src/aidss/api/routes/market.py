@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AlertResponse,
     QuoteSnapshotResponse,
@@ -48,7 +48,7 @@ from aidss.recommendations.strategy import build_strategy
 from aidss.screener import Horizon, screen
 from aidss.security.rbac import Permission
 
-router = APIRouter(tags=["market"])
+router = APIRouter(tags=["market"], route_class=CommitBeforeResponse)
 
 
 # --- stock picks -----------------------------------------------------------

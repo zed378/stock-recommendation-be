@@ -8,14 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_current_user, get_db
+from aidss.api.deps import CommitBeforeResponse, get_current_user, get_db
 from aidss.api.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from aidss.config import Settings, get_settings
 from aidss.db.models import ActorType, AuditLog, User
 from aidss.security.passwords import PasswordPolicyError, hash_password, verify_password
 from aidss.security.tokens import create_access_token
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"], route_class=CommitBeforeResponse)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AssetCreate,
     AssetResponse,
@@ -39,7 +39,7 @@ from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.registry import get_market_data_provider
 from aidss.security.rbac import Permission
 
-router = APIRouter(prefix="/assets", tags=["assets"])
+router = APIRouter(prefix="/assets", tags=["assets"], route_class=CommitBeforeResponse)
 
 DISCLAIMER = (
     "Deterministically computed indicators and features for informational "

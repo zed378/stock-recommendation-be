@@ -13,7 +13,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from aidss.api.deps import CommitBeforeResponse
 from aidss.api.middleware import (
     RateLimitMiddleware,
     RequestContextMiddleware,
@@ -80,11 +79,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs",
     )
 
-    # Set before any router is included, because a router copies the route
-    # class in effect when it is added. Applied to every HTTP route so the
-    # guarantee is a property of the API rather than of the endpoints somebody
-    # remembered to write it into.
-    app.router.route_class = CommitBeforeResponse
+    # Note for anyone tempted to centralise `CommitBeforeResponse` here:
+    # setting `app.router.route_class` does nothing. `include_router` keeps the
+    # routes the router already built at import time, so the class has to be
+    # passed to each `APIRouter(...)`. Tried it the tidy way; all 79 routes
+    # stayed plain `APIRoute` and the guard test is what noticed.
 
     # Load every bundled adapter into the plugin registry. Importing for the
     # side effect is deliberate: adapters self-register via @register.

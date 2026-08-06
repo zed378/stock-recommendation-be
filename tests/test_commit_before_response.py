@@ -90,18 +90,35 @@ def test_get_db_hands_its_session_to_the_route(session) -> None:
     generator.close()
 
 
-def test_the_route_class_is_applied_to_the_real_app() -> None:
-    """The fix lives in one line of the app factory, and a router included
-    before that line silently keeps the default class. Nothing else would
-    notice: every endpoint still works, just with the race back."""
+def test_every_http_route_commits_before_responding() -> None:
+    """Walked through `original_router`, not `app.routes`.
+
+    `app.routes` holds one `_IncludedRouter` per included router in this
+    FastAPI version, and no `APIRoute` at all - so the obvious version of this
+    check finds zero routes, filters zero of them, and passes against an app
+    where nothing was applied. It did exactly that, which is how the first
+    attempt at the fix - `app.router.route_class`, one tidy line in the app
+    factory - looked like it worked while all 79 routes stayed plain.
+    """
     from fastapi.routing import APIRoute
 
     from aidss.main import create_app
 
     app = create_app()
-    plain = [
-        route.path
-        for route in app.routes
-        if isinstance(route, APIRoute) and not isinstance(route, CommitBeforeResponse)
+    routes = [
+        route
+        for included in app.routes
+        for route in getattr(getattr(included, "original_router", None), "routes", [])
+        if isinstance(route, APIRoute)
     ]
-    assert not plain, f"these routes commit after their response: {plain}"
+    assert len(routes) > 50, (
+        f"only found {len(routes)} routes to check; this walk has stopped "
+        "matching how routers are stored, and is passing by finding nothing"
+    )
+    plain = sorted(
+        {r.path for r in routes if not isinstance(r, CommitBeforeResponse)}
+    )
+    assert not plain, (
+        f"these routes commit after their response has been sent: {plain}. "
+        "Pass route_class=CommitBeforeResponse to their APIRouter."
+    )

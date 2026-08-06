@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AdminUserResponse,
     BanRequest,
@@ -43,7 +43,7 @@ from aidss.db.models import ActorType, Asset, AuditLog, NewsSource, User, UserRo
 from aidss.security.rbac import Permission
 from aidss.syndication.feeds import FeedParseError
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], route_class=CommitBeforeResponse)
 
 
 def _audit(

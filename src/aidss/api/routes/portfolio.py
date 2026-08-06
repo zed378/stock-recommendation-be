@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AgentSkipResponse,
     HoldingResponse,
@@ -34,7 +34,7 @@ from aidss.portfolio.loader import load_positions, load_price_series
 from aidss.portfolio.simulation import AllocationChange, SimulationError, simulate
 from aidss.security.rbac import Permission
 
-router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+router = APIRouter(prefix="/portfolio", tags=["portfolio"], route_class=CommitBeforeResponse)
 
 PORTFOLIO_DISCLAIMER = (
     "Computed from holdings you entered yourself. Concentration, diversification, "

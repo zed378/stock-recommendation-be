@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     DEFAULT_CATEGORY,
     WatchlistCategoryCreate,
@@ -34,7 +34,7 @@ from aidss.collectors.normalization import normalize_ticker
 from aidss.db.models import Asset, User, Watchlist, WatchlistItem
 from aidss.security.rbac import Permission
 
-router = APIRouter(prefix="/watchlist", tags=["watchlist"])
+router = APIRouter(prefix="/watchlist", tags=["watchlist"], route_class=CommitBeforeResponse)
 
 
 def _category(session: Session, user: User, name: str) -> Watchlist:

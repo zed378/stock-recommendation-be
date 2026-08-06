@@ -26,7 +26,7 @@ from aidss.agents.conversation import (
     ResearchAgent,
     journal_summary,
 )
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AuditLogResponse,
     ChatRequest,
@@ -53,7 +53,7 @@ from aidss.prompts.validator import ValidationFailure
 from aidss.rag.provisioning import build_rag
 from aidss.security.rbac import Permission
 
-router = APIRouter(tags=["journal"])
+router = APIRouter(tags=["journal"], route_class=CommitBeforeResponse)
 
 CHAT_DISCLAIMER = (
     "AI-generated explanation for informational purposes only. It is not investment "

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     NotificationResponse,
     OperationsOverviewResponse,
@@ -26,7 +26,7 @@ from aidss.reporting.notifications import NotificationService
 from aidss.reporting.operations import build_overview
 from aidss.security.rbac import Permission
 
-router = APIRouter(tags=["reporting"])
+router = APIRouter(tags=["reporting"], route_class=CommitBeforeResponse)
 
 
 def _markdown(report) -> Response:

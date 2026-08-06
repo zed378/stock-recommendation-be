@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.agents.engine import AnalysisEngine
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AgentSkipResponse,
     AnalysisRequest,
@@ -32,7 +32,7 @@ from aidss.llm.errors import GatewayError
 from aidss.llm.provisioning import build_gateway
 from aidss.security.rbac import Permission
 
-router = APIRouter(prefix="/assets", tags=["analysis"])
+router = APIRouter(prefix="/assets", tags=["analysis"], route_class=CommitBeforeResponse)
 
 ANALYSIS_DISCLAIMER = (
     "AI-generated analysis for informational purposes only. It is not investment "

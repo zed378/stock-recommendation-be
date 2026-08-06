@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss.api.deps import get_db, require_permission
+from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import JobResponse, QueueStatsResponse
 from aidss.db.models import JobQueueEntry, JobStatus, User
 from aidss.jobs.handlers import registered_types
@@ -20,7 +20,7 @@ from aidss.jobs.leader import current_leader
 from aidss.jobs.queue import stats
 from aidss.security.rbac import Permission
 
-router = APIRouter(tags=["jobs"])
+router = APIRouter(tags=["jobs"], route_class=CommitBeforeResponse)
 
 
 def _to_response(entry: JobQueueEntry) -> JobResponse:
