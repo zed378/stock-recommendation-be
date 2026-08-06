@@ -11,6 +11,7 @@ producing three identical errors in the log.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -24,7 +25,13 @@ from aidss.collectors.issuers import sync_directory
 from aidss.collectors.market_data import FundamentalCollector, MarketDataCollector, load_candles
 from aidss.config import get_settings
 from aidss.db.base import get_sessionmaker
-from aidss.db.models import AnalysisResult, Asset, FundamentalMetric, TickerNewsSchedule
+from aidss.db.models import (
+    AnalysisResult,
+    Asset,
+    FundamentalMetric,
+    SchedulerJob,
+    TickerNewsSchedule,
+)
 from aidss.domain.types import Timeframe
 from aidss.indicators.engine import IndicatorEngine
 from aidss.indicators.features import persist_features
@@ -32,11 +39,15 @@ from aidss.jobs import queue, quota
 from aidss.llm.provisioning import build_gateway
 from aidss.monitoring.poller import poll_watched_assets
 from aidss.news.collector import NewsCollector, NewsScheduler
+from aidss.news.schedules import next_run_at
 from aidss.news.sweep import sweep_all_sources, tag_untagged
+from aidss.platform.settings import NEWS_SWEEP_CRON, get_setting
 from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.registry import get_market_data_provider, get_news_provider
 from aidss.rag.provisioning import build_rag
 from aidss.reporting.notifications import NotificationEvent, NotificationService
+
+logger = logging.getLogger("aidss.jobs")
 
 Handler = Callable[[Session, dict[str, Any]], dict[str, Any]]
 
@@ -550,3 +561,70 @@ def due_news_schedules(
             )
         ).all()
     )
+
+
+def enqueue_due_news_sweep(session: Session, *, now: datetime | None = None) -> dict[str, Any]:
+    """Queue a sweep of every configured feed, if the operator scheduled one.
+
+    Driven by a platform setting rather than an environment variable, because
+    "read the news every two hours" is a decision the person running the
+    platform makes and revises - not one that should require a redeploy.
+
+    Empty means off, and off is the default. Reading somebody else's feeds on a
+    timer nobody asked for is not a sensible thing to do by default.
+
+    The due time is stored on a `scheduler_jobs` row rather than recomputed, so
+    changing the cron takes effect from the change rather than from whenever
+    the previous expression happened to point at. Advanced when the job is
+    created, for the same reason the news schedules advance there: a job
+    sitting in the queue would otherwise be re-enqueued on every tick.
+    """
+    now = now or datetime.now(UTC)
+    expression = str(get_setting(session, NEWS_SWEEP_CRON) or "").strip()
+
+    row = session.scalar(select(SchedulerJob).where(SchedulerJob.job_type == "news.sweep"))
+    if not expression:
+        # The operator turned it off. The row is deactivated rather than
+        # deleted, so turning it back on does not lose the schedule's history.
+        if row is not None and row.is_active:
+            row.is_active = False
+        return {"enqueued": 0, "disabled": True}
+
+    if row is None:
+        row = SchedulerJob(job_type="news.sweep", cron_expr=expression, is_active=True)
+        session.add(row)
+        session.flush()
+    if row.cron_expr != expression or not row.is_active:
+        # Re-anchored on change: a new expression must not inherit a due time
+        # computed from the old one.
+        row.cron_expr = expression
+        row.is_active = True
+        row.next_run_at = None
+
+    try:
+        if row.next_run_at is None:
+            row.next_run_at = next_run_at(expression, after=now)
+            return {"enqueued": 0, "scheduled_for": row.next_run_at.isoformat()}
+        if row.next_run_at > now:
+            return {"enqueued": 0, "scheduled_for": row.next_run_at.isoformat()}
+    except Exception as exc:  # noqa: BLE001 - the parser raises its own types
+        # A cron expression that stopped parsing disables the sweep loudly
+        # rather than raising on every scheduler tick forever.
+        logger.warning(
+            "news sweep schedule is not usable",
+            extra={"cron": expression, "error": f"{type(exc).__name__}: {exc}"},
+        )
+        row.is_active = False
+        return {"enqueued": 0, "disabled": True, "error": str(exc)}
+
+    due = row.next_run_at
+    result = queue.enqueue(
+        session, "news.sweep", {}, dedup_key=f"news-sweep:{due.isoformat()}"
+    )
+    if result.created:
+        row.next_run_at = next_run_at(expression, after=now)
+    return {
+        "enqueued": 1 if result.created else 0,
+        "already_queued": 0 if result.created else 1,
+        "scheduled_for": row.next_run_at.isoformat() if row.next_run_at else None,
+    }

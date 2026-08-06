@@ -34,6 +34,7 @@ from aidss.jobs.handlers import (
     PermanentJobError,
     due_news_schedules,
     enqueue_due_fundamentals,
+    enqueue_due_news_sweep,
     enqueue_monitoring_pass,
     get_handler,
 )
@@ -307,6 +308,10 @@ class Scheduler:
             # queues one pass per interval rather than one per tick.
             monitoring = enqueue_monitoring_pass(session, now=now)
 
+            # The sweep over every configured feed, on whatever cron the
+            # operator set from the admin screen. Off unless they set one.
+            news_sweep = enqueue_due_news_sweep(session, now=now)
+
             session.commit()
             return {
                 "leader": True,
@@ -318,6 +323,7 @@ class Scheduler:
                 "enqueued": enqueued,
                 "already_queued": skipped,
                 "fundamentals": fundamentals,
+                "news_sweep": news_sweep,
                 "monitoring": monitoring,
                 "total_enqueued": (
                     enqueued + fundamentals["enqueued"] + monitoring["enqueued"]

@@ -12,6 +12,7 @@ from aidss.api.deps import CommitBeforeResponse, get_current_user, get_db
 from aidss.api.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from aidss.config import Settings, get_settings
 from aidss.db.models import ActorType, AuditLog, User
+from aidss.platform.settings import REGISTRATION_OPEN, get_setting
 from aidss.security.passwords import PasswordPolicyError, hash_password, verify_password
 from aidss.security.tokens import create_access_token
 
@@ -20,6 +21,26 @@ router = APIRouter(prefix="/auth", tags=["auth"], route_class=CommitBeforeRespon
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, session: Session = Depends(get_db)) -> User:
+    """Create an account, if the operator currently allows it.
+
+    The gate is checked before anything else and before the email is looked
+    up, so a closed instance cannot be used to find out which addresses are
+    registered - a 409 for an existing email and a 403 for a new one would
+    enumerate the user list through a door that is supposed to be shut.
+
+    The very first account is always allowed through. An operator who closes
+    registration and then loses their only admin would otherwise have no way
+    back in short of editing the database, and a switch that can brick the
+    platform is a switch nobody should be offered.
+    """
+    if not get_setting(session, REGISTRATION_OPEN):
+        has_users = session.scalar(select(User.id).limit(1)) is not None
+        if has_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Registration is currently closed on this platform.",
+            )
+
     existing = session.scalar(select(User).where(User.email == payload.email.lower()))
     if existing is not None:
         raise HTTPException(

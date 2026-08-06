@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -860,3 +860,129 @@ class AlertBatchResponse(BaseModel):
     """
 
     affected: int
+
+
+T = TypeVar("T")
+
+
+class Page(BaseModel, Generic[T]):
+    """One window onto a list, with enough context to move.
+
+    A bare list plus a `limit` is not pagination: the caller cannot tell a full
+    page from the end of the data, cannot ask for the next one, and cannot show
+    how much there is. Every admin list here grows without bound - audit rows,
+    jobs, issuers - so "the first hundred, silently" is a screen that stops
+    telling the truth on the hundred and first.
+
+    `total` is the count before the window, not after, which is the only way a
+    reader learns there is more than they can see.
+    """
+
+    items: list[T]
+    total: int
+    limit: int
+    offset: int
+
+    @property
+    def has_more(self) -> bool:
+        return self.offset + len(self.items) < self.total
+
+
+class PlatformSettingsResponse(BaseModel):
+    """Operator choices that apply without a redeploy."""
+
+    registration_open: bool
+    news_sweep_cron: str
+
+
+class PlatformSettingsUpdate(BaseModel):
+    """Only the keys sent are changed; omitted keys keep their value.
+
+    `None` rather than a default, so "leave this alone" and "set it to false"
+    are different requests. A partial update that silently reset the keys it
+    did not mention would close registration every time somebody changed the
+    news schedule.
+    """
+
+    registration_open: bool | None = None
+    news_sweep_cron: str | None = Field(default=None, max_length=120)
+
+
+class AIProviderResponse(BaseModel):
+    """A configured provider, without its credential.
+
+    `api_key_hint` is what the interface shows: enough to recognise which key
+    is stored, never enough to use it. The value itself is not returned by any
+    endpoint - not to admins, not on the row that was just written.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    adapter_name: str
+    base_url: str | None = None
+    default_model: str | None = None
+    role: str
+    priority: int
+    is_active: bool
+    self_hosted: bool
+    timeout_seconds: float | None = None
+    api_key_hint: str | None = None
+    input_cost_per_1k: Decimal | None = None
+    output_cost_per_1k: Decimal | None = None
+    last_status: str | None = None
+    last_error: str | None = None
+    last_checked_at: datetime | None = None
+
+
+class AIProviderWrite(BaseModel):
+    """Creating or updating a provider.
+
+    `api_key` is write-only and optional on update: omitting it keeps the key
+    already stored, which is what an admin editing the model name expects.
+    Sending an empty string clears it, which is what a switch to a local model
+    needing no key expects. Those are different intents and are kept apart.
+    """
+
+    name: str = Field(min_length=1, max_length=80)
+    adapter_name: str = Field(default="openai_compatible", max_length=80)
+    base_url: str | None = Field(default=None, max_length=500)
+    default_model: str | None = Field(default=None, max_length=120)
+    #: Which task complexities this provider may serve. "general" handles
+    #: everything, which is right for a single-provider deployment.
+    role: str = Field(default="general")
+    priority: int = Field(default=100, ge=0, le=10_000)
+    is_active: bool = True
+    #: Declared by the operator when inference runs on infrastructure they
+    #: control at a public domain - the platform cannot tell by looking, and
+    #: the answer decides whether personal financial data may go there.
+    self_hosted: bool = False
+    timeout_seconds: float | None = Field(default=None, gt=0, le=3600)
+    api_key: str | None = Field(default=None, max_length=400)
+    input_cost_per_1k: Decimal | None = Field(default=None, ge=0)
+    output_cost_per_1k: Decimal | None = Field(default=None, ge=0)
+
+
+class AIProviderTestResponse(BaseModel):
+    """What the provider answered, just now."""
+
+    ok: bool
+    latency_ms: int | None = None
+    model: str | None = None
+    reply: str | None = None
+    error: str | None = None
+
+
+class AdminUserCreate(BaseModel):
+    """An account created by an administrator rather than by its owner.
+
+    A password is required rather than generated: a generated one has to be
+    transmitted somehow, and every convenient channel for that is a worse place
+    for a credential than wherever the admin was going to type it anyway.
+    """
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=200)
+    full_name: str | None = Field(default=None, max_length=200)
+    role: UserRole = UserRole.INVESTOR

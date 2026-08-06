@@ -11,6 +11,7 @@ binding, so a fresh install works before anyone configures anything.
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -22,6 +23,9 @@ from aidss.llm.gateway import LLMGateway
 from aidss.llm.router import ModelRouter, ProviderBinding, TaskComplexity
 from aidss.plugins.errors import PluginNotFoundError
 from aidss.plugins.registry import get_plugin_class
+from aidss.security.secrets import SecretUnreadable, decrypt_secret
+
+logger = logging.getLogger("aidss.llm")
 
 #: Maps a provider's configured role to the complexities it may serve.
 #: "general" handles everything, which is the sensible default for a
@@ -38,25 +42,65 @@ _ROLE_HANDLES: dict[str, frozenset[TaskComplexity]] = {
 SELF_HOSTED_ADAPTERS = frozenset({"fixture"})
 
 
+def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN201
+    """Build the adapter this row describes, using *this row's* credentials.
+
+    Previously every row was built with `from_settings`, so all of them shared
+    the one base URL and key in the environment. Several rows could then differ
+    only by model name against a single endpoint - which is not multi-provider,
+    it is one provider listed several times, and it made the fallback chain
+    unable to fail over to anywhere else.
+
+    Falls back to the environment field by field rather than all-or-nothing, so
+    a row that only overrides the model still works on a deployment that
+    configured its endpoint the old way.
+    """
+    cls = get_plugin_class("ai", row.adapter_name)
+    if not hasattr(cls, "__init__") or row.adapter_name not in {"openai_compatible"}:
+        # Adapters without a URL/key shape (the fixture) are built the plain
+        # way; there is nothing per-row to give them.
+        factory = getattr(cls, "from_settings", None)
+        return factory(settings) if factory else cls()  # type: ignore[call-arg]
+
+    api_key: str | None = settings.ai_api_key
+    if row.api_key_ciphertext:
+        api_key = decrypt_secret(row.api_key_ciphertext, settings)
+
+    return cls(  # type: ignore[call-arg]
+        base_url=row.base_url or settings.ai_base_url,
+        api_key=api_key,
+        chat_model=row.default_model or settings.ai_chat_model,
+        embedding_model=settings.ai_embedding_model,
+        timeout=row.timeout_seconds or settings.ai_timeout_seconds,
+    )
+
+
 def _binding_from_row(row: AIProviderConfig, settings: Settings) -> ProviderBinding | None:
     try:
-        cls = get_plugin_class("ai", row.adapter_name)
+        provider = provider_from_row(row, settings)
     except PluginNotFoundError:
         # A row naming an adapter that no longer exists is skipped rather than
         # fatal: one stale row must not take the whole AI layer offline.
         return None
-
-    factory = getattr(cls, "from_settings", None)
-    provider = factory(settings) if factory else cls()  # type: ignore[call-arg]
+    except SecretUnreadable:
+        # The secret rotated. Skipped for the same reason, and loudly: the row
+        # is visibly present and visibly unusable on the admin screen rather
+        # than silently authenticating as nobody.
+        logger.warning(
+            "provider skipped: stored credential could not be decrypted",
+            extra={"provider": row.name},
+        )
+        return None
 
     return ProviderBinding(
         name=row.name,
         provider=provider,
-        model=row.default_model or "",
+        model=row.default_model or settings.ai_chat_model,
         handles=_ROLE_HANDLES.get(row.role, _ROLE_HANDLES["general"]),
         priority=row.priority,
         self_hosted=row.adapter_name in SELF_HOSTED_ADAPTERS
-        or bool(row.base_url and _is_local(row.base_url)),
+        or bool(row.base_url and _is_local(row.base_url))
+        or row.self_hosted,
         input_cost_per_1k=row.input_cost_per_1k or Decimal("0"),
         output_cost_per_1k=row.output_cost_per_1k or Decimal("0"),
     )

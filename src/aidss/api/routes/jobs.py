@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
-from aidss.api.schemas import JobResponse, QueueStatsResponse
+from aidss.api.pagination import paginate
+from aidss.api.schemas import JobResponse, Page, QueueStatsResponse
 from aidss.db.models import JobQueueEntry, JobStatus, User
 from aidss.jobs.handlers import registered_types
 from aidss.jobs.leader import current_leader
@@ -56,20 +57,24 @@ def get_job(
     return _to_response(entry)
 
 
-@router.get("/jobs", response_model=list[JobResponse])
+@router.get("/jobs", response_model=Page[JobResponse])
 def list_jobs(
     job_status: JobStatus | None = Query(default=None, alias="status"),
     job_type: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
-) -> list[JobResponse]:
-    stmt = select(JobQueueEntry).order_by(JobQueueEntry.created_at.desc())
+) -> Page[JobResponse]:
+    stmt = select(JobQueueEntry)
     if job_status is not None:
         stmt = stmt.where(JobQueueEntry.status == job_status)
     if job_type:
         stmt = stmt.where(JobQueueEntry.job_type == job_type)
-    return [_to_response(entry) for entry in session.scalars(stmt.limit(limit)).all()]
+    rows, total = paginate(session, stmt, JobQueueEntry.created_at.desc(), limit, offset)
+    return Page(
+        items=[_to_response(entry) for entry in rows], total=total, limit=limit, offset=offset
+    )
 
 
 @router.get("/admin/queue", response_model=QueueStatsResponse)

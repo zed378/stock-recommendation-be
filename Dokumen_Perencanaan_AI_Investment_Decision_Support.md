@@ -545,8 +545,8 @@ erDiagram
 **A. Users & Personal Data**
 | Tabel | Kolom Kunci | Catatan |
 |---|---|---|
-| `users` | id, email, password_hash, mfa_enabled | Akun platform |
-| `watchlists` / `watchlist_items` | id, user_id (FK) / watchlist_id (FK), asset_id (FK) | |
+| `users` | id, email, password_hash, mfa_enabled, role, status, status_reason, suspended_until | Akun platform. `status` adalah enum (aktif/suspend/ban), bukan boolean: sebuah flag tidak bisa membedakan suspend dua hari dari ban permanen, sehingga alasannya harus disimpan terpisah — dan penanda yang bisa bertentangan dengan alasan di sebelahnya adalah cara akun terban tetap bisa masuk |
+| `watchlists` / `watchlist_items` | id, user_id (FK), name / watchlist_id (FK), asset_id (FK) | `name` unik per pengguna: kelompok watchlist *adalah* nama itu. Unik pada `(watchlist_id, asset_id)`, sehingga satu emiten boleh berada di beberapa kelompok |
 | `portfolios` / `portfolio_holdings` | id, user_id (FK) / portfolio_id (FK), asset_id (FK), qty, avg_price, input_method | `input_method` (manual/import) — penting karena tidak ada sinkronisasi otomatis ke broker |
 | `investment_journal` | id, user_id (FK), asset_id (FK) nullable, decision, note, recommendation_ref (FK) nullable, created_at | Jurnal keputusan investor sendiri |
 
@@ -562,7 +562,10 @@ erDiagram
 | Tabel | Kolom Kunci | Catatan |
 |---|---|---|
 | `ticker_news_schedules` | id, user_id (FK), asset_id (FK), cron_expression, preset_label, is_active, status (active/needs_attention), last_fetched_at, next_run_at, created_at | Basis flow Section 6.3 — satu record per kombinasi user+emiten+cron |
-| `news_items` | id, asset_id (FK) nullable, schedule_id (FK) nullable, source, source_url, headline, body_summary, published_at, is_indexed (bool) | `source_url` dipakai untuk deduplikasi; `is_indexed` mencegah embedding berulang; `schedule_id` menandai berita ini hasil fetch terjadwal mana (nullable karena bisa juga hasil fetch on-demand) |
+| `news_items` | id, asset_id (FK) nullable, schedule_id (FK) nullable, source, source_url, dedup_hash, headline, body_summary, published_at, is_indexed (bool) | `dedup_hash` atas URL+judul, karena satu berita disindikasikan dengan beberapa URL. `asset_id` mencatat *pengambilan terjadwal milik emiten mana yang mengambilnya* — bukan tentang siapa isinya, yang ditangani `news_item_issuers` |
+| `news_sources` | id, name, feed_url (unik), asset_id (FK) nullable, is_active, last_status, last_error, consecutive_failures, last_fetched_at | Feed yang dibaca platform. Hidup di basis data, bukan di setelan: yang memutuskan publikasi mana diikuti bukan yang men-deploy ulang stack. Hasil pembacaan terakhir ikut disimpan, karena feed yang mulai menjawab 404 jika tidak akan tampak persis seperti feed yang memang sepi |
+| `issuers` | id, ticker (unik), name, sector, sub_sector, industry, listing_board, listed_on, website, aliases (JSONB), is_listed, synced_at | Direktori lengkap perusahaan tercatat IDX. Sengaja bukan baris di `assets`: sebuah `Asset` adalah instrumen yang datanya dimiliki platform dan bisa dianalisis, sedangkan ini data referensi untuk menentukan sebuah berita membahas siapa |
+| `news_item_issuers` | id, news_item_id (FK), issuer_id (FK), ticker, method, matched_text | Emiten yang dibahas satu berita — jamak, karena berita sektor membahas beberapa sekaligus. `method` dan `matched_text` disimpan agar tanda yang keliru menyebut sebabnya sendiri |
 | `sentiment_scores` | id, news_item_id (FK), score, model_used, rationale | Hasil News Analyzer |
 | `news_embeddings` | id, news_item_id (FK), chunk_text, embedding (vector), metadata (JSONB: ticker, published_at, sentiment_score) | Hasil chunking+embedding (langkah 8–9, Section 6.3) — dipakai RAG Engine saat retrieval, terpisah dari `knowledge_chunks` karena siklus hidup & filter (per-ticker, per-waktu) berbeda dari dokumen statis |
 
@@ -587,7 +590,7 @@ erDiagram
 **F. System — Notification, Audit, Config, Scheduler**
 | Tabel | Kolom Kunci | Catatan |
 |---|---|---|
-| `notifications` | id, user_id (FK), channel, message, status | |
+| `notifications` | id, user_id (FK), channel, event, message, context (JSONB), read_at | `event` enum tertutup berisi kejadian; `context` membawa fakta terstruktur sehingga klien menyusun kalimatnya sendiri dalam bahasa yang sedang dipilih |
 | `audit_logs` | id, actor_type (user/ai/system), actor_id, action, entity, before, after, created_at | Append-only |
 | `system_configuration` | id, scope, key, value (JSONB) | Termasuk konfigurasi provider aktif |
 | `scheduler_jobs` | id, job_type, cron_expr, is_active | |
@@ -654,16 +657,21 @@ erDiagram
 | `/assets/{ticker}/news` | GET | Ambil berita & sentimen tersimpan untuk suatu emiten |
 | `/providers` | GET/PUT | Kelola konfigurasi AI/data provider aktif (admin) |
 | `/audit-logs` | GET | Ekspor audit trail |
-| `/assets/{ticker}/strategy` | GET | Pembacaan sikap tersimpan dari dua sisi posisi (Section 20) |
-| `/stock-picks` | GET | Penyaringan emiten per horizon, termasuk kandidat dekat-ARA (Section 21) |
-| `/monitoring/quotes` | GET | Observasi harga terakhir untuk emiten yang dipantau (Section 22) |
+| `/assets/{ticker}/strategy` | GET | Pembacaan sikap tersimpan dari dua sisi posisi (Section 21) |
+| `/stock-picks` | GET | Penyaringan emiten per horizon, termasuk kandidat dekat-ARA (Section 22) |
+| `/monitoring/quotes` | GET | Observasi harga terakhir untuk emiten yang dipantau (Section 23) |
 | `/monitoring/poll` | POST | Observasi manual di luar interval worker |
 | `/alerts` | GET | Alert yang terbentuk untuk pengguna |
 | `/alerts/{id}/acknowledge` | POST | Tandai alert sudah dibaca |
 | `/watchlist/categories` | GET | Daftar kelompok watchlist beserta jumlah anggotanya |
 | `/watchlist/categories` | POST | Buat kelompok kosong tanpa harus menambah emiten |
 | `/watchlist/categories/{name}` | PATCH/DELETE | Ganti nama / hapus kelompok (anggota pindah ke `Default`) |
-| `/translate` | POST | Render prosa analisis tersimpan ke bahasa lain (Section 23) |
+| `/translate` | POST | Render prosa analisis tersimpan ke bahasa lain (Section 25) |
+| `/ws/events` | WS | Kanal event per pengguna; token dikirim di frame pertama (Section 24) |
+| `/alerts/acknowledge`, `/alerts/delete` (+ `-all`) | POST | Aksi massal atas alert, dibatasi pemiliknya (Section 23.5) |
+| `/admin/news-sources/fetch-all` | POST | Antre pembacaan seluruh feed aktif (Section 26.2) |
+| `/admin/issuers`, `/admin/issuers/sync` | GET/POST | Direktori emiten dan penyegarannya dari IDX (Section 26.3) |
+| `/admin/news/retag` | POST | Menandai ulang berita tersimpan setelah alias diperbaiki (Section 26.5) |
 
 > **Catatan desain API:** Tidak ada endpoint `/orders`, `/execute`, atau sejenisnya di seluruh permukaan API — konsisten dengan hard constraint arsitektur di Section 3–4.
 
@@ -937,7 +945,23 @@ Total estimasi kasar: **~30–35 minggu efektif** dengan tim inti 4–6 orang.
 
 ---
 
-## 20. Position-Aware Strategy (Sudah Punya vs Belum Punya)
+## 20. Watchlist & Pengelompokan
+
+**Kelompok bukan konsep baru yang ditempelkan.** `watchlists` membawa `name` dengan batasan unik per pengguna sejak skema awal, dan `watchlist_items` menggantung padanya. Sebuah kelompok *adalah* nama itu.
+
+**Satu emiten boleh berada di beberapa kelompok.** Keunikan ada pada `(watchlist_id, asset_id)`. BBCA adalah bank sekaligus pembagi dividen, dan memaksa memilih di antara keduanya membuat pengelompokan kurang berguna dibanding tanpa pengelompokan sama sekali.
+
+**Kelompok bisa dibuat kosong.** Kelompok yang hanya lahir sebagai efek samping menambah emiten membuat penataan watchlist hanya mungkin sambil mengisinya: yang ingin tiga kelompok harus lebih dulu mencari tiga emiten untuk dimasukkan. Kelompok kosong adalah bentuk watchlist yang sedang akan dibangun seseorang. Pembuatan implisit saat menambah emiten tetap ada, karena menolak sebuah penambahan demi kelompok yang bisa saja langsung dibuat bukan perbaikan.
+
+**Nama yang bentrok dijawab 409, bukan diam-diam mengembalikan yang sudah ada.** Hasilnya akan terlihat sama persis dengan berhasil membuat yang baru, dan pembaca akan mengira punya dua. Hal yang sama berlaku pada ganti nama: penggabungan tidak dicoba, karena itu diam-diam menyatukan dua kelompok yang sengaja dipisahkan dan membatalkannya harus manual.
+
+**Menghapus kelompok memindahkan anggotanya ke `Default`, tidak menghapusnya.** Membubarkan pengelompokan bukan hal yang sama dengan memutuskan berhenti memantau emiten di dalamnya, dan keduanya mudah tertukar ketika satu aksi melakukan keduanya. `Default` sendiri tidak bisa dihapus — ia tempat segalanya mendarat, jadi menghapusnya membuat fallback tidak punya tempat jatuh.
+
+**Nama dipangkas,** sebab tanpa itu "Perbankan" dan "Perbankan " menjadi dua kelompok yang terlihat identik di antarmuka.
+
+---
+
+## 21. Position-Aware Strategy (Sudah Punya vs Belum Punya)
 
 **Masalah yang diselesaikan.** Satu label menjawab dua pertanyaan berbeda. `hold` pada emiten yang Anda miliki berarti *pertahankan*; `hold` pada emiten yang tidak Anda miliki berarti *tidak ada alasan untuk mulai*. Kata yang sama, dua situasi. Itulah sebabnya orang membaca rekomendasi dan tetap bertanya "jadi saya harus apa?".
 
@@ -960,7 +984,7 @@ Total estimasi kasar: **~30–35 minggu efektif** dengan tim inti 4–6 orang.
 
 ---
 
-## 21. Stock Pick & Penyaringan Dekat-ARA
+## 22. Stock Pick & Penyaringan Dekat-ARA
 
 **Ini penyaringan, bukan ramalan.** Perbedaan itu adalah keseluruhan desainnya. Setiap kriteria adalah aturan bernama dan dapat diperiksa atas snapshot indikator yang sudah dihitung mesin. Tidak ada yang meramalkan harga, tidak ada yang melekatkan probabilitas, dan skor adalah **hitungan kondisi yang terpenuhi**, bukan peluang naik.
 
@@ -981,15 +1005,25 @@ Total estimasi kasar: **~30–35 minggu efektif** dengan tim inti 4–6 orang.
 
 ---
 
-## 22. Monitoring Mendekati Realtime & Alert
+## 23. Monitoring, Alert & Notifikasi
+
+### 23.1 Observasi
 
 **"Mendekati realtime" adalah nama yang jujur.** Sumber gratis tertunda sekitar 15 menit, dan memoll lebih cepat tidak membuat datanya baru — hanya menanyakan angka basi yang sama lebih sering. Setiap observasi menyimpan apakah penyedia mengaku live, sehingga antarmuka menyatakannya alih-alih menyiratkan kesegaran yang tidak dimiliki siapa pun.
 
-**Alert adalah permukaan paling berbahaya di platform ini.** Ia datang tanpa diminta, dibaca dalam hitungan detik, dan sudah terlepas dari segala hal yang mengelilingi sikap di layar analisis — faktor penyeimbang, confidence terkalibrasi, disclaimer. Notifikasi berbunyi "JUAL BBCA" adalah sinyal trading, apa pun yang dikatakan sisa produk tentang dirinya.
+**Satu panggilan penyedia melayani semua pengikut.** Dua orang memantau BBCA berbiaya satu panggilan, bukan dua.
 
-Maka aturannya sempit dan mutlak: **alert menyatakan apa yang terjadi, dan sikapnya berjalan sebagai data.** `AlertKind` adalah enum tertutup berisi observasi. Pesannya kalimat fakta. Ketika sikap relevan, ia masuk ke `context` sebagai field, yang dirender antarmuka di sebelah tautan kembali ke analisis lengkap.
+### 23.2 Aturan yang mengikat alert dan notifikasi
 
-| Jenis | Terpicu saat |
+**Alert dan notifikasi adalah permukaan paling berbahaya di platform ini.** Keduanya datang tanpa diminta, dibaca dalam hitungan detik, dan sudah terlepas dari segala hal yang mengelilingi sikap di layar analisis — faktor penyeimbang, confidence terkalibrasi, disclaimer. Notifikasi berbunyi "JUAL BBCA" adalah sinyal trading, apa pun yang dikatakan sisa produk tentang dirinya.
+
+Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
+
+- `AlertKind` dan `NotificationEvent` adalah **enum tertutup berisi observasi**, sehingga tidak ada pemanggil di masa depan yang bisa memperkenalkan alert berbentuk perintah dengan mengoper string lain.
+- Pesannya **kalimat fakta**.
+- Ketika sikap relevan, ia **berjalan sebagai data di `context`** — dirender antarmuka sebagai nilai berlabel di sebelah tautan kembali ke analisis lengkap, tidak pernah dilipat ke dalam kalimatnya.
+
+| Jenis alert | Terpicu saat |
 |---|---|
 | `level_approached` / `level_crossed` | Harga mendekati atau menembus support/resistance tersimpan |
 | `stance_changed` | Analisis terbaru mencapai sikap berbeda dari sebelumnya |
@@ -997,23 +1031,17 @@ Maka aturannya sempit dan mutlak: **alert menyatakan apa yang terjadi, dan sikap
 | `suggested_stop_reached` | Harga mencapai level yang disarankan analisis sebagai stop |
 | `unusual_move` | Pergerakan besar **relatif terhadap volatilitas emiten itu sendiri** |
 
+### 23.3 Pengiriman
+
 **Deduplikasi per pengguna, per kejadian.** Kondisi yang benar tetap benar, jadi aturan yang dievaluasi tiap beberapa menit akan menyala tiap beberapa menit. Kunci dedup memuat apa yang membuat kejadiannya berbeda — level, sesi, sikap — sehingga penembusan baru tidak ikut terbungkam. Per pengguna, karena kunci bersama berarti siapa pun yang memoll kedua tidak pernah diberi tahu sama sekali.
-
-**Satu panggilan penyedia melayani semua pengikut.** Dua orang memantau BBCA berbiaya satu panggilan, bukan dua.
-
----
-
-## 22a. Notifikasi
-
-Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada satu pun yang pernah menulis notifikasi.** Dua kejadian yang paling layak diberitahukan justru yang paling mudah terlewat: analisis selesai setelah pembaca berpindah layar, dan monitoring menemukan sesuatu pada emiten yang tidak sedang dibuka siapa pun.
-
-**Aturan alert berlaku utuh di sini.** Notifikasi adalah permukaan yang sama berbahayanya — datang tanpa diminta, dibaca dalam hitungan detik, terlepas dari confidence dan faktor penyeimbang di layar analisis. Maka pesannya kalimat fakta, `NotificationEvent` tetap enum tertutup berisi kejadian (tidak ada anggota yang bisa memuat perintah), dan **sikap berjalan sebagai data di `context`**, dirender antarmuka sebagai nilai berlabel di sebelah tautan kembali ke analisis — tidak pernah dilipat ke dalam kalimatnya.
-
-**Notifikasi tidak boleh membiayai pekerjaan yang sudah selesai.** Baik pengumuman analisis maupun alert dijalankan setelah semuanya tersimpan dan dibungkus penjaga: notifikasi yang gagal dicatat sebagai peringatan, bukan dilemparkan ke atas — melemparkannya berarti melaporkan kegagalan atas analisis yang sedang duduk di basis data.
 
 **Satu notifikasi per pengguna per pass monitoring, bukan per alert.** Satu pass atas watchlist pada hari pasar bergerak menaikkan satu alert per emiten; mengirim satu notifikasi masing-masing berarti belasan tiba dalam satu detik, dan itulah cara sebuah fitur dibisukan selamanya. Notifikasinya menyebut berapa banyak dan pada emiten apa; layar alert memuat rinciannya.
 
+**Notifikasi tidak boleh membiayai pekerjaan yang sudah selesai.** Pengumuman dijalankan setelah semuanya tersimpan dan dibungkus penjaga: notifikasi yang gagal dicatat sebagai peringatan, bukan dilemparkan ke atas — melemparkannya berarti melaporkan kegagalan atas analisis yang sedang duduk di basis data.
+
 **Kalimatnya disusun di klien, bukan dibaca dari server.** Pesan tersimpan ditulis sekali dalam satu bahasa pada saat kejadian, sehingga tidak bisa mengikuti sakelar bahasa yang ditekan pembaca setelahnya. Faktanya berjalan di `context` — ticker, jumlah agen, jumlah alert — dan kedua bahasa menyusun kalimat dari sana. Pesan tersimpan tetap ada sebagai rekaman dan sebagai fallback untuk kejadian yang belum dikenali build frontend.
+
+### 23.4 Kehadiran di antarmuka
 
 **Suaranya dibangkitkan, bukan diambil.** Nada disintesis lewat Web Audio: tidak ada berkas audio, tidak ada permintaan jaringan, tidak ada yang bergantung pada CDN atau pada CSP ketat yang harus meloloskan URL media — karena tidak ada URL. Dua nada naik, bukan satu bip: bip tunggal adalah kosakata galat, sedangkan yang terjadi adalah sesuatu *datang*.
 
@@ -1021,21 +1049,17 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 **Bisa dimatikan, dan pilihannya disimpan.** Suara yang tidak bisa dihentikan pembacanya adalah fitur yang memusuhinya: ia berbunyi tanpa diminta, di layar yang mungkin terbuka seharian di samping pekerjaan lain. Menyalakannya kembali langsung memutar nadanya sekali, sebagai satu-satunya cara mengetahui apa yang baru saja dinyalakan tanpa menunggu sesuatu terjadi.
 
-**Riwayat tidak menghapus dirinya sendiri.** Menandai terbaca sempat mengeluarkan notifikasi dari satu-satunya endpoint yang mengembalikannya, sehingga "alert satu jam lalu itu tentang apa?" tidak punya jawaban. `include_read` memisahkan lonceng (yang belum dibaca) dari panel (yang bisa menampilkan seluruhnya), dan `/notifications/unread-count` melayani lencana dengan satu bilangan — memoll lima puluh baris tiap setengah menit untuk merender satu angka adalah pemborosan yang tidak perlu diadakan.
+**Riwayat tidak menghapus dirinya sendiri.** Menandai terbaca tidak boleh mengeluarkan notifikasi dari satu-satunya endpoint yang mengembalikannya, sebab "alert satu jam lalu itu tentang apa?" lalu tidak punya jawaban. `include_read` memisahkan lonceng (yang belum dibaca) dari panel (yang bisa menampilkan seluruhnya), dan `/notifications/unread-count` melayani lencana dengan satu bilangan — memoll lima puluh baris tiap setengah menit untuk merender satu angka adalah pemborosan yang tidak perlu diadakan.
 
----
-
-## 22d. Aksi Massal pada Alert
+### 23.5 Aksi massal
 
 **Satu pernyataan SQL, bukan perulangan permintaan.** Klien yang mengulang lima puluh permintaan bisa gagal di tengah dan meninggalkan daftar setengah tertangani tanpa apa pun yang mencatat di mana ia berhenti.
 
-**"Semua" punya endpoint sendiri, terpisah dari yang menerima daftar id.** Melipatnya menjadi "daftar kosong berarti semua" menaruh perbedaan antara "tandai tiga ini" dan "hapus segalanya" pada apakah filter klien kebetulan mengembalikan sesuatu — dan itu bukan perbedaan yang boleh bergantung pada bug di hulu. Daftar kosong ditolak 422.
+**"Semua" punya endpoint sendiri, terpisah dari yang menerima daftar id.** Melipatnya menjadi "daftar kosong berarti semua" menaruh perbedaan antara "tandai tiga ini" dan "hapus segalanya" pada apakah filter klien kebetulan mengembalikan sesuatu — dan itu bukan perbedaan yang boleh bergantung pada bug di hulu. Daftar kosong ditolak 422, dan panjangnya dibatasi supaya klausa `IN` tidak dibangun tanpa batas dari masukan pengguna.
 
 **Setiap pernyataan dibatasi user id di klausa WHERE yang sama dengan id-nya.** Sebuah id alert adalah token pembawa bagi baris yang disebutnya: siapa pun yang memegangnya bisa memasukkannya ke daftar. Menyaring kepemilikan belakangan — atau tidak sama sekali — adalah cara satu akun menghapus alert akun lain.
 
-**Jumlah dilaporkan dari server, bukan diasumsikan sama dengan yang dipilih.** Id yang sudah dibaca, atau milik orang lain, dilewati. Pemilih lima yang berubah tiga berhak tahu.
-
-**Alert yang sudah dibaca tidak dicap ulang,** sehingga stempel waktunya tetap berarti "kapan ini pertama kali dilihat".
+**Jumlah dilaporkan dari server, bukan diasumsikan sama dengan yang dipilih.** Id yang sudah dibaca, atau milik orang lain, dilewati. Pemilih lima yang berubah tiga berhak tahu. Alert yang sudah dibaca juga tidak dicap ulang, sehingga stempel waktunya tetap berarti "kapan ini pertama kali dilihat".
 
 **Menghapus bertanya lebih dulu, menandai-dibaca tidak.** Penghapusan tidak bisa dibatalkan dan "hapus semua" satu-satunya aksi yang cakupannya tidak terlihat dari apa yang dicentang. Menanyakan hal yang bisa dibatalkan hanya melatih orang menutup dialog yang justru penting.
 
@@ -1043,9 +1067,9 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 ---
 
-## 22c. Event Realtime & Pekerjaan Panjang
+## 24. Pekerjaan Panjang & Event Realtime
 
-**Analisis penuh tidak boleh ditahan di atas satu request HTTP.** Satu run multi-agen adalah belasan panggilan model ditambah beberapa terjemahan. Ditahan di request, apa pun yang berada di depan server menjadi batas sebenarnya atas seberapa teliti sebuah analisis boleh dilakukan — dan di balik Cloudflare batas itu **100 detik yang tidak bisa dinaikkan dari sisi origin**. Yang diterima pembaca adalah halaman galat 524, sementara pekerjaannya jalan terus lalu hasilnya dibuang. Endpoint antrean sudah ada sejak job queue dibangun; tombolnya saja yang tidak memakainya.
+**Analisis penuh tidak boleh ditahan di atas satu request HTTP.** Satu run multi-agen adalah belasan panggilan model. Ditahan di request, apa pun yang berada di depan server menjadi batas sebenarnya atas seberapa teliti sebuah analisis boleh dilakukan — dan di balik Cloudflare batas itu **100 detik yang tidak bisa dinaikkan dari sisi origin**. Yang diterima pembaca adalah halaman galat 524, sementara pekerjaannya jalan terus lalu hasilnya dibuang.
 
 **Antrean mengembalikan id dalam milidetik.** Tidak ada yang bisa timeout di jalur itu karena tidak ada yang lambat di jalur itu.
 
@@ -1053,33 +1077,21 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 **Payload-nya penunjuk, bukan datanya.** `NOTIFY` berbatas 8000 byte dan satu analisis jauh melewatinya, jadi event hanya menyebut apa yang berubah dan klien mengambilnya lewat endpoint terautentikasi biasa. Itu juga menjaga otorisasi tetap di satu tempat: socket tidak pernah menjadi pintu kedua untuk membaca data yang akan ditolak lapisan REST.
 
-**Autentikasi lewat frame pertama, bukan URL.** Peramban tidak bisa menyetel header pada handshake WebSocket, dan alternatif lazimnya menaruh token di query string — tempat ia mendarat di setiap log akses dan log proksi sepanjang jalur.
-
-**Polling di bawahnya tetap dipertahankan.** Socket yang diam-diam berhenti mengirim terlihat persis seperti sistem yang tidak punya kabar, dan bedanya baru muncul sebagai pengguna yang menatap spinner yang tidak akan bergerak. Interval yang ada cukup lambat untuk hampir tidak berbiaya dan cukup pendek untuk menjadi lantai: saat socket bekerja ia tidak pernah berguna, saat proksi menolak upgrade produknya tetap jalan, hanya kurang segera.
+**Autentikasi lewat frame pertama, bukan URL.** Peramban tidak bisa menyetel header pada handshake WebSocket, dan alternatif lazimnya menaruh token di query string — tempat ia mendarat di setiap log akses dan log proksi sepanjang jalur. Ban dicek ulang saat socket dibuka, bukan hanya saat login.
 
 **Satu koneksi LISTEN per proses API,** difan-out ke socket yang dipegang proses itu. Satu koneksi per tab berarti satu backend PostgreSQL per tab terbuka, dan itu sumber daya yang tetap dan sedikit.
 
 **Antrean per socket berbatas.** Klien yang berhenti membaca — laptop tersuspend, tab macet — tidak boleh menumbuhkan antrean tanpa batas. Melewati batas, event terlamanya dibuang: semuanya hanya petunjuk untuk mengambil ulang, jadi yang terbaru menggantikan yang di belakangnya.
 
----
+**Polling di bawahnya tetap dipertahankan.** Socket yang diam-diam berhenti mengirim terlihat persis seperti sistem yang tidak punya kabar, dan bedanya baru muncul sebagai pengguna yang menatap spinner yang tidak akan bergerak. Interval yang ada cukup lambat untuk hampir tidak berbiaya dan cukup pendek untuk menjadi lantai: saat socket bekerja ia tidak pernah berguna, saat proksi menolak upgrade produknya tetap jalan, hanya kurang segera.
 
-## 22b. Kelompok Watchlist
-
-**Kelompok bukan konsep baru yang ditempelkan.** `watchlists` sudah membawa `name` dengan batasan unik per pengguna sejak skema awal, dan `watchlist_items` menggantung padanya. Setiap endpoint dulu menuliskan "Default" secara keras, sehingga seorang pengguna hanya bisa punya satu daftar tanpa nama. Sebuah kelompok *adalah* nama itu.
-
-**Satu emiten boleh berada di beberapa kelompok.** Keunikan ada pada `(watchlist_id, asset_id)`. BBCA adalah bank sekaligus pembagi dividen, dan memaksa memilih di antara keduanya membuat pengelompokan kurang berguna dibanding tanpa pengelompokan sama sekali.
-
-**Kelompok bisa dibuat kosong.** Semula kelompok hanya lahir sebagai efek samping menambah emiten, sehingga menata watchlist hanya mungkin sambil mengisinya: yang ingin tiga kelompok harus lebih dulu mencari tiga emiten untuk dimasukkan. Kelompok kosong adalah hal yang wajar diinginkan — ia bentuk watchlist yang sedang akan dibangun seseorang. Pembuatan implisit saat menambah emiten tetap ada, karena menolak sebuah penambahan demi kelompok yang bisa saja langsung dibuat bukan perbaikan.
-
-**Nama yang bentrok dijawab 409, bukan diam-diam mengembalikan yang sudah ada.** Hasilnya akan terlihat sama persis dengan berhasil membuat yang baru, dan pembaca akan mengira punya dua. Hal yang sama berlaku pada ganti nama: penggabungan tidak dicoba, karena itu diam-diam menyatukan dua kelompok yang sengaja dipisahkan dan membatalkannya harus manual.
-
-**Menghapus kelompok memindahkan anggotanya ke `Default`, tidak menghapusnya.** Membubarkan pengelompokan bukan hal yang sama dengan memutuskan berhenti memantau emiten di dalamnya, dan keduanya mudah tertukar ketika satu aksi melakukan keduanya. `Default` sendiri tidak bisa dihapus — ia tempat segalanya mendarat, jadi menghapusnya membuat fallback tidak punya tempat jatuh.
-
-**Nama dipangkas.** Tanpa itu "Perbankan" dan "Perbankan " menjadi dua kelompok yang terlihat identik di antarmuka.
+**Commit terjadi sebelum respons dikirim, bukan di teardown dependensi.** FastAPI menutup dependensi `yield` setelah respons berangkat, sehingga klien yang bertindak atas jawaban bisa mendahului commit-nya. Diukur: baris pengguna mendarat 9–51 md setelah 201 yang mengumumkannya, dan mendaftar lalu langsung masuk — persis yang dilakukan formulir pendaftaran — gagal lima kali dari delapan. Setiap mutasi di antarmuka ini juga langsung memuat ulang query yang baru saja diinvalidasinya, sehingga pola yang sama menjatuhkan baris yang baru ditulis dari daftar yang memuat ulang beberapa milidetik terlalu cepat.
 
 ---
 
-## 23. Terjemahan Analisis (Dwibahasa)
+## 25. Keluaran Dwibahasa & Respons Bertahap
+
+### 25.1 Satu analisis, dua render
 
 **Desain yang tampak wajar dan salah:** menghasilkan analisis dua kali, satu per bahasa. Dua jalur independen atas bukti yang sama bisa mencapai sikap berbeda. Pembaca yang melihat "beli" di satu kolom dan "tahan" di kolom lain tidak punya cara menyelesaikannya, dan platform telah menerbitkan dua analisis yang bertentangan atas emiten yang sama dengan otoritas setara.
 
@@ -1094,51 +1106,71 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 **Kedua bahasa disimpan untuk setiap agen, bukan hanya untuk rekomendasi.** Tab analisis menampilkan temuan tiap agen, dan sakelar yang menerjemahkan kesimpulannya saja akan meninggalkan bukti di bawahnya dalam bahasa yang tidak diminta pembaca. Dirender sekali dan disimpan, bukan dipanggil ulang tiap kali sakelar ditekan atas teks yang tidak bisa berubah.
 
----
+**Satu panggilan per agen, bukan satu panggilan untuk semuanya.** Membatch lebih murah, tetapi `translate` menolak respons yang menjatuhkan satu kunci — dan dengan seluruh agen dalam satu payload, satu kelalaian akan membuang seluruh himpunan. Per agen, kegagalan hanya membebani render agen itu.
 
-## 23b. Respons Bertahap
+**Bahasa asli datang dari kontennya, bukan dari antarmuka.** Bahasa keluaran adalah setelan server (`AIDSS_ANALYSIS_LANGUAGE`, default `en`): prosanya berbahasa Inggris apa pun bahasa antarmuka pembaca. Sakelar yang menyimpulkannya dari locale memberi label "EN" pada prosa Indonesia dan, saat ditekan, meminta terjemahan **ke bahasa yang sudah dipakai teks itu** — permintaan yang tidak pernah cocok dengan terjemahan tersimpan mana pun, sehingga ia memanggil endpoint setiap kali untuk hasil yang sudah ada di basis data. Maka setiap respons berprosa menyatakan `language`-nya sendiri, dan sakelarnya menampilkan pasangan itu.
 
-**Terjemahan adalah job kedua, bukan tahap akhir job pertama.** Dirender di dalam run analisis, ia menggandakan waktu sebelum pembaca punya apa pun — untuk bahasa yang mungkin tidak pernah ia buka. Yang lebih menentukan: setiap detik tambahan di dalam satu job adalah detik tambahan yang harus dilewati **tanpa satu pun panggilan model gagal**. Pekerjaan yang lebih panjang tidak sekadar terasa lambat, ia lebih mungkin tidak selesai sama sekali, dan saat gagal ia membuang analisis yang sudah berhasil bersama terjemahan yang belum.
+### 25.2 Terjemahan sebagai job kedua
 
-**Dipecah, kegagalan menjadi parsial alih-alih total.** Terjemahan yang gagal meninggalkan analisis Inggris yang utuh dan terbaca. Ini bentuk yang sama dengan aturan di §23 — terjemahan gagal tidak boleh merusak aslinya — hanya ditegakkan pada tingkat job, bukan pada tingkat payload.
+**Dirender di dalam run analisis, terjemahan menggandakan waktu sebelum pembaca punya apa pun** — untuk bahasa yang mungkin tidak pernah ia buka. Yang lebih menentukan: setiap detik tambahan di dalam satu job adalah detik tambahan yang harus dilewati **tanpa satu pun panggilan model gagal**. Pekerjaan yang lebih panjang tidak sekadar terasa lambat, ia lebih mungkin tidak selesai sama sekali, dan saat gagal ia membuang analisis yang sudah berhasil bersama terjemahan yang belum.
+
+**Dipecah, kegagalan menjadi parsial alih-alih total.** Terjemahan yang gagal meninggalkan analisis Inggris yang utuh dan terbaca — bentuk yang sama dengan aturan di §25.1, hanya ditegakkan pada tingkat job.
 
 **Di-enqueue di transaksi yang sama dengan penyimpanan hasilnya,** dengan `dedup_key` per `analysis_result_id`. Commit yang sama yang membuat analisis ada juga membuat terjemahannya terantre; tidak ada jendela di mana hasil tersimpan tanpa pekerjaan lanjutan yang menemaninya. Kunci dedup berarti percobaan ulang tidak membayar render kedua atas teks yang sudah dirender.
 
-**Kedua rute — sinkron maupun antrean — berperilaku sama.** Endpoint sinkron masih ada untuk skrip, dan bila ia menerjemahkan inline sementara jalur antrean tidak, sistem akan punya dua bentuk hasil yang berbeda tergantung siapa yang memanggilnya. Ia menyimpan Inggris dan meng-enqueue lanjutan yang persis sama.
+**Kedua rute — sinkron maupun antrean — berperilaku sama.** Endpoint sinkron tetap ada untuk skrip, dan bila ia menerjemahkan inline sementara jalur antrean tidak, sistem akan punya dua bentuk hasil yang berbeda tergantung siapa yang memanggilnya.
 
 **Sakelar bahasa baru muncul setelah bahasa kedua benar-benar ada.** Ditawarkan lebih awal, ia berpindah ke tempat kosong: pembaca menekannya, tidak terjadi apa-apa, dan kontrol itu telah mengajari mereka untuk tidak mempercayainya. Gerbangnya adalah isi datanya, bukan tebakan atas waktu.
 
 **Event `translation_ready` memicu render ulang, bukan permintaan muat ulang.** Halaman yang sudah terbuka mengambil ulang analisisnya dan sakelarnya muncul sendiri.
 
-**Toast dan notifikasi, keduanya, untuk event yang sama.** Notifikasi adalah catatan: ia bertahan, ia terhitung di lencana, dan ia masih ada besok — untuk pembaca yang sudah beranjak. Toast adalah interupsi bagi yang masih menatap halamannya saat itu. Keduanya perlu, karena keduanya adalah orang yang berbeda. Tidak ada informasi yang hanya hidup di toast; yang terlewat sekilas tetap tercatat di tempat lain.
-
-**Satu panggilan per agen, bukan satu panggilan untuk semuanya.** Membatch lebih murah, tetapi `translate` menolak respons yang menjatuhkan satu kunci — dan dengan seluruh agen dalam satu payload, satu kelalaian akan membuang seluruh himpunan. Per agen, kegagalan hanya membebani render agen itu.
-
-**Bahasa asli datang dari kontennya, bukan dari antarmuka.** Bahasa keluaran adalah setelan server (`AIDSS_ANALYSIS_LANGUAGE`): pada penyebaran default prosanya Bahasa Indonesia apa pun bahasa antarmuka pembaca. Sakelar yang menyimpulkannya dari locale memberi label "EN" pada prosa Indonesia dan, saat ditekan, meminta terjemahan **ke bahasa yang sudah dipakai teks itu** — permintaan yang tidak pernah cocok dengan terjemahan tersimpan mana pun, sehingga ia memanggil endpoint setiap kali untuk hasil yang sudah ada di basis data. Maka setiap respons berprosa menyatakan `language`-nya sendiri, dan sakelarnya menampilkan pasangan itu.
+**Toast dan notifikasi, keduanya, untuk event yang sama.** Notifikasi adalah catatan: ia bertahan, terhitung di lencana, dan masih ada besok — untuk pembaca yang sudah beranjak. Toast adalah interupsi bagi yang masih menatap halamannya saat itu. Keduanya perlu, karena keduanya orang yang berbeda. Tidak ada informasi yang hanya hidup di toast.
 
 ---
 
-## 23c. Direktori Emiten & Penandaan Berita
+## 26. Berita: Sumber, Direktori Emiten & Penandaan
 
-**Pipeline berita berjalan per emiten, dan itu punya lantai yang tidak bisa ditembus.** Untuk tiap emiten yang dipantau seseorang, feed dicari. Artinya sebuah berita hanya pernah terlihat kalau ada emiten yang mencarinya: liputan atas perusahaan yang tidak dipantau siapa pun bukan sekadar tak tertandai, ia tidak pernah diambil. Feed umum juga dibaca ulang sekali per emiten, dan setiap kali seluruh isinya yang tidak cocok dibuang.
+### 26.1 Sumber feed
 
-**Sapuan membalik arahnya.** Setiap feed aktif dibaca sekali, semua isinya disimpan, lalu atribusi dilakukan setelahnya terhadap direktori emiten penuh. Berita yang menyebut enam bank ditandai ke enam bank, bukan diarsipkan di bawah satu yang kebetulan mengambilnya. Keduanya hidup berdampingan: jadwal tetap menjamin kesegaran untuk emiten yang dipantau, sapuan mengisi seluruh sisanya.
+**Pipeline berita bisa berjalan hijau tanpa menyimpan apa pun yang ditulis manusia,** dan pernah begitu: satu-satunya `NewsProvider` di pohon kode adalah fixture yang mengarang judul untuk keperluan tes — dan fixture itu juga provider default. Jadwal berjalan, handler sukses, laporan hijau, `news_items` kosong. Tiga sebab menumpuk: tidak ada adapter sungguhan, konfigurasinya menunjuk fixture, dan nol jadwal pernah dibuat sehingga adapter yang bekerja pun tak akan pernah dipanggil.
 
-**Direktori adalah tabel tersendiri, bukan baris di `assets`.** `Asset` adalah instrumen yang datanya dimiliki platform dan bisa dianalisis. Memasukkan 962 perusahaan tercatat ke sana mengiklankan 962 instrumen yang bisa dianalisis dengan harga yang hanya ada untuk segelintir. Ini data referensi, dan justru lengkap karena tidak mengaku lebih dari itu. Sumbernya endpoint profil perusahaan IDX sendiri — asal publik yang sama yang sudah dibaca adapter fundamental.
+**Sumber feed hidup di basis data, bukan di setelan.** Orang yang memutuskan publikasi mana yang diikuti bukan orang yang men-deploy ulang stack.
 
-**Tanda disimpan di tabel relasi, bukan kolom.** Satu berita rutin membahas beberapa perusahaan, dan `news_items.asset_id` hanya memuat satu. Kolom itu tetap dengan artinya semula: pengambilan terjadwal milik emiten mana yang mengambil artikel tersebut — fakta yang berbeda dari siapa yang dibicarakan artikel itu, dan mencampur keduanya adalah cara sebuah berita sektor berakhir diarsipkan di bawah emiten mana pun yang kebetulan menemukannya.
+**Dua bentuk feed, dibedakan oleh URL-nya sendiri, bukan oleh flag.** URL yang memuat `{ticker}` disubstitusi per emiten dan penerbitnya yang mencari — hasilnya tidak disaring lagi. URL biasa adalah feed umum yang diambil sekali untuk semua emiten.
 
-**Kecocokan disimpan bersama tandanya** — metodenya dan teks yang cocok. Tanda yang keliru dengan demikian menyebut sebabnya sendiri, dan alias di baliknya bisa diperbaiki; tanpa itu ia hanya asosiasi yang tidak bisa dipertanggungjawabkan siapa pun.
+**Nol sumber adalah galat, bukan hasil kosong.** Mengembalikan nol artikel akan memberi tahu jadwal bahwa tidak ada berita, dan ia akan terus mengatakan itu selamanya.
+
+**Halaman error HTML adalah XML yang sah.** Server yang menjawab 404 dengan halaman bergaya akan terparsir bersih dan menghasilkan nol entri, yang terbaca di hilir sebagai "tidak ada berita hari ini" dan bertahan begitu selamanya. Elemen akar yang memisahkan feed dari dokumen yang kebetulan terparsir, sehingga hanya `rss`, `feed`, dan `rdf` yang diterima.
+
+**Setiap feed membawa hasil pembacaan terakhirnya** — status, galat, dan hitungan kegagalan berturut-turut. Tanpa itu, feed yang mulai menjawab 404 tidak bisa dibedakan dari feed yang memang sepi. Tombol uji mengambil feed saat itu juga dan menampilkan beberapa judul teratas: hitungan menjawab "apakah sesuatu terparsir", hanya judulnya yang menjawab "apakah ini feed yang Anda maksud".
+
+**Satu feed mati tidak menghilangkan berita sembilan belas lainnya.** Perilaku yang membuat kesunyian subsistem ini dulu begitu sulit disadari adalah kegagalan yang menghentikan semuanya dan tidak melaporkan apa pun.
+
+### 26.2 Sapuan menggantikan pencarian per emiten
+
+**Pipeline per emiten punya lantai yang tidak bisa ditembus.** Untuk tiap emiten yang dipantau seseorang, feed dicari. Artinya sebuah berita hanya pernah terlihat kalau ada emiten yang mencarinya: liputan atas perusahaan yang tidak dipantau siapa pun bukan sekadar tak tertandai — ia tidak pernah diambil. Feed umum juga dibaca ulang sekali per emiten, dan tiap kali seluruh isinya yang tidak cocok dibuang.
+
+**Sapuan membalik arahnya.** Setiap feed aktif dibaca sekali, semua isinya disimpan, lalu atribusi dilakukan setelahnya terhadap direktori emiten penuh. Berita yang menyebut enam bank ditandai ke enam bank, bukan diarsipkan di bawah satu yang kebetulan mengambilnya. Keduanya hidup berdampingan: jadwal tetap menjamin kesegaran untuk emiten yang dipantau — termasuk yang beritanya datang lewat URL pencarian bertemplat yang tak bisa disapu — dan sapuan mengisi seluruh sisanya.
+
+### 26.3 Direktori emiten
+
+**Tabel tersendiri, bukan baris di `assets`.** Sebuah `Asset` adalah instrumen yang datanya dimiliki platform dan bisa dianalisis; memasukkan 962 perusahaan tercatat ke sana mengiklankan 962 instrumen yang bisa dianalisis dengan harga yang hanya ada untuk segelintir. Ini data referensi, dan justru lengkap karena tidak mengaku lebih dari itu.
+
+**Sumbernya endpoint profil perusahaan IDX sendiri** — asal publik yang sama yang sudah dibaca adapter fundamental, jadi tidak menambah dependensi maupun pertanyaan baru tentang dari mana datanya.
+
+**Kelengkapannya adalah tempat recall penandaan berpijak.** Emiten yang hilang dari tabel tidak menghasilkan tanda yang salah, ia menghasilkan kesunyian — dan kesunyian tak bisa dibedakan dari berita yang memang tidak menyebut siapa pun.
+
+**Emiten yang hilang dari feed ditandai, bukan dihapus.** Beritanya masih ada dan masih merujuknya. Tanda yang menunjuk baris yang tidak ada lagi lebih buruk daripada tanda yang menunjuk perusahaan yang tidak lagi diperdagangkan.
+
+### 26.4 Menentukan sebuah berita membahas siapa
+
+**Tanda disimpan di tabel relasi, bukan kolom.** Satu berita rutin membahas beberapa perusahaan, dan `news_items.asset_id` hanya memuat satu. Kolom itu tetap dengan artinya semula: pengambilan terjadwal milik emiten mana yang mengambil artikel tersebut — fakta yang berbeda dari siapa yang dibicarakan artikel itu.
+
+**Kecocokan disimpan bersama tandanya** — metodenya dan teks yang cocok — sehingga tanda yang keliru menyebut sebabnya sendiri dan alias di baliknya bisa diperbaiki.
 
 **Kode dicocokkan peka huruf besar, dan itu diukur bukan diasumsikan.** `BANK`, `LABA`, `AGRO`, dan `RAYA` semuanya kode emiten sungguhan sekaligus kata Indonesia biasa. Dicocokkan tanpa memperhatikan kapitalisasi, "bank sentral menaikkan suku bunga" menandai Bank Aladin dan "laba bersih" menandai Ladangbaja. Terhadap judul sungguhan itu bukan kasus pinggiran, itu mayoritas kalimat.
 
 **Judul yang seluruhnya kapital tidak dicocokkan pada kode sama sekali.** Kapitalisasi adalah satu-satunya sinyal yang memisahkan kode dari kata, jadi teks yang seluruhnya kapital tidak membawa sinyal itu. Namanya tetap dicocokkan; tanda yang hilang berbiaya lebih kecil daripada tanda yang salah.
-
-**Inisial tidak diturunkan, dan ini pelajaran yang dibayar.** Mengambil huruf pertama tampak seperti aturan yang menghasilkan "BRI" dari "Bank Rakyat Indonesia" — dan memang begitu. Dijalankan atas direktori 962 emiten sungguhan terhadap satu hari feed pasar Indonesia, ia juga menghasilkan `bps` untuk HOKI (cocok dengan Badan Pusat Statistik di 17 berita ekonomi), `bagi` untuk INPC, `siap` untuk INET, `apa` untuk NASA, `sri` untuk SRIL (cocok dengan Sri Mulyani), dan `mei` untuk MEDC. Satu benar berbanding delapan salah. Tidak ada dalam susunan hurufnya yang memisahkan "bni" dari "apa", jadi aturan itu tidak bisa diperbaiki dengan diperketat — hanya dihapus, dan kasus yang berguna diketik oleh orang yang memang tahu.
-
-**Alias hasil turunan bisa disunting, dan suntingan itu bertahan.** Sinkronisasi berikutnya memperbarui semua kolom dari bursa tetapi tidak menyentuh alias yang sudah terisi. Kolom yang bisa disunting lalu direset oleh penjadwal lebih buruk daripada tidak ada kolomnya sama sekali.
-
-**Alias yang terlalu umum ditolak saat disimpan, bukan didiamkan.** "Bank" sebagai alias bukan satu tanda sempit, melainkan beberapa ratus tanda yang salah. Administrator yang mengetiknya berhak diberi tahu saat itu juga, bukan menemukannya seminggu kemudian di dalam tanda-tanda.
 
 **Nama yang dimiliki dua emiten tidak dimiliki keduanya.** Ambiguitas tidak bisa diselesaikan dengan memilih salah satu, jadi aliasnya dibuang. Tanda hasil tebakan lebih buruk daripada tanda yang tidak ada: ia memasukkan berita perusahaan lain ke dalam bukti yang dijadikan dasar penalaran sebuah analisis.
 
@@ -1146,44 +1178,82 @@ Sampai fase ini `NotificationService` ada, `/notifications` ada, dan **tidak ada
 
 **Menandai ulang mengganti, bukan menambah.** Justru itu gunanya bisa memperbaiki alias: koreksi harus mampu membatalkan tanda salah yang disebabkannya, bukan hanya berlaku untuk yang datang besok.
 
-**Satu feed mati tidak menghilangkan berita sembilan belas lainnya.** Perilaku yang membuat kesunyian subsistem ini dulu begitu sulit disadari adalah kegagalan yang menghentikan semuanya dan tidak melaporkan apa pun.
+**Berita bertanda masuk ke tab berita emitennya dan ke bukti analisisnya.** Menyaring `asset_id` — kolom siapa-yang-mengambil — untuk menjawab apa-isinya menghasilkan nol, dengan benar dan tanpa guna. Setiap artikel membawa alasan ia ada di sana beserta emiten lain yang disebutnya, sehingga berita sektor terbaca sebagai berita sektor.
+
+### 26.5 Indeks alias
+
+**Nama yang lazim dipakai tidak bisa diturunkan dari nama terdaftar.** Liputan menulis "BCA", bukan "PT Bank Central Asia Tbk"; "Indomie" ketika emitennya Indofood CBP; "Tolak Angin" ketika emitennya Sido Muncul. Huruf-hurufnya memang tidak ada di sana. Maka indeksnya ditulis tangan — ia pengetahuan, bukan algoritma, dan setiap entri adalah klaim bahwa satu untai kata tertentu dalam liputan pasar Indonesia berarti satu emiten tertentu.
+
+**Yang sengaja tidak dimasukkan sama pentingnya.** ARTO adalah "Bank Jago", tidak pernah "Jago" — *jago* kata biasa. TINS adalah "PT Timah", tidak pernah "Timah" — logamnya ditulis terus-menerus tanpa perusahaannya terlibat. GIAA adalah "Garuda Indonesia", tidak pernah "Garuda". Bentuk dua huruf seperti "XL" mencocoki terlalu banyak prosa.
+
+**Anak usaha dan merek produk masuk bila beritanya memang tentang induk yang tercatat.** Artikel tentang tarif Telkomsel adalah artikel tentang pendapatan TLKM; tentang harga Indomie adalah tentang margin ICBP.
+
+**Inisial tidak diturunkan secara mekanis, dan ini pelajaran yang dibayar.** Mengambil huruf pertama tampak seperti aturan yang menghasilkan "BRI" dari "Bank Rakyat Indonesia" — dan memang begitu. Dijalankan atas direktori 962 emiten sungguhan terhadap satu hari feed pasar Indonesia, ia juga menghasilkan `bps` untuk HOKI (cocok dengan Badan Pusat Statistik di 17 berita ekonomi), `bagi` untuk INPC, `siap` untuk INET, `apa` untuk NASA, `sri` untuk SRIL (cocok dengan Sri Mulyani), dan `mei` untuk MEDC. Satu benar berbanding delapan salah. Tidak ada dalam susunan hurufnya yang memisahkan "bni" dari "apa", jadi aturan itu tidak bisa diperbaiki dengan diperketat — hanya dihapus, dan kasus yang berguna dipindahkan ke indeks yang ditulis orang yang memang tahu.
+
+**Daftar alias efektif dihitung saat pencocokan, bukan disimpan.** Disimpan, emiten yang diimpor bulan lalu selamanya memakai aturan bulan lalu: menambahkan "Indomie" ke indeks tidak akan menjangkau siapa pun sampai seseorang menyinkronkan ulang, dan pengetatan aturan turunan meninggalkan alias yang seharusnya dihapus tetap duduk di tabel. Kolom `aliases` karena itu hanya berisi tambahan yang diketik seseorang, dan sinkronisasi tidak menyentuhnya.
+
+**Aturan "semua kata umum berarti alias umum" terdengar benar dan salah.** Ia menolak "Bank Mandiri", "Semen Indonesia", "Kimia Farma", dan "Bank Raya" — semuanya nama sehari-hari emiten sungguhan. Frasa yang hendak ditangkapnya berbiaya satu tanda meragukan; aturannya sendiri berbiaya liputan beberapa perusahaan terbesar di bursa. Kegenerikan adalah sifat sebuah kata sendirian; dua kata bersama adalah nama.
+
+**Tetapi turunan mekanis tidak mendapat kelonggaran yang sama.** Indeks boleh menyebut "Bank Mandiri" karena ada orang yang memeriksanya. Turunan tidak diperiksa siapa pun, dan dengan kelonggaran itu ia menghasilkan "kawasan industri" untuk KIJA — Bahasa Indonesia untuk lahan industri — yang mencocoki berita tentang kawasan industri di Madura.
+
+**Alias yang terlalu umum ditolak saat disimpan, bukan didiamkan.** "Bank" sebagai alias bukan satu tanda sempit, melainkan beberapa ratus tanda yang salah. Administrator yang mengetiknya berhak diberi tahu saat itu juga, bukan menemukannya seminggu kemudian di dalam tanda-tanda.
 
 ---
 
-## 23a. Sumber Berita & Administrasi Akun
+## 27. Antarmuka & Administrasi Akun
 
-**Pipeline berita berjalan hijau selama berminggu-minggu tanpa menyimpan apa pun yang ditulis manusia.** Satu-satunya `NewsProvider` di pohon kode adalah fixture yang mengarang judul berita untuk keperluan tes — dan fixture itu juga yang menjadi provider default. Jadwal berjalan, handler sukses, laporan hijau, `news_items` kosong. Tiga sebab menumpuk: tidak ada adapter sungguhan, konfigurasinya menunjuk fixture, dan nol jadwal pernah dibuat sehingga adapter yang bekerja pun tak akan pernah dipanggil.
+### 27.1 Navigasi
 
-**Sumber feed hidup di basis data, bukan di setelan.** Orang yang memutuskan publikasi mana yang diikuti bukan orang yang men-deploy ulang stack.
+**Deretan datar tujuh tautan tidak mengatakan apa pun tentang bagaimana produk ini tersusun.** "Picks" dan "Chat" sama-sama riset, "Portfolio" dan "Journal" sama-sama catatan tentang apa yang benar-benar Anda lakukan, dan Admin pekerjaan yang lain sama sekali. Pengelompokan adalah cara termurah menyatakan itu.
 
-**Dua bentuk feed, dibedakan oleh URL-nya sendiri, bukan oleh flag.** URL yang memuat `{ticker}` disubstitusi per emiten dan penerbitnya yang mencari — hasilnya tidak disaring lagi. URL biasa adalah feed umum: diambil sekali, lalu setiap entri dicocokkan dengan kode emiten dan nama perusahaan. Pencocokan memakai batas kata, sebab kode IDX empat huruf dan pencocokan substring akan memasukkan setiap artikel yang memuat "banks" ke BANK. Bentuk korporat (`PT`, `Tbk`, `Persero`) dibuang lebih dulu karena muncul di setiap nama perusahaan Indonesia dan tidak membawa sinyal apa pun.
+**Kelompok berupa judul, bukan laci yang bisa dilipat.** Ada empat kelompok dengan selusin tautan; menyembunyikannya di balik pengungkapan berbiaya satu klik dan tidak menghemat apa pun yang sepadan.
 
-**Nol sumber adalah galat, bukan hasil kosong.** Mengembalikan nol artikel akan memberi tahu jadwal bahwa tidak ada berita, dan ia akan terus mengatakan itu selamanya — persis keadaan subsistem ini sebelumnya.
+**Setiap bagian admin punya alamat.** Sebagai tab, tidak ada satu pun bagian yang bisa ditandai, ditautkan ke rekan, atau bertahan setelah muat ulang — setiap reload mendarat kembali di ikhtisar.
 
-**Halaman error HTML adalah XML yang sah.** Server yang menjawab 404 dengan halaman bergaya akan terparsir bersih dan menghasilkan nol entri, yang terbaca di hilir sebagai "tidak ada berita hari ini" dan bertahan begitu selamanya. Elemen akar yang memisahkan feed dari dokumen yang kebetulan terparsir, sehingga hanya `rss`, `feed`, dan `rdf` yang diterima.
+**Tautan admin disembunyikan dari yang bukan admin, dan itu bukan kontrolnya.** Rute dan API masing-masing berdiri sendiri; ini hanya menghindari menawarkan tautan ke tempat yang tidak bisa dipakai pembacanya.
 
-**Setiap feed membawa hasil pembacaan terakhirnya** — status, galat, dan hitungan kegagalan berturut-turut. Tanpa itu, feed yang mulai menjawab 404 tidak bisa dibedakan dari feed yang memang sepi. Tombol uji mengambil feed saat itu juga dan menampilkan beberapa judul teratas: hitungan menjawab "apakah sesuatu terparsir", hanya judulnya yang menjawab "apakah ini feed yang Anda maksud".
+### 27.2 Ekspor PDF
 
-**`is_active` boolean pada akun diganti `status`.** Boolean bisa menyatakan akun mati tapi tidak bisa menyatakan itu suspend dua hari atau ban permanen, sehingga alasannya harus disimpan di tempat lain — dan penanda yang bisa bertentangan dengan alasan di sebelahnya adalah persis cara akun yang diban tetap bisa masuk. Satu fungsi, `sign_in_block()`, dipakai gerbang login, setiap request terautentikasi, dan daftar admin — sehingga status yang dibaca admin secara konstruksi adalah status yang ditegakkan platform.
+**Dibuat di peramban.** Merender dokumen adalah pekerjaan per pembaca tanpa hasil bersama untuk di-cache, jadi menaruhnya di server tidak membeli apa pun dan berbiaya satu request yang harus ditahan selama mesin tata letak berjalan — bentuk kesalahan yang sama yang membuat analisisnya sendiri kehabisan waktu di balik proksi.
+
+**Ditulis sebagai teks, bukan ditangkap sebagai gambar.** Tangkapan layar lebih sederhana dan menghasilkan berkas yang tidak bisa dicari, angkanya tidak bisa disalin, dan tidak terbaca pembaca layar — dengan ukuran beberapa kali lipat.
+
+**Disclaimer ikut, dan itu tidak opsional.** PDF adalah satu-satunya artefak yang meninggalkan platform sepenuhnya: ia dikirim lewat surel, dicetak, dan diteruskan tanpa antarmuka di sekelilingnya yang membawa peringatan. Ekspor yang menjatuhkannya menerbitkan prosa investasi hasil model tanpa satu pun keterangan tentang apa itu (Section 13).
+
+**Target dan stop membawa metodenya.** Angka tanpa dasar yang dinyatakan adalah angka yang diperlakukan pembaca sebagai lebih pasti daripada sebenarnya.
+
+**Pustaka PDF dimuat saat diminta.** Ia sepertiga dari bundel utama, dan sebagian besar sesi tidak pernah mengekspor apa pun.
+
+### 27.3 Status akun
+
+**Status, bukan boolean.** Sebuah flag bisa menyatakan akun mati tapi tidak bisa menyatakan itu suspend dua hari atau ban permanen, sehingga alasannya harus disimpan di tempat lain — dan penanda yang bisa bertentangan dengan alasan di sebelahnya adalah persis cara akun yang diban tetap bisa masuk. Satu fungsi, `sign_in_block()`, dipakai gerbang login, setiap request terautentikasi, dan daftar admin — sehingga status yang dibaca admin secara konstruksi adalah status yang ditegakkan platform.
 
 **Suspend berakhir sendiri; tidak ada job yang mencabutnya.** Suspend yang hidup melampaui tenggatnya karena worker sedang mati adalah hukuman yang tidak dipilih siapa pun.
 
 **Ban dicek ulang di setiap request, bukan hanya saat login.** Token tetap valid secara kriptografis sepanjang satu jam; ban yang hanya menjaga halaman login tidak akan berlaku sampai orang yang diban kebetulan keluar sendiri.
 
-**Admin terakhir tidak bisa mundur.** Tidak ada endpoint yang memberikan peran admin — promosi adalah perintah shell, justru agar sebuah rute tidak menjadi permukaan eskalasi. Konsekuensinya: organisasi yang menurunkan admin tunggalnya tidak bisa pulih dari dalam produk sama sekali. Sebaliknya, mundur saat masih ada admin lain **diizinkan** — melarangnya sekaligus membuat penjaga admin-terakhir tidak pernah tercapai, dan penjaga yang tak pernah menyala bukan penjaga, melainkan komentar.
+**Admin terakhir tidak bisa mundur.** Tidak ada endpoint yang memberikan peran admin — promosi adalah perintah shell, justru agar sebuah rute tidak menjadi permukaan eskalasi hak akses, dan karena pendaftaran hanya membuat `investor` sehingga admin pertama tidak akan pernah bisa ada tanpa pintu belakang yang ikut terkirim dalam kode. Konsekuensinya: organisasi yang menurunkan admin tunggalnya tidak bisa pulih dari dalam produk. Sebaliknya, mundur saat masih ada admin lain **diizinkan** — melarangnya sekaligus membuat penjaga admin-terakhir tidak pernah tercapai, dan penjaga yang tak pernah menyala bukan penjaga, melainkan komentar.
 
-**Aksi batch memakai endpoint per akun yang sama.** Tidak ada endpoint massal, disengaja: ia harus menuliskan ulang penjaga "bukan diri sendiri" dan "bukan admin terakhir", lalu memutuskan arti batch yang setengah diterapkan. Batch dijalankan berurutan, setiap akun tetap dicoba meski ada yang gagal, dan hasilnya dilaporkan per akun. Batch yang diam-diam melaporkan sukses untuk yang berhasil saja adalah cara seorang admin percaya empat puluh akun tersuspend padahal tiga puluh delapan.
+**Aksi batch akun memakai endpoint per akun yang sama.** Tidak ada endpoint massal, disengaja: ia harus menuliskan ulang penjaga "bukan diri sendiri" dan "bukan admin terakhir", lalu memutuskan arti batch yang setengah diterapkan. Batch dijalankan berurutan, setiap akun tetap dicoba meski ada yang gagal, dan hasilnya dilaporkan per akun. Batch yang diam-diam melaporkan sukses untuk yang berhasil saja adalah cara seorang admin percaya empat puluh akun tersuspend padahal tiga puluh delapan.
+
+*(Berbeda dari aksi massal alert di §23.5, yang memakai satu pernyataan SQL. Perbedaannya bukan inkonsistensi: alert tidak punya penjaga per baris untuk dituliskan ulang, akun punya.)*
 
 ---
 
-## 24. Catatan Implementasi yang Menyimpang dari Rencana Awal
+## 28. Kendala Nyata Sumber Data Publik
 
-Beberapa hal ditemukan saat membangun dan berbeda dari asumsi dokumen ini. Dicatat agar pembaca berikutnya tidak mengulang jalannya.
+Bagian ini menetapkan apa yang benar-benar tersedia secara gratis dan publik untuk pasar Indonesia. Semuanya ditetapkan dengan pengujian terhadap endpoint sungguhan, bukan dari dokumentasi, dan sebagian besar bertentangan dengan asumsi yang wajar.
 
-- **Yahoo `quoteSummary` menolak (401).** Endpoint `chart` untuk harga tetap terbuka. Workaround tidak diimplementasikan: memakai endpoint tak berdokumen yang terbuka adalah satu hal, menembus kontrol akses yang ditambahkan penyedia adalah hal lain.
-- **Alpha Vantage tidak meliput fundamental IDX.** Diuji dengan kunci sungguhan: `BBCA.JKT`, `BBCA.JK`, `BBRI.JKT` semua kosong. Tepat untuk ekuitas AS, keliru untuk pasar ini.
-- **Fundamental IDX diambil dari API statistik bursa sendiri**, melalui klien yang menyajikan sidik jari TLS peramban karena endpoint-nya di balik Cloudflare. Tidak ada akun, kredensial, atau paywall di sana — yang dilewati adalah manajemen bot. Yang **tidak** dilewati adalah syarat IDX yang melarang redistribusi komersial; ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (Section 13).
-- **Satuan IDX tidak berdokumen.** Uang dalam miliar rupiah; `roa` dan `roe` dalam persen sementara penyedia lain memakai pecahan. Keduanya ditetapkan dengan membandingkan emiten lintas tiga orde besaran, dan salah menanganinya adalah galat seratus atau semiliar kali lipat yang tidak tertangkap pemeriksaan tipe apa pun.
-- **Basis periode `ytd` ditambahkan** ke kosakata `period_type`. IDX melaporkan kumulatif berjalan: laporan bertanggal 30 September memuat sembilan bulan pendapatan. Menyebutnya tahunan melebihkan sepertiga, kuartalan mengurangi tiga kali lipat, dan `ttm` jendela yang sama sekali berbeda.
-- **Promosi peran admin adalah perintah shell, bukan endpoint.** Rute yang membagikan peran admin adalah permukaan eskalasi hak akses, dan pendaftaran hanya membuat `investor` — sehingga dengan promosi lewat API, admin pertama tidak akan pernah bisa ada tanpa pintu belakang yang ikut terkirim dalam kode.
-- **Retrieval berjalan tanpa model embedding.** Banyak gateway swakelola hanya melayani model chat dan menjawab `/embeddings` dengan 404. Pencarian token eksak — kode emiten, nama metrik, rasio — tidak terpengaruh; yang hilang adalah pencocokan parafrasa.
+**Yahoo `quoteSummary` menolak (401).** Endpoint `chart` untuk harga tetap terbuka. Workaround tidak diimplementasikan: memakai endpoint tak berdokumen yang terbuka adalah satu hal, menembus kontrol akses yang ditambahkan penyedia adalah hal lain.
+
+**Alpha Vantage tidak meliput fundamental IDX.** Diuji dengan kunci sungguhan: `BBCA.JKT`, `BBCA.JK`, dan `BBRI.JKT` semuanya mengembalikan kosong. Tepat untuk ekuitas AS, keliru untuk pasar ini.
+
+**Fundamental IDX diambil dari API statistik bursa sendiri**, melalui klien yang menyajikan sidik jari TLS peramban karena endpoint-nya di balik Cloudflare. Tidak ada akun, kredensial, atau paywall di sana — yang dilewati adalah manajemen bot, bukan kontrol akses. Yang **tidak** dilewati adalah syarat IDX yang melarang redistribusi komersial: ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (Section 13). Konsekuensi praktis yang ditanggung kode: endpoint bisa berubah tanpa pemberitahuan sehingga bentuk responsnya diperiksa alih-alih dipercaya, dan batasnya tidak dipublikasikan sehingga permintaannya dijeda.
+
+**Satuan IDX tidak berdokumen, dan salah menanganinya adalah galat seratus atau semiliar kali lipat yang tidak tertangkap pemeriksaan tipe apa pun.** Uang dalam miliar rupiah — aset BBCA datang sebagai `1433701.78`, berarti Rp 1.434 triliun. `roa`, `roe`, dan `npm` dalam persen sementara penyedia lain memakai pecahan: IDX menulis `20.82` dan Alpha Vantage `0.345` untuk konsep yang sama. Keduanya ditetapkan dengan membandingkan emiten lintas tiga orde besaran.
+
+**Basis periode `ytd` ditambahkan** ke kosakata `period_type`. IDX melaporkan kumulatif berjalan: laporan bertanggal 30 September memuat sembilan bulan pendapatan. Menyebutnya tahunan melebihkan sepertiga, kuartalan mengurangi tiga kali lipat, dan `ttm` jendela yang sama sekali berbeda.
+
+**Retrieval berjalan tanpa model embedding.** Banyak gateway swakelola hanya melayani model chat dan menjawab `/embeddings` dengan 404. Pencarian token eksak — kode emiten, nama metrik, rasio — tidak terpengaruh; yang hilang adalah pencocokan parafrasa.
+
+**Gateway AI swakelola punya batas waktunya sendiri.** Diukur pada satu penyebaran: prompt seukuran analyzer (1.170 token masuk, 600 token keluar) dijawab HTTP 504 pada detik ke-90, sementara permintaan 10 token dijawab dalam 16 detik. Menaikkan timeout klien tidak bisa menolong — batasnya ada di sisi gateway. Memecah pekerjaan menjadi job-job yang lebih pendek (§25.2) mengurangi paparannya; menaikkan batas itu sendiri adalah pekerjaan operator gateway.

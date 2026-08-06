@@ -20,6 +20,7 @@ Three guards, all of them load-bearing:
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -28,8 +29,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
+from aidss.api.pagination import paginate
 from aidss.api.schemas import (
+    AdminUserCreate,
     AdminUserResponse,
+    AIProviderResponse,
+    AIProviderTestResponse,
+    AIProviderWrite,
     BanRequest,
     IssuerResponse,
     IssuerUpdateRequest,
@@ -38,12 +44,17 @@ from aidss.api.schemas import (
     NewsSourceResponse,
     NewsSourceTestResponse,
     NewsSourceUpdate,
+    Page,
+    PlatformSettingsResponse,
+    PlatformSettingsUpdate,
     RoleChangeRequest,
     SuspendRequest,
 )
 from aidss.collectors.normalization import normalize_ticker
+from aidss.config import get_settings
 from aidss.db.models import (
     ActorType,
+    AIProviderConfig,
     Asset,
     AuditLog,
     Issuer,
@@ -53,13 +64,26 @@ from aidss.db.models import (
     UserStatus,
 )
 from aidss.jobs.queue import enqueue
+from aidss.llm.provisioning import provider_from_row
+from aidss.news.schedules import next_run_at
 from aidss.news.tagging import (
     MIN_ALIAS_LENGTH,
     effective_aliases,
     is_usable_alias,
     normalise,
 )
+from aidss.platform.settings import (
+    NEWS_SWEEP_CRON,
+    REGISTRATION_OPEN,
+    all_settings,
+    set_setting,
+)
+from aidss.plugins.errors import PluginNotFoundError
+from aidss.plugins.registry import get_plugin_class
+from aidss.security.passwords import PasswordPolicyError, hash_password
 from aidss.security.rbac import Permission
+from aidss.security.secrets import encrypt_secret
+from aidss.security.secrets import hint as secret_hint
 from aidss.syndication.feeds import FeedParseError
 
 router = APIRouter(prefix="/admin", tags=["admin"], route_class=CommitBeforeResponse)
@@ -149,14 +173,16 @@ def _refuse_if_last_admin(session: Session, target: User) -> None:
         )
 
 
-@router.get("/users", response_model=list[AdminUserResponse])
+
+@router.get("/users", response_model=Page[AdminUserResponse])
 def list_users(
     q: str | None = Query(default=None, description="Match on email or name"),
     role: UserRole | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
-) -> list[AdminUserResponse]:
+) -> Page[AdminUserResponse]:
     stmt = select(User)
     if q:
         needle = f"%{q.strip().lower()}%"
@@ -165,8 +191,10 @@ def list_users(
         )
     if role is not None:
         stmt = stmt.where(User.role == role)
-    rows = session.scalars(stmt.order_by(User.created_at.desc()).limit(limit)).all()
-    return [_to_user_response(u) for u in rows]
+    rows, total = paginate(session, stmt, User.created_at.desc(), limit, offset)
+    return Page(
+        items=[_to_user_response(u) for u in rows], total=total, limit=limit, offset=offset
+    )
 
 
 @router.patch("/users/{user_id}/role", response_model=AdminUserResponse)
@@ -344,13 +372,20 @@ def _require_http(url: str) -> str:
     return trimmed
 
 
-@router.get("/news-sources", response_model=list[NewsSourceResponse])
+@router.get("/news-sources", response_model=Page[NewsSourceResponse])
 def list_news_sources(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
-) -> list[NewsSourceResponse]:
-    rows = session.scalars(select(NewsSource).order_by(NewsSource.name)).all()
-    return [_to_source_response(session, s) for s in rows]
+) -> Page[NewsSourceResponse]:
+    rows, total = paginate(session, select(NewsSource), NewsSource.name, limit, offset)
+    return Page(
+        items=[_to_source_response(session, row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
@@ -632,14 +667,15 @@ def _issuer_payload(issuer: Issuer) -> IssuerResponse:
     )
 
 
-@router.get("/issuers", response_model=list[IssuerResponse])
+@router.get("/issuers", response_model=Page[IssuerResponse])
 def list_issuers(
     search: str | None = Query(default=None, description="Matches the code or the name"),
     listed_only: bool = Query(default=True),
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=50, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
-) -> list[IssuerResponse]:
+) -> Page[IssuerResponse]:
     """Browse the directory. Searchable, because it holds nearly a thousand rows
     and scrolling to find one is not browsing."""
     stmt = select(Issuer)
@@ -650,8 +686,13 @@ def list_issuers(
         stmt = stmt.where(
             func.lower(Issuer.ticker).like(pattern) | func.lower(Issuer.name).like(pattern)
         )
-    rows = session.scalars(stmt.order_by(Issuer.ticker).limit(limit)).all()
-    return [_issuer_payload(issuer) for issuer in rows]
+    rows, total = paginate(session, stmt, Issuer.ticker, limit, offset)
+    return Page(
+        items=[_issuer_payload(issuer) for issuer in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.patch("/issuers/{issuer_id}", response_model=IssuerResponse)
@@ -697,3 +738,297 @@ def update_issuer(
     issuer.aliases = cleaned
     session.flush()
     return _issuer_payload(issuer)
+
+
+# ---------------------------------------------------------------------------
+# Platform settings, accounts created by an admin, and AI providers
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings", response_model=PlatformSettingsResponse)
+def read_platform_settings(
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> PlatformSettingsResponse:
+    return PlatformSettingsResponse(**all_settings(session))
+
+
+@router.patch("/settings", response_model=PlatformSettingsResponse)
+def update_platform_settings(
+    payload: PlatformSettingsUpdate,
+    session: Session = Depends(get_db),
+    actor: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> PlatformSettingsResponse:
+    """Change operator settings. Only the keys sent are touched.
+
+    Both are audited. Closing registration and changing when the platform reads
+    the news are the kind of decisions someone asks about a month later, and an
+    audit row is the only answer that does not depend on memory.
+    """
+    if payload.news_sweep_cron is not None and payload.news_sweep_cron.strip():
+        # Validated here rather than discovered by the scheduler at 3am, where
+        # the failure is a sweep that silently never runs.
+        try:
+            next_run_at(payload.news_sweep_cron.strip())
+        except Exception as exc:  # noqa: BLE001 - the parser raises its own types
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Not a usable cron expression: {exc}",
+            ) from exc
+
+    before = all_settings(session)
+    cron = None if payload.news_sweep_cron is None else payload.news_sweep_cron.strip()
+    for key, value in ((REGISTRATION_OPEN, payload.registration_open), (NEWS_SWEEP_CRON, cron)):
+        if value is not None:
+            set_setting(session, key, value, by=actor.id)
+
+    after = all_settings(session)
+    _audit(
+        session,
+        actor,
+        action="platform_settings.update",
+        entity="platform_settings",
+        entity_id="-",
+        before=before,
+        after=after,
+    )
+    return PlatformSettingsResponse(**after)
+
+
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+def create_user(
+    payload: AdminUserCreate,
+    session: Session = Depends(get_db),
+    actor: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> AdminUserResponse:
+    """Create an account on somebody's behalf.
+
+    Exists because registration can be closed, and an operator who closed it
+    still needs to onboard people. Without this the only ways in are reopening
+    the door for everyone or editing the database.
+
+    Unlike self-registration this may set a role, which makes it the one route
+    that can mint an admin. It is guarded by `MANAGE_PROVIDERS` - so only an
+    existing admin can - and audited, because "who made this account an admin"
+    is a question that gets asked exactly once, urgently.
+    """
+    if session.scalar(select(User).where(User.email == payload.email.lower())):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email is already registered"
+        )
+    try:
+        password_hash = hash_password(payload.password)
+    except PasswordPolicyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+
+    user = User(
+        email=payload.email.lower(),
+        password_hash=password_hash,
+        full_name=payload.full_name,
+        role=payload.role,
+    )
+    session.add(user)
+    session.flush()
+    _audit(
+        session,
+        actor,
+        action="user.create",
+        entity="users",
+        entity_id=str(user.id),
+        before=None,
+        after={"email": user.email, "role": user.role.value},
+    )
+    return _to_user_response(user)
+
+
+@router.get("/ai-providers", response_model=list[AIProviderResponse])
+def list_ai_providers(
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> list[AIProviderConfig]:
+    """Every configured provider, in fallback order.
+
+    Not paginated, unlike the other admin lists: the point of this screen is
+    seeing the chain, and a chain split across pages is not a chain anybody can
+    read.
+    """
+    return list(
+        session.scalars(select(AIProviderConfig).order_by(AIProviderConfig.priority)).all()
+    )
+
+
+@router.post(
+    "/ai-providers", response_model=AIProviderResponse, status_code=status.HTTP_201_CREATED
+)
+def create_ai_provider(
+    payload: AIProviderWrite,
+    session: Session = Depends(get_db),
+    actor: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> AIProviderConfig:
+    if session.scalar(select(AIProviderConfig).where(AIProviderConfig.name == payload.name)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A provider named {payload.name!r} already exists",
+        )
+    _check_adapter(payload.adapter_name)
+    row = AIProviderConfig(name=payload.name)
+    _apply_provider(row, payload)
+    session.add(row)
+    session.flush()
+    _audit(
+        session,
+        actor,
+        action="ai_provider.create",
+        entity="ai_providers",
+        entity_id=str(row.id),
+        before=None,
+        after=_provider_audit(row),
+    )
+    return row
+
+
+@router.patch("/ai-providers/{provider_id}", response_model=AIProviderResponse)
+def update_ai_provider(
+    provider_id: uuid.UUID,
+    payload: AIProviderWrite,
+    session: Session = Depends(get_db),
+    actor: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> AIProviderConfig:
+    row = session.get(AIProviderConfig, provider_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    _check_adapter(payload.adapter_name)
+    before = _provider_audit(row)
+    _apply_provider(row, payload)
+    session.flush()
+    _audit(
+        session,
+        actor,
+        action="ai_provider.update",
+        entity="ai_providers",
+        entity_id=str(row.id),
+        before=before,
+        after=_provider_audit(row),
+    )
+    return row
+
+
+@router.delete("/ai-providers/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ai_provider(
+    provider_id: uuid.UUID,
+    session: Session = Depends(get_db),
+    actor: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> None:
+    row = session.get(AIProviderConfig, provider_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    _audit(
+        session,
+        actor,
+        action="ai_provider.delete",
+        entity="ai_providers",
+        entity_id=str(row.id),
+        before=_provider_audit(row),
+        after=None,
+    )
+    session.delete(row)
+
+
+@router.post("/ai-providers/{provider_id}/test", response_model=AIProviderTestResponse)
+def test_ai_provider(
+    provider_id: uuid.UUID,
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> AIProviderTestResponse:
+    """Ask this provider one trivial question, now.
+
+    Without it, a wrong URL or a stale key is discovered by an analysis failing
+    twenty minutes later, with the reason buried in a worker log. The prompt is
+    deliberately tiny: this establishes reachability and authentication, not
+    that the model is any good.
+    """
+    row = session.get(AIProviderConfig, provider_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+
+    settings = get_settings()
+    started = time.monotonic()
+    try:
+        provider = provider_from_row(row, settings)
+        result = provider.chat(
+            [{"role": "user", "content": "Reply with the single word: ok"}],
+            model=row.default_model or settings.ai_chat_model,
+            max_tokens=5,
+        )
+        elapsed = int((time.monotonic() - started) * 1000)
+        row.last_status, row.last_error = "ok", None
+        row.last_checked_at = datetime.now(UTC)
+        session.flush()
+        return AIProviderTestResponse(
+            ok=True,
+            latency_ms=elapsed,
+            model=getattr(result, "model", None) or row.default_model,
+            reply=(getattr(result, "content", "") or "")[:200],
+        )
+    except Exception as exc:  # noqa: BLE001 - adapters raise their own hierarchies
+        detail = f"{type(exc).__name__}: {exc}"[:500]
+        row.last_status, row.last_error = "failed", detail
+        row.last_checked_at = datetime.now(UTC)
+        session.flush()
+        return AIProviderTestResponse(ok=False, error=detail)
+
+
+def _check_adapter(adapter_name: str) -> None:
+    try:
+        get_plugin_class("ai", adapter_name)
+    except PluginNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"No AI adapter named {adapter_name!r} is registered",
+        ) from exc
+
+
+def _apply_provider(row: AIProviderConfig, payload: AIProviderWrite) -> None:
+    """Copy the writable fields, handling the credential's three intents.
+
+    Omitted keeps what is stored, empty clears it, a value replaces it. An
+    admin editing the model name expects the first; a switch to a local model
+    needing no key expects the second; and collapsing them would make one of
+    those impossible to express.
+    """
+    row.name = payload.name
+    row.adapter_name = payload.adapter_name
+    row.base_url = payload.base_url or None
+    row.default_model = payload.default_model or None
+    row.role = payload.role
+    row.priority = payload.priority
+    row.is_active = payload.is_active
+    row.self_hosted = payload.self_hosted
+    row.timeout_seconds = payload.timeout_seconds
+    row.input_cost_per_1k = payload.input_cost_per_1k
+    row.output_cost_per_1k = payload.output_cost_per_1k
+
+    if payload.api_key is None:
+        return
+    if payload.api_key == "":
+        row.api_key_ciphertext, row.api_key_hint = None, None
+        return
+    row.api_key_ciphertext = encrypt_secret(payload.api_key)
+    row.api_key_hint = secret_hint(payload.api_key)
+
+
+def _provider_audit(row: AIProviderConfig) -> dict[str, object]:
+    """What goes in the audit trail. Never the credential, not even encrypted."""
+    return {
+        "name": row.name,
+        "adapter_name": row.adapter_name,
+        "base_url": row.base_url,
+        "default_model": row.default_model,
+        "role": row.role,
+        "priority": row.priority,
+        "is_active": row.is_active,
+        "self_hosted": row.self_hosted,
+        "has_api_key": bool(row.api_key_ciphertext),
+    }

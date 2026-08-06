@@ -238,3 +238,27 @@ class ProviderIngestionRun(Base):
     error: Mapped[str | None] = mapped_column(Text, default=None)
     started_at: Mapped[datetime] = mapped_column(default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
+class PlatformSetting(Base):
+    """Operator choices that must outlive a redeploy and be changeable without one.
+
+    A table rather than more environment variables, because the two differ in
+    who can change them and when. `AIDSS_*` is set by whoever deploys, applies
+    at boot, and needs a restart to alter - correct for a database URL, wrong
+    for "is registration open right now", which is a decision someone makes at
+    11pm because a link leaked.
+
+    Deliberately narrow: this is not a general key-value store for anything
+    that resists schema design. Each key here is a named operator decision with
+    a default in code, so an empty table is a working system.
+    """
+
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), default=None
+    )

@@ -27,6 +27,7 @@ from aidss.agents.conversation import (
     journal_summary,
 )
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
+from aidss.api.pagination import paginate
 from aidss.api.schemas import (
     AuditLogResponse,
     ChatRequest,
@@ -34,6 +35,7 @@ from aidss.api.schemas import (
     JournalEntryCreate,
     JournalEntryResponse,
     JournalSummaryResponse,
+    Page,
     ReflectionResponse,
 )
 from aidss.collectors.normalization import normalize_ticker
@@ -273,39 +275,46 @@ def chat(
 # --- Audit log (Sections 10, 13) -------------------------------------------
 
 
-@router.get("/audit-logs", response_model=list[AuditLogResponse])
+@router.get("/audit-logs", response_model=Page[AuditLogResponse])
 def export_audit_logs(
     entity: str | None = Query(default=None),
     actor_type: ActorType | None = Query(default=None),
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=50, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.READ_AUDIT_LOG)),
-) -> list[AuditLogResponse]:
+) -> Page[AuditLogResponse]:
     """Export the append-only audit trail (Section 13).
 
     Read-only, and there is no endpoint that writes or deletes one. An audit
     log an application can edit is not an audit log.
     """
-    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+    stmt = select(AuditLog)
     if entity:
         stmt = stmt.where(AuditLog.entity == entity)
     if actor_type:
         stmt = stmt.where(AuditLog.actor_type == actor_type)
 
-    return [
-        AuditLogResponse(
-            id=row.id,
-            actor_type=row.actor_type,
-            actor_id=row.actor_id,
-            action=row.action,
-            entity=row.entity,
-            entity_id=row.entity_id,
-            before=row.before,
-            after=row.after,
-            created_at=row.created_at,
-        )
-        for row in session.scalars(stmt.limit(limit)).all()
-    ]
+    rows, total = paginate(session, stmt, AuditLog.created_at.desc(), limit, offset)
+    return Page(
+        items=[
+            AuditLogResponse(
+                id=row.id,
+                actor_type=row.actor_type,
+                actor_id=row.actor_id,
+                action=row.action,
+                entity=row.entity,
+                entity_id=row.entity_id,
+                before=row.before,
+                after=row.after,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/audit-logs/analysis/{analysis_result_id}", response_model=dict)

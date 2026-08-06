@@ -29,8 +29,16 @@ from aidss.db.base import Base, Embedding, new_uuid, utcnow
 class AIProviderConfig(Base):
     """Configured AI providers - the basis of multi-model routing (Section 12.10).
 
-    A row points at a registered adapter through ``adapter_name``. Credentials
-    stay in the secret manager; none of these columns holds one (Section 13).
+    A row points at a registered adapter through ``adapter_name`` and carries
+    everything needed to reach it: its own base URL, model, timeout and
+    credential. That last one is a deliberate change from "credentials stay in
+    the environment": an operator has to be able to add a model from the admin
+    screen, and a row whose key came from `.env` would mean every provider
+    shares one key - which is the same as having one provider.
+
+    The credential is encrypted at rest (`aidss.security.secrets`) and never
+    returned by the API; `api_key_hint` is what the interface shows so a
+    reader can tell *which* key is stored without being told the key.
     """
 
     __tablename__ = "ai_providers"
@@ -44,6 +52,25 @@ class AIProviderConfig(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     #: Position in the fallback chain (Section 12.10); lower wins.
     priority: Mapped[int] = mapped_column(default=100)
+    #: Fernet ciphertext, or null when this provider needs no key - which is
+    #: the normal case for Ollama, vLLM and LM Studio.
+    api_key_ciphertext: Mapped[str | None] = mapped_column(Text, default=None)
+    #: What the interface shows in place of the key.
+    api_key_hint: Mapped[str | None] = mapped_column(String(40), default=None)
+    #: Per provider, because they differ by an order of magnitude: a hosted API
+    #: answers in seconds and a self-hosted model on modest hardware needs
+    #: minutes for the same prompt.
+    timeout_seconds: Mapped[float | None] = mapped_column(default=None)
+    #: Set by the operator when inference runs on infrastructure they control
+    #: but is published at a public domain - indistinguishable from a
+    #: third-party API by inspection, and the difference decides whether
+    #: personal financial data may be sent there (Section 13).
+    self_hosted: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: Result of the last reachability check, so a provider that stopped
+    #: answering is distinguishable from one nobody has tried.
+    last_status: Mapped[str | None] = mapped_column(String(20), default=None)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    last_checked_at: Mapped[datetime | None] = mapped_column(default=None)
     #: Pricing for cost estimates (Section 12.9), per 1K tokens.
     input_cost_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), default=None)
     output_cost_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), default=None)
