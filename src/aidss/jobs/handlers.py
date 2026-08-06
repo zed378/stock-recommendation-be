@@ -276,7 +276,7 @@ def run_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
             },
             dedup_key=f"translate:{run.analysis_result_id}",
         )
-        translation_job = str(queued.job.id)
+        translation_job = str(queued.job_id)
 
     return {
         "ticker": run.asset_ticker,

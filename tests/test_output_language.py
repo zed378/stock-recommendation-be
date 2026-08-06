@@ -13,6 +13,7 @@ looks like a fact, and everything downstream treats it as one.
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -402,6 +403,43 @@ def test_re_running_the_translation_pays_for_nothing_twice(session, monkeypatch)
     report = AnalysisEngine(session, make_gateway()).translate_stored(result)
 
     assert report["agents"] == [], "an already-rendered agent was translated again"
+
+
+def test_the_analysis_job_hands_off_to_the_translation_job(session, monkeypatch) -> None:
+    """Every test above starts from an analysis built the way the handler
+    *would* have built it, and so never runs the handoff itself. That left the
+    one line joining the two jobs unexecuted by the entire suite - it read
+    `queued.job.id` against a result object that only has `job_id`, and the
+    staged flow died at the join on its first real run. An imitation of a
+    handler's output cannot test the handler.
+    """
+    from aidss.collectors.market_data import MarketDataCollector
+    from aidss.config import Settings
+    from aidss.db.models import JobQueueEntry
+    from aidss.domain.types import Timeframe
+    from aidss.jobs import handlers
+    from aidss.plugins.registry import get_market_data_provider
+    from tests.test_agents import make_gateway
+
+    collector = MarketDataCollector(
+        get_market_data_provider(Settings(market_data_provider="fixture"))
+    )
+    asset = collector.get_or_create_asset(session, "ANTM", sector="Mining")
+    end = datetime(2025, 6, 1, tzinfo=UTC)
+    collector.collect(session, asset, Timeframe.D1, end - timedelta(days=400), end)
+    monkeypatch.setattr(handlers, "build_gateway", lambda _session: make_gateway())
+
+    report = handlers.run_analysis(
+        session, {"asset_id": str(asset.id), "timeframe": "1d", "include_recommendation": True}
+    )
+
+    assert report["translation_job_id"], "the follow-up job was never reported"
+    queued = session.get(JobQueueEntry, uuid.UUID(report["translation_job_id"]))
+    assert queued is not None, "the reported job id does not name a real job"
+    assert queued.job_type == "analysis.translate"
+    assert queued.dedup_key == f"translate:{report['analysis_result_id']}", (
+        "without the dedup key a retried analysis pays for the same rendering twice"
+    )
 
 
 def test_a_failed_translation_leaves_the_analysis_readable(session, monkeypatch) -> None:
