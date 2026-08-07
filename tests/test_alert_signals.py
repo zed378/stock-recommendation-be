@@ -348,20 +348,44 @@ def test_price_in_the_middle_of_the_year_s_range_is_neither() -> None:
 def test_a_squeeze_is_measured_against_this_issuer_s_own_bands() -> None:
     """An absolute width says nothing: bands two percent wide are a squeeze on
     a volatile miner and ordinary on a utility."""
-    fired = fire(bandwidth=Decimal("0.02"), bandwidth_percentile=Decimal("0.05"))
+    fired = fire(
+        bandwidth=Decimal("0.02"),
+        previous_bandwidth_percentile=Decimal("0.4"),
+        bandwidth_percentile=Decimal("0.05"),
+    )
 
     assert AlertKind.VOLATILITY_SQUEEZE in fired
     assert AlertKind.VOLATILITY_SQUEEZE not in fire(
-        bandwidth=Decimal("0.02"), bandwidth_percentile=Decimal("0.5")
+        bandwidth=Decimal("0.02"),
+        previous_bandwidth_percentile=Decimal("0.6"),
+        bandwidth_percentile=Decimal("0.5"),
     )
+
+
+def test_a_squeeze_is_reported_on_entering_it_not_on_being_in_one() -> None:
+    """Measured as a state it matched a third of the exchange on a quiet week -
+    a true statement and a useless alert. Every other rule here fires on a
+    crossing, and this one was the exception until a real scan showed why it
+    should not be."""
+    already = fire(
+        previous_bandwidth_percentile=Decimal("0.04"),
+        bandwidth_percentile=Decimal("0.03"),
+    )
+
+    assert AlertKind.VOLATILITY_SQUEEZE not in already
+
+
+def test_a_squeeze_needs_a_previous_reading() -> None:
+    """Without one there is no crossing to observe, only a value."""
+    assert AlertKind.VOLATILITY_SQUEEZE not in fire(bandwidth_percentile=Decimal("0.02"))
 
 
 def test_the_squeeze_message_states_compression_and_stops_there() -> None:
     """"Bands are narrow" is an observation. "A big move is coming" is a
     forecast, and which way it resolves is exactly what a squeeze cannot say."""
-    message = fire(bandwidth_percentile=Decimal("0.05"))[
-        AlertKind.VOLATILITY_SQUEEZE
-    ].message.lower()
+    message = fire(
+        previous_bandwidth_percentile=Decimal("0.4"), bandwidth_percentile=Decimal("0.05")
+    )[AlertKind.VOLATILITY_SQUEEZE].message.lower()
 
     for forecast in ("will", "expect", "coming", "breakout soon", "about to"):
         assert forecast not in message, message

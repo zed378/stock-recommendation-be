@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { MarketScan } from "@/components/MarketScan";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n } from "@/i18n/context";
@@ -62,6 +63,13 @@ export function StockPicks() {
 
   return (
     <div className="space-y-6">
+      {/* The whole-market scan leads, because it is the list that can contain
+          something new: the horizon screener below ranks assets with imported
+          price history, which is a few dozen, while the scan covers every
+          issuer the exchange publishes a session record for. Same criteria in
+          both places - the scan stores what the alert rules found. */}
+      <MarketScan defaultScope="global" />
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-lg font-semibold text-ink">{t("picks.title")}</h1>
         <div className="flex flex-wrap items-center gap-3">

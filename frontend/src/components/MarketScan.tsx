@@ -22,10 +22,13 @@ import { Card, Empty, ErrorNote, Loading } from "@/components/primitives";
 
 type Scope = "watchlist" | "global";
 
-export function MarketScan() {
+export function MarketScan({ defaultScope = "watchlist" }: { defaultScope?: Scope } = {}) {
   const { t, money, date } = useI18n();
 
-  const [scope, setScope] = useState<Scope>("watchlist");
+  // The monitoring screen opens on what you follow; the screener opens on the
+  // whole exchange, because a screener that starts from your watchlist can
+  // only ever return things you already knew about.
+  const [scope, setScope] = useState<Scope>(defaultScope);
   const [criteria, setCriteria] = useState<string[]>([]);
   const [page, setPage] = useState<PageState>({ limit: 25, offset: 0 });
 
