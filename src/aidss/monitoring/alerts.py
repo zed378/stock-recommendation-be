@@ -510,9 +510,18 @@ def evaluate_signals(
     # The squeeze states the compression and stops there. "Bands are narrow" is
     # an observation; "a big move is coming" is a forecast, and the direction of
     # the resolution is precisely what a squeeze does not tell anybody.
-    if signals.bandwidth_percentile is not None and (
-        signals.bandwidth_percentile <= SQUEEZE_PERCENTILE
-    ):
+    # Reported on entering the squeeze, not on being in one. Measured as a
+    # state it matched a third of the exchange on a quiet week - which is a
+    # true statement and a useless alert, and breaks the rule every other
+    # condition here follows: an interruption is worth an event, not a
+    # standing fact.
+    entered_squeeze = (
+        signals.bandwidth_percentile is not None
+        and signals.previous_bandwidth_percentile is not None
+        and signals.previous_bandwidth_percentile > SQUEEZE_PERCENTILE
+        and signals.bandwidth_percentile <= SQUEEZE_PERCENTILE
+    )
+    if entered_squeeze:
         add(
             AlertKind.VOLATILITY_SQUEEZE,
             AlertDirection.NONE,

@@ -82,6 +82,12 @@ SQUEEZE_PERCENTILE = Decimal("0.10")
 #: Sessions of bandwidth history the percentile is measured against.
 SQUEEZE_LOOKBACK = 120
 
+#: How much wider the window's 90th percentile must be than its 10th before
+#: "narrow" is a meaningful thing to say about today. Without it, an issuer
+#: whose bands are always almost nothing reports a squeeze on whichever session
+#: happens to be fractionally the narrowest.
+SQUEEZE_MIN_DISPERSION = Decimal("1.5")
+
 #: A session whose high-low range exceeds this multiple of the average true
 #: range has expanded. Two is far enough outside ordinary variation to be worth
 #: an interruption.
@@ -172,6 +178,10 @@ class TechnicalSignals:
     bandwidth: Decimal | None = None
     bandwidth_percentile: Decimal | None = None
 
+    #: Where yesterday's bandwidth sat, so a squeeze can be reported when it
+    #: is *entered* rather than on every session it persists.
+    previous_bandwidth_percentile: Decimal | None = None
+
     #: This session's high-low range against the average true range.
     range_ratio: Decimal | None = None
 
@@ -211,6 +221,9 @@ def compute_signals(candles: list[Candle]) -> TechnicalSignals:
         return _dec(series.iloc[-1 - back]) if len(series) > back else None
 
     bandwidth_now, bandwidth_rank = _bandwidth(frame, close)
+    # Measured again one bar back, which is what turns "is compressed" into
+    # "has just compressed".
+    _, previous_rank = _bandwidth(frame.iloc[:-1], close.iloc[:-1])
 
     latest = candles[-1]
     previous = candles[-2]
@@ -239,6 +252,7 @@ def compute_signals(candles: list[Candle]) -> TechnicalSignals:
         year_low=_dec(close.iloc[-YEAR_SESSIONS:].min()) if len(close) >= 60 else None,
         bandwidth=bandwidth_now,
         bandwidth_percentile=bandwidth_rank,
+        previous_bandwidth_percentile=previous_rank,
         range_ratio=_range_ratio(frame),
     )
 
@@ -305,9 +319,23 @@ def _bandwidth(frame: pd.DataFrame, close: pd.Series) -> tuple[Decimal | None, D
 
     window = series.iloc[-SQUEEZE_LOOKBACK:]
     current = float(series.iloc[-1])
-    # Share of the window at or below today. Zero means today is the narrowest
-    # the bands have been in the whole window.
-    rank = float((window <= current).mean()) if len(window) > 1 else None
+    if len(window) < 20 or current <= 0:
+        return _dec(current), None
+
+    # A percentile alone was not enough, and the failure is instructive: on a
+    # real scan it put 36% of the exchange in a squeeze. The bottom decile of
+    # your own history is by construction a one-in-ten event, so a third of the
+    # market cannot be in it - unless the measure is degenerate, which for
+    # illiquid issuers it is. A name that barely trades has a bandwidth of
+    # almost nothing on almost every session, so "narrower than usual" is
+    # noise between two numbers that are both effectively zero.
+    #
+    # So the window must show real dispersion before "narrow" means anything.
+    low, high = float(window.quantile(0.1)), float(window.quantile(0.9))
+    if low <= 0 or high < low * float(SQUEEZE_MIN_DISPERSION):
+        return _dec(current), None
+
+    rank = float((window < current).mean())
     return _dec(current), _dec(rank)
 
 

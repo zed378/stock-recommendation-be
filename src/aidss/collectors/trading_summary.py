@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss.db.models import DailyTradingSummary
+from aidss.domain.types import Candle
 
 logger = logging.getLogger("aidss.market")
 
@@ -95,6 +96,9 @@ def sync_summaries(session: Session, rows: list[dict[str, Any]]) -> SummarySync:
             continue
 
         fields = {
+            "open_price": _decimal(row.get("OpenPrice")),
+            "high": _decimal(row.get("High")),
+            "low": _decimal(row.get("Low")),
             "close": _decimal(row.get("Close")),
             "previous_close": _decimal(row.get("Previous")),
             "volume": _decimal(row.get("Volume")),
@@ -137,3 +141,76 @@ def foreign_flow_history(
         .limit(limit)
     ).all()
     return [row.net_foreign for row in rows if row.net_foreign is not None]
+
+
+#: Sessions walked back through when filling in history. A trading year plus
+#: slack for holidays, which is what the 52-week window and the 200-day average
+#: both need.
+BACKFILL_SESSIONS = 320
+
+
+def candles_from_summaries(rows: list[DailyTradingSummary]) -> list[Candle]:
+    """Turn stored session records into bars an indicator can read.
+
+    Two properties of the exchange's data decide the whole shape of this, and
+    both are silent corruptions if handled naively:
+
+      * **A session with no volume is not a bar.** IDX still publishes the
+        issuer with high, low and open at zero and the previous close carried
+        forward. Kept as written, every such row is a bar whose range is the
+        entire price - which destroys ATR, the range ratio and every average
+        that touches it. They are skipped: an untraded day is an absence, not
+        an observation.
+      * **`OpenPrice` is frequently zero even when the stock traded.** Several
+        hundred issuers report it that way on an ordinary day. Where it is
+        missing the previous close stands in, which is the only value that
+        leaves the bar internally consistent - and it means a gap cannot be
+        detected for that session, which is correct: the data does not say.
+
+    Rows are returned oldest first, which is what every indicator expects.
+    """
+    bars: list[Candle] = []
+    for row in sorted(rows, key=lambda item: item.session_date):
+        if not row.volume or row.close is None or not row.high or not row.low:
+            continue
+        opening = row.open_price if row.open_price else row.previous_close or row.close
+        bars.append(
+            Candle(
+                timestamp=datetime.combine(row.session_date, time(0), tzinfo=UTC),
+                open=opening,
+                high=row.high,
+                low=row.low,
+                close=row.close,
+                volume=row.volume,
+            )
+        )
+    return bars
+
+
+def summaries_for(
+    session: Session, ticker: str, *, limit: int = BACKFILL_SESSIONS
+) -> list[DailyTradingSummary]:
+    return list(
+        session.scalars(
+            select(DailyTradingSummary)
+            .where(DailyTradingSummary.ticker == ticker.upper())
+            .order_by(DailyTradingSummary.session_date.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+def tickers_with_history(session: Session, *, minimum: int = 60) -> list[str]:
+    """Issuers with enough traded sessions stored to be worth analysing.
+
+    Counted on sessions that actually traded, not on rows: a name that has been
+    suspended for three months has rows for every one of those days and no
+    information in any of them.
+    """
+    rows = session.execute(
+        select(DailyTradingSummary.ticker, func.count())
+        .where(DailyTradingSummary.volume > 0)
+        .group_by(DailyTradingSummary.ticker)
+        .having(func.count() >= minimum)
+    ).all()
+    return sorted(ticker for ticker, _ in rows)

@@ -1011,3 +1011,18 @@ class AdminUserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=200)
     full_name: str | None = Field(default=None, max_length=200)
     role: UserRole = UserRole.INVESTOR
+
+
+class MarketScanResponse(BaseModel):
+    """One issuer's result from the whole-market scan.
+
+    `signals` carries the computed values behind the match, so a reader can see
+    *why* a ticker is on the list rather than only that it is.
+    """
+
+    ticker: str
+    session_date: date
+    close: Decimal | None = None
+    matched: list[str] = Field(default_factory=list)
+    matched_count: int
+    signals: dict[str, Any] = Field(default_factory=dict)

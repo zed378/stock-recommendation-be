@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
+import { MarketScan } from "@/components/MarketScan";
 import {
   Button,
   Card,
@@ -230,6 +231,8 @@ export function Monitoring() {
           </>
         )}
       </Card>
+
+      <MarketScan />
 
       <Card
         title={t("alerts.title")}

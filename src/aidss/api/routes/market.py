@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, select, update
@@ -26,6 +27,8 @@ from aidss.api.schemas import (
     AlertBatchRequest,
     AlertBatchResponse,
     AlertResponse,
+    MarketScanResponse,
+    Page,
     QuoteSnapshotResponse,
     StockPickResponse,
     StrategyResponse,
@@ -34,6 +37,7 @@ from aidss.api.schemas import (
 from aidss.collectors.normalization import normalize_ticker
 from aidss.db.models import (
     Alert,
+    AlertKind,
     AnalysisResult,
     Asset,
     Recommendation,
@@ -44,6 +48,7 @@ from aidss.db.models import (
 from aidss.llm.provisioning import build_gateway
 from aidss.llm.router import Sensitivity
 from aidss.monitoring.poller import latest_quotes, poll_watched_assets, recent_alerts
+from aidss.monitoring.scan import results_for
 from aidss.plugins.registry import get_market_data_provider
 from aidss.prompts.translation import translate
 from aidss.recommendations.strategy import build_strategy
@@ -393,3 +398,84 @@ def acknowledge_alert(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
     alert.acknowledged_at = datetime.now(UTC)
     session.flush()
+
+
+@router.get("/market-scan", response_model=Page[MarketScanResponse])
+def market_scan(
+    scope: Literal["watchlist", "global"] = Query(
+        default="global",
+        description=(
+            "`watchlist` narrows to the tickers you follow; `global` is the whole "
+            "exchange. Same scan, one filter apart."
+        ),
+    ),
+    matched: list[str] = Query(  # noqa: B008 - FastAPI resolves this per request
+        default_factory=list,
+        description="Criteria to require. Repeatable; several are combined with OR.",
+    ),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> Page[MarketScanResponse]:
+    """The latest whole-market scan, optionally narrowed to what you watch.
+
+    One pass over the exchange answers both questions. The alternative - a
+    monitoring screen that evaluates conditions for watched tickers and a
+    screener that applies its own rules to its own candidates - is how a
+    criterion comes to mean one thing in one place and something subtly
+    different in the other.
+    """
+    kinds: list[AlertKind] = []
+    for value in matched:
+        try:
+            kinds.append(AlertKind(value))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{value!r} is not a known criterion",
+            ) from exc
+
+    tickers: list[str] | None = None
+    if scope == "watchlist":
+        tickers = list(
+            session.scalars(
+                select(Asset.ticker)
+                .join(WatchlistItem, WatchlistItem.asset_id == Asset.id)
+                .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
+                .where(Watchlist.user_id == user.id)
+                .distinct()
+            ).all()
+        )
+
+    rows, total = results_for(
+        session, tickers=tickers, matched_any=kinds or None, limit=limit, offset=offset
+    )
+    return Page(
+        items=[
+            MarketScanResponse(
+                ticker=row.ticker,
+                session_date=row.session_date,
+                close=row.close,
+                matched=[str(value) for value in (row.matched or [])],
+                matched_count=row.matched_count,
+                signals=row.signals or {},
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/market-scan/criteria", response_model=list[str])
+def scan_criteria(
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> list[str]:
+    """Every criterion the scan can report, for a filter to offer.
+
+    Read from the enum rather than hard-coded, so a criterion added to the
+    rules appears in the filter without a second edit somewhere else.
+    """
+    return sorted(kind.value for kind in AlertKind)

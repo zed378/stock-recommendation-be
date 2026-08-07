@@ -23,12 +23,13 @@ from sqlalchemy.orm import Session
 from aidss.agents.engine import AnalysisEngine
 from aidss.collectors.issuers import sync_directory
 from aidss.collectors.market_data import FundamentalCollector, MarketDataCollector, load_candles
-from aidss.collectors.trading_summary import sync_summaries
+from aidss.collectors.trading_summary import BACKFILL_SESSIONS, sync_summaries
 from aidss.config import get_settings
 from aidss.db.base import get_sessionmaker
 from aidss.db.models import (
     AnalysisResult,
     Asset,
+    DailyTradingSummary,
     FundamentalMetric,
     SchedulerJob,
     TickerNewsSchedule,
@@ -39,6 +40,7 @@ from aidss.indicators.features import persist_features
 from aidss.jobs import queue, quota
 from aidss.llm.provisioning import build_gateway
 from aidss.monitoring.poller import poll_watched_assets
+from aidss.monitoring.scan import SCAN_CHUNK, scan_tickers, scannable_tickers
 from aidss.news.collector import NewsCollector, NewsScheduler
 from aidss.news.schedules import next_run_at
 from aidss.news.sweep import sweep_all_sources, tag_untagged
@@ -49,6 +51,12 @@ from aidss.rag.provisioning import build_rag
 from aidss.reporting.notifications import NotificationEvent, NotificationService
 
 logger = logging.getLogger("aidss.jobs")
+
+#: Seconds between queued backfill imports. The endpoint publishes no rate
+#: limit, so the pacing is a guess made deliberately on the slow side: a
+#: backfill is a one-off that can take an hour, and being throttled costs more
+#: than waiting.
+SUMMARY_BACKFILL_SPACING = 8.0
 
 Handler = Callable[[Session, dict[str, Any]], dict[str, Any]]
 
@@ -315,6 +323,122 @@ def sync_trading_summary(session: Session, payload: dict[str, Any]) -> dict[str,
 
     report = sync_summaries(session, rows)
     return {**report.as_payload(), "closed": False}
+
+
+
+@register("market.summary_backfill")
+def plan_summary_backfill(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Queue one import job per session date, rather than fetching a year at once.
+
+    Pulling a trading year in one job is three hundred sequential requests to
+    an endpoint that publishes no rate limit and sits behind bot management.
+    Held in a single job that is: one unit of work that runs for many minutes,
+    retries from the beginning when it fails at request two hundred, and looks
+    identical to a hang while it does.
+
+    Split, each date is its own job with its own retry, the queue's existing
+    concurrency limit paces the whole thing, and a failure costs one session
+    rather than the run. The dates are spread out through `available_at` so the
+    backfill does not become a burst the moment it is planned.
+
+    Idempotent per date: re-planning a range that is already stored queues
+    nothing, because the import jobs dedupe on their own date.
+    """
+    sessions = int(payload.get("sessions") or BACKFILL_SESSIONS)
+    sessions = max(1, min(sessions, 1000))
+    # `is None` rather than `or`: zero is a meaningful value here - "queue
+    # them all now" - and `or` silently turns it into the default.
+    raw_spacing = payload.get("spacing_seconds")
+    spacing = float(SUMMARY_BACKFILL_SPACING if raw_spacing is None else raw_spacing)
+
+    end = (
+        date.fromisoformat(str(payload["until"]))
+        if payload.get("until")
+        else datetime.now(UTC).date()
+    )
+    # Which dates already have rows, so a re-plan after a partial run queues
+    # only the gaps.
+    stored = {
+        row
+        for row in session.scalars(
+            select(DailyTradingSummary.session_date)
+            .where(DailyTradingSummary.session_date > end - timedelta(days=sessions))
+            .distinct()
+        ).all()
+    }
+
+    queued = 0
+    now = datetime.now(UTC)
+    for offset in range(sessions):
+        on_date = end - timedelta(days=offset)
+        # Weekends are skipped here rather than discovered by the handler: the
+        # exchange answers with an empty list, which costs a request to learn
+        # something a calendar already knows.
+        if on_date.weekday() >= 5 or on_date in stored:
+            continue
+        result = queue.enqueue(
+            session,
+            "market.trading_summary",
+            {"date": on_date.isoformat()},
+            dedup_key=f"trading-summary:{on_date.isoformat()}",
+            available_at=now + timedelta(seconds=spacing * queued),
+        )
+        if result.created:
+            queued += 1
+
+    return {
+        "queued": queued,
+        "already_stored": len(stored),
+        "until": end.isoformat(),
+        "spacing_seconds": spacing,
+    }
+
+
+
+@register("market.scan")
+def plan_market_scan(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Split the whole-market scan into chunks and queue them.
+
+    A thousand issuers in one job is one unit of work that runs for minutes,
+    holds a transaction open the whole time, and restarts from the first ticker
+    when it fails at the nine hundredth. Chunked, a failure costs a hundred
+    names and the queue's own concurrency limit paces the rest.
+
+    Planning is separate from scanning so this job stays fast: it reads which
+    tickers have enough history and queues the work, which is milliseconds.
+    """
+    tickers = scannable_tickers(session)
+    if not tickers:
+        return {"chunks": 0, "tickers": 0, "reason": "no issuer has enough stored sessions yet"}
+
+    size = int(payload.get("chunk_size") or SCAN_CHUNK)
+    size = max(10, min(size, 500))
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+
+    chunks = 0
+    for start in range(0, len(tickers), size):
+        batch = tickers[start : start + size]
+        result = queue.enqueue(
+            session,
+            "market.scan_chunk",
+            {"tickers": batch},
+            # Keyed by the chunk's first ticker and the minute: a scheduler
+            # ticking twice queues one set of chunks, not two.
+            dedup_key=f"market-scan:{stamp}:{batch[0]}",
+        )
+        if result.created:
+            chunks += 1
+
+    return {"chunks": chunks, "tickers": len(tickers), "chunk_size": size}
+
+
+@register("market.scan_chunk")
+def scan_market_chunk(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate every criterion for one chunk of issuers."""
+    tickers = [str(t).upper() for t in (payload.get("tickers") or [])]
+    if not tickers:
+        raise PermanentJobError("payload carried no tickers")
+    return scan_tickers(session, tickers).as_payload()
 
 
 @register("issuers.sync")

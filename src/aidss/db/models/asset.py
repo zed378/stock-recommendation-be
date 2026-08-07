@@ -204,6 +204,12 @@ class DailyTradingSummary(Base):
     ticker: Mapped[str] = mapped_column(String(20), index=True)
     session_date: Mapped[date] = mapped_column(index=True)
 
+    #: Zero for several hundred issuers on an ordinary session even when they
+    #: traded, so it is stored as reported and treated as missing downstream
+    #: rather than trusted.
+    open_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
+    high: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
+    low: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     close: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     previous_close: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     volume: Mapped[Decimal | None] = mapped_column(Numeric(28, 2), default=None)
@@ -230,4 +236,50 @@ class DailyTradingSummary(Base):
 
     __table_args__ = (
         UniqueConstraint("ticker", "session_date", name="uq_trading_summary_session"),
+    )
+
+
+class MarketScanResult(Base):
+    """What one issuer looked like on one session, and which criteria it met.
+
+    The point of storing this rather than recomputing on demand is that the
+    same analysis answers two questions that used to be answered separately and
+    inconsistently: *tell me about the stocks I watch* and *find me stocks that
+    look like this*. Alerts and the screener now read one pass over the whole
+    exchange, so a criterion cannot mean one thing on the monitoring screen and
+    something subtly different on the picks screen.
+
+    Whole-market rather than per-watchlist, and that is the substantive change:
+    a screener that only sees what somebody already follows cannot surface
+    anything new, which is the one thing a screener is for.
+    """
+
+    __tablename__ = "market_scan_results"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    ticker: Mapped[str] = mapped_column(String(20), index=True)
+    session_date: Mapped[date] = mapped_column(index=True)
+
+    close: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
+
+    #: The criteria this issuer met, as `AlertKind` values. The same vocabulary
+    #: the alerts use, because they are the same conditions - a screener with
+    #: its own private list of rules is how the two drift apart.
+    matched: Mapped[list[Any]] = mapped_column(default=list)
+
+    #: How many were met. Denormalised so the screener can order by it without
+    #: unpacking JSON on every row, and named as a count rather than a score:
+    #: it is a tally of conditions, not a probability of anything.
+    matched_count: Mapped[int] = mapped_column(default=0, index=True)
+
+    #: The computed values behind the match, so a result can be explained
+    #: without recomputing it - and so a reader can see *why* something is on
+    #: the list rather than only that it is.
+    signals: Mapped[dict[str, Any]] = mapped_column(default=dict)
+
+    scanned_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "session_date", name="uq_market_scan_session"),
+        Index("ix_market_scan_session_count", "session_date", "matched_count"),
     )

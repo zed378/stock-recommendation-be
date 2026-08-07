@@ -29,6 +29,7 @@ from aidss.db.models.asset import (
     FundamentalMetric,
     HistoricalPrice,
     Issuer,
+    MarketScanResult,
     TechnicalIndicator,
 )
 from aidss.db.models.monitoring import (
@@ -85,6 +86,7 @@ __all__ = [
     "FundamentalMetric",
     "HistoricalPrice",
     "DailyTradingSummary",
+    "MarketScanResult",
     "Issuer",
     "HoldingInputMethod",
     "InvestmentHorizon",

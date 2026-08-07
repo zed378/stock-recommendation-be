@@ -92,6 +92,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/registration-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Registration Status */
+        get: operations["registration_status_auth_registration_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -116,38 +133,6 @@ export interface paths {
          *     platform is a switch nobody should be offered.
          */
         post: operations["register_auth_register_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/registration-status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            responses: {
-                200: {
-                    content: {
-                        "application/json": {
-                            registration_open: boolean;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1424,6 +1409,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/market-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market Scan
+         * @description The latest whole-market scan, optionally narrowed to what you watch.
+         *
+         *     One pass over the exchange answers both questions. The alternative - a
+         *     monitoring screen that evaluates conditions for watched tickers and a
+         *     screener that applies its own rules to its own candidates - is how a
+         *     criterion comes to mean one thing in one place and something subtly
+         *     different in the other.
+         */
+        get: operations["market_scan_market_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/market-scan/criteria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan Criteria
+         * @description Every criterion the scan can report, for a filter to offer.
+         *
+         *     Read from the enum rather than hard-coded, so a criterion added to the
+         *     rules appears in the filter without a second edit somewhere else.
+         */
+        get: operations["scan_criteria_market_scan_criteria_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -2691,6 +2725,32 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * MarketScanResponse
+         * @description One issuer's result from the whole-market scan.
+         *
+         *     `signals` carries the computed values behind the match, so a reader can see
+         *     *why* a ticker is on the list rather than only that it is.
+         */
+        MarketScanResponse: {
+            /** Ticker */
+            ticker: string;
+            /**
+             * Session Date
+             * Format: date
+             */
+            session_date: string;
+            /** Close */
+            close?: string | null;
+            /** Matched */
+            matched?: string[];
+            /** Matched Count */
+            matched_count: number;
+            /** Signals */
+            signals?: {
+                [key: string]: unknown;
+            };
+        };
         /** NewsScheduleCreate */
         NewsScheduleCreate: {
             /** Ticker */
@@ -2907,6 +2967,17 @@ export interface components {
         Page_JobResponse_: {
             /** Items */
             items: components["schemas"]["JobResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** Page[MarketScanResponse] */
+        Page_MarketScanResponse_: {
+            /** Items */
+            items: components["schemas"]["MarketScanResponse"][];
             /** Total */
             total: number;
             /** Limit */
@@ -3505,6 +3576,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderInventoryResponse"];
+                };
+            };
+        };
+    };
+    registration_status_auth_registration_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -5517,6 +5610,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    market_scan_market_scan_get: {
+        parameters: {
+            query?: {
+                /** @description `watchlist` narrows to the tickers you follow; `global` is the whole exchange. Same scan, one filter apart. */
+                scope?: "watchlist" | "global";
+                /** @description Criteria to require. Repeatable; several are combined with OR. */
+                matched?: string[];
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_MarketScanResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_criteria_market_scan_criteria_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };
