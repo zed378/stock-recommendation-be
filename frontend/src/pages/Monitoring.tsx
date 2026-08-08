@@ -44,7 +44,7 @@ export function Monitoring() {
   // a filter rather than a different feature.
   // The whole index by default, as asked: a screen that only shows what you
   // already follow cannot tell you about a stock you have not thought of.
-  const [scope, setScope] = useState<AlertScope>("global");
+  const [scope, setScope] = useState<AlertScope>("watchlist");
   // One box for both tabs. Two would be two things to clear, and a reader who
   // typed a ticker on one tab means the same ticker on the other.
   const [alertSearch, setAlertSearch] = useState("");
@@ -359,7 +359,9 @@ export function Monitoring() {
         {/* The whole index, as the scan computed it this session. Rendered
             inside this card rather than beside it, because it is the same set
             of criteria and a reader should have one place to look. */}
-        {scope === "global" && <MarketScan scope="global" bare search={alertSearch} />}
+        {scope === "global" && (
+          <MarketScan scope="global" bare search={alertSearch} />
+        )}
 
         {scope === "watchlist" && (
           <>
