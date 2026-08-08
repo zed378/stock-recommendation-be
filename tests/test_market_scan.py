@@ -360,3 +360,154 @@ def test_clearing_the_market_cron_turns_the_import_off(session) -> None:
     set_setting(session, MARKET_SCAN_CRON, "")
 
     assert enqueue_daily_trading_summary(session)["disabled"] is True
+
+
+# --- the picks screen reads the same pass ------------------------------------
+
+
+def test_the_screen_covers_issuers_with_no_asset_row(session) -> None:
+    """The point of the change. The horizon screener read `historical_prices`,
+    which exist only for assets somebody registered - a dozen against the
+    exchange's eight hundred - so a whole-market screener was really a
+    watchlist viewer. A list that can only show names you already follow cannot
+    surface one you have not thought of."""
+    from aidss.screener import Horizon, screen_stored
+
+    for ticker in ("NNNN", "OOOO", "PPPP"):
+        seed(session, ticker, sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["NNNN", "OOOO", "PPPP"], on_date=on_date)
+
+    result = screen_stored(session, Horizon.D7, on_date=on_date)
+
+    assert result.considered == 3, "no Asset rows exist for any of these"
+    assert {pick.ticker for pick in result.picks} == {"NNNN", "OOOO", "PPPP"}
+    assert all(pick.asset_id is None for pick in result.picks)
+
+
+def test_a_pick_carries_the_conditions_it_met(session) -> None:
+    """A ranked list of tickers is read as a forecast unless every row can say
+    why it is there. "Score 3.1 of 4.1, because these four things are true" can
+    be argued with; "score 0.72" cannot."""
+    from aidss.screener import Horizon, screen_stored
+
+    seed(session, "QQQQ", sessions=140)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["QQQQ"], on_date=on_date)
+
+    pick = screen_stored(session, Horizon.D7, on_date=on_date).picks[0]
+
+    assert pick.out_of > 0
+    assert pick.score == sum(item.weight for item in pick.met)
+    assert all(item.describes for item in pick.met), "every met condition is explained"
+    assert set(pick.unmet).isdisjoint({item.key for item in pick.met})
+
+
+def test_the_watchlist_is_a_filter_not_a_different_universe(session) -> None:
+    """Same pass, one filter apart, so a criterion cannot mean one thing with
+    the box ticked and something else without it."""
+    from aidss.screener import Horizon, screen_stored
+
+    for ticker in ("RRRR", "SSSS"):
+        seed(session, ticker, sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["RRRR", "SSSS"], on_date=on_date)
+
+    everything = screen_stored(session, Horizon.D7, on_date=on_date)
+    narrowed = screen_stored(session, Horizon.D7, on_date=on_date, tickers=["RRRR"])
+
+    assert everything.considered == 2
+    assert [pick.ticker for pick in narrowed.picks] == ["RRRR"]
+    kept = next(p for p in everything.picks if p.ticker == "RRRR")
+    assert narrowed.picks[0].score == kept.score, "the same criteria, scored the same way"
+
+
+def test_following_nothing_returns_nothing(session) -> None:
+    from aidss.screener import Horizon, screen_stored
+
+    seed(session, "TTTT", sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["TTTT"], on_date=on_date)
+
+    assert screen_stored(session, Horizon.D7, on_date=on_date, tickers=[]).picks == []
+
+
+def test_no_scan_yet_is_an_empty_universe_not_an_empty_result(session) -> None:
+    """"Nothing meets your conditions" and "nothing has been looked at yet" are
+    different answers, and only one of them is about the market."""
+    from aidss.screener import Horizon, screen_stored
+
+    result = screen_stored(session, Horizon.D7)
+
+    assert result.considered == 0
+    assert result.picks == []
+
+
+def test_every_horizon_is_stored_by_one_pass(session) -> None:
+    """Four horizons read the same indicator snapshot, and the snapshot is the
+    expensive part. Computing them separately per request is what made the
+    screen unaffordable over the whole exchange in the first place."""
+    from aidss.screener import Horizon
+
+    seed(session, "UUUU", sessions=140)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["UUUU"], on_date=on_date)
+
+    row = session.scalar(select(MarketScanResult).where(MarketScanResult.ticker == "UUUU"))
+
+    assert set(row.horizon_scores) == {h.value for h in Horizon}
+
+
+def test_a_row_scanned_before_the_horizons_existed_is_not_scored_as_zero(session) -> None:
+    """Empty stored scores mean "not evaluated", not "met nothing". Ranked as
+    zero, every pre-upgrade row would sit at the bottom of the screen looking
+    like a considered judgement about the issuer."""
+    from aidss.screener import Horizon, screen_stored
+
+    seed(session, "VVVV", sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["VVVV"], on_date=on_date)
+    row = session.scalar(select(MarketScanResult).where(MarketScanResult.ticker == "VVVV"))
+    row.horizon_scores = {}
+    session.flush()
+
+    result = screen_stored(session, Horizon.D7, on_date=on_date)
+
+    assert result.picks == []
+    assert result.insufficient_history == ["VVVV"]
+
+
+def test_a_condition_that_could_not_be_checked_is_not_a_condition_failed(session) -> None:
+    """The exchange table holds about sixty sessions an issuer, so the 200-bar
+    average is null for every one of them. Counted as failures, the 30-day
+    horizon reports a best-in-market score of 2.0 against a ceiling of 3.9 -
+    and a reader sees a mediocre stock where the truth is that an issuer met
+    everything anybody could measure."""
+    from aidss.screener import Horizon, screen_stored
+
+    # Enough to scan, nowhere near enough for the 200-bar average.
+    seed(session, "WWWW", sessions=90)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["WWWW"], on_date=on_date)
+
+    pick = screen_stored(session, Horizon.D30, on_date=on_date).picks[0]
+
+    assert "above_long_average" in pick.unevaluable
+    assert "above_long_average" not in pick.unmet
+    assert pick.out_of < 3.9, "the ceiling excludes what could not be checked"
+
+
+def test_a_ceiling_is_only_reduced_by_what_is_actually_missing(session) -> None:
+    """Otherwise the fix trades one misleading number for another: a screen
+    whose ceiling shrinks to whatever each issuer happened to meet would score
+    everything at 100%."""
+    from aidss.screener import Horizon, screen_stored
+
+    seed(session, "XXXX", sessions=90)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["XXXX"], on_date=on_date)
+
+    pick = screen_stored(session, Horizon.D30, on_date=on_date).picks[0]
+
+    assert pick.unmet or pick.score < pick.out_of or not pick.unevaluable
+    assert pick.score <= pick.out_of

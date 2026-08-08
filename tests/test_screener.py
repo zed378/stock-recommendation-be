@@ -322,3 +322,88 @@ def test_no_output_field_is_named_as_a_prediction(session) -> None:
     blob = str(payload).lower()
     for word in ("probability", "forecast", "prediction", "expected_return", "will_rise"):
         assert word not in blob, f"output uses forecast vocabulary: {word}"
+
+
+# --- criteria that can actually fire ----------------------------------------
+
+
+def test_every_criterion_can_fire_on_some_input() -> None:
+    """A criterion testing for a value its source never produces is dead, and a
+    dead criterion is invisible: it reads as a condition nothing happened to
+    meet. `breakout_up_confirmed` tested `direction == "up"` while the detector
+    says `"bullish"`, so 1.0 of the 1d horizon's 4.1 was unreachable for as long
+    as the screen only ranked a dozen assets.
+
+    Rather than assert against a hardcoded list of enum values - which would go
+    stale in exactly the same way - this drives real bars through the real
+    engine and requires each criterion to fire at least once.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from aidss.domain.types import Candle
+    from aidss.indicators.engine import IndicatorEngine
+    from aidss.screener.criteria import CRITERIA_BY_HORIZON
+    from aidss.screener.engine import _reading
+
+    LAST = 259
+
+    def series(shape, volume=lambda i: 1_000_000 + (i % 7) * 200_000) -> list[Candle]:
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        bars = []
+        for index in range(LAST + 1):
+            close = shape(index)
+            bars.append(
+                Candle(
+                    timestamp=start + timedelta(days=index),
+                    open=Decimal(str(close)),
+                    high=Decimal(str(close * 1.02)),
+                    low=Decimal(str(close * 0.98)),
+                    close=Decimal(str(close)),
+                    volume=volume(index),
+                )
+            )
+        return bars
+
+    shapes = [
+        (lambda i: 100 + i * 0.5, None),                    # steady climb
+        (lambda i: 300 - i * 0.8, None),                    # steady fall
+        (lambda i: 100 + (i % 20) * 2, None),               # sawtooth
+        (lambda i: 100.0, None),                            # flat
+        # A range broken on the very last bar. Breaking it earlier lets the
+        # 20-bar window catch up, and the breakout stops being one.
+        (lambda i: 100 + (40 if i == LAST else 0), None),
+        # A dip and recovery, which is what the oversold-turning-up readings
+        # are written to describe.
+        (lambda i: 200 - min(i, 200) * 0.9 + max(0, i - 240) * 8, None),
+        # A long slide that turns up two bars from the end. %K reacts before
+        # %D, so the cross happens while both are still low - which is the
+        # whole shape "turning up from a low reading" names.
+        (lambda i: 300 - min(i, LAST - 2) * 0.9 + max(0, i - (LAST - 2)) * 3, None),
+        # Rising into a volume surge, for the criteria that ask whether the
+        # move is being paid for.
+        (
+            lambda i: 100 + i * 0.4,
+            lambda i: 20_000_000 if i > LAST - 3 else 1_000_000,
+        ),
+    ]
+
+    engine = IndicatorEngine()
+    fired: set[str] = set()
+    for shape, volume in shapes:
+        bars = series(shape) if volume is None else series(shape, volume)
+        reading = _reading(bars, engine)
+        if reading is None:
+            continue
+        for criteria in CRITERIA_BY_HORIZON.values():
+            for criterion in criteria:
+                try:
+                    if criterion.test(reading):
+                        fired.add(criterion.key)
+                except (TypeError, ValueError):
+                    pass
+
+    everything = {c.key for criteria in CRITERIA_BY_HORIZON.values() for c in criteria}
+    assert everything - fired == set(), (
+        "these criteria never fired on any shape, which usually means they test "
+        "for a value their source does not produce"
+    )

@@ -277,6 +277,25 @@ class MarketScanResult(Base):
     #: the list rather than only that it is.
     signals: Mapped[dict[str, Any]] = mapped_column(default=dict)
 
+    #: Which of each horizon's criteria fired, as ``{"7d": ["above_ma50", ...]}``.
+    #:
+    #: The horizon screener used to compute this per request over
+    #: `historical_prices`, which meant it ranked the twelve assets somebody had
+    #: registered rather than the exchange. Computing it live over all of them
+    #: is ~44 ms an issuer, so half a minute per page load. The scan already
+    #: computes the indicator snapshot these criteria read, so they are
+    #: evaluated once here and the picks screen becomes a query.
+    #:
+    #: Only the keys are stored. Weights and descriptions live with the
+    #: criterion definitions; a copy frozen into every row would keep explaining
+    #: old results in wording the code no longer uses.
+    horizon_scores: Mapped[dict[str, Any]] = mapped_column(default=dict)
+
+    #: How much of the session's upward auto-rejection band the close consumed.
+    #: Needs the previous bar, which the scan has and a reader of this row does
+    #: not, so it is computed there.
+    limit_proximity: Mapped[dict[str, Any] | None] = mapped_column(default=None)
+
     scanned_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     __table_args__ = (

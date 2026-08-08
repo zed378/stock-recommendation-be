@@ -204,7 +204,14 @@ _D1 = (
         key="breakout_up_confirmed",
         weight=1.0,
         describes="a breakout above the recent range is in progress",
-        test=lambda r: r.breakout.get("direction") == "up",
+        # `detect_breakout` says "bullish", never "up". Tested against "up",
+        # this was dead - the heaviest criterion in the 1d horizon, worth 1.0 of
+        # its 4.1, silently unreachable. It survived because the screen only
+        # ever ranked the dozen assets with imported price bars, where a
+        # criterion firing zero times is indistinguishable from a quiet market.
+        # Over 799 issuers it stood out: the same scan reported ninety names at
+        # 52-week highs, and not one of them breaking a 20-bar range.
+        test=lambda r: r.breakout.get("direction") == "bullish",
     ),
 )
 

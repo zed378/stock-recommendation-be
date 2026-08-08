@@ -48,6 +48,7 @@ from aidss.monitoring.alerts import (
     evaluate_signals,
 )
 from aidss.monitoring.signals import TechnicalSignals, compute_signals
+from aidss.screener.engine import horizon_scores, limit_proximity
 
 logger = logging.getLogger("aidss.monitoring")
 
@@ -142,7 +143,16 @@ def scan_tickers(
         for value in matched:
             report.matches_by_kind[value] = report.matches_by_kind.get(value, 0) + 1
 
-        _store(session, ticker, run_date, price, matched, signals)
+        _store(
+            session,
+            ticker,
+            run_date,
+            price,
+            matched,
+            signals,
+            horizon_scores=horizon_scores(bars),
+            limit_proximity=limit_proximity(bars),
+        )
         report.scanned += 1
         if matched:
             report.with_matches += 1
@@ -181,6 +191,9 @@ def _store(
     price: Decimal,
     matched: list[str],
     signals: TechnicalSignals,
+    *,
+    horizon_scores: dict[str, list[str]],
+    limit_proximity: dict[str, Any] | None,
 ) -> None:
     """Upsert one result. Re-scanning a session replaces rather than duplicates."""
     row = session.scalar(
@@ -196,6 +209,8 @@ def _store(
     row.matched = matched
     row.matched_count = len(matched)
     row.signals = _serialisable(signals)
+    row.horizon_scores = horizon_scores
+    row.limit_proximity = limit_proximity
     row.scanned_at = datetime.now(UTC)
 
 

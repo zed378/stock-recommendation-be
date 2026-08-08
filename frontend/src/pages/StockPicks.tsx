@@ -18,6 +18,7 @@ interface Pick {
   out_of: number;
   met: { key: string; describes: string; weight: number }[];
   unmet: string[];
+  unevaluable: string[];
   limit_proximity: {
     consumed: number;
     ceiling: string;
@@ -63,11 +64,11 @@ export function StockPicks() {
 
   return (
     <div className="space-y-6">
-      {/* The whole-market scan leads, because it is the list that can contain
-          something new: the horizon screener below ranks assets with imported
-          price history, which is a few dozen, while the scan covers every
-          issuer the exchange publishes a session record for. Same criteria in
-          both places - the scan stores what the alert rules found. */}
+      {/* Both lists now read the same whole-exchange pass. The scan above
+          reports which alert criteria an issuer met; the screener below ranks
+          the same issuers by the horizon conditions. They used to disagree
+          about the universe - the screener saw only assets with imported price
+          history, a few dozen against the exchange's eight hundred. */}
       <MarketScan scope="global" />
 
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -191,6 +192,18 @@ export function StockPicks() {
                   {pick.unmet.length > 0 && (
                     <p className="mt-2 text-xs text-faint">
                       {t("picks.unmet")}: {pick.unmet.join(", ").replace(/_/g, " ")}
+                    </p>
+                  )}
+
+                  {/* Kept apart from the unmet list. A condition nobody could
+                      check is not a condition the issuer failed, and the score
+                      is already out of a ceiling that excludes these - so
+                      listing them together would read as "and it also failed
+                      these", which is the opposite of what happened. */}
+                  {pick.unevaluable.length > 0 && (
+                    <p className="mt-1 text-xs text-faint/70">
+                      {t("picks.unevaluable")}:{" "}
+                      {pick.unevaluable.join(", ").replace(/_/g, " ")}
                     </p>
                   )}
 

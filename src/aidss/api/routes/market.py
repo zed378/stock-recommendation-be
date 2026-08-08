@@ -52,7 +52,7 @@ from aidss.monitoring.scan import results_for
 from aidss.plugins.registry import get_market_data_provider
 from aidss.prompts.translation import translate
 from aidss.recommendations.strategy import build_strategy
-from aidss.screener import Horizon, screen
+from aidss.screener import Horizon, screen_stored
 from aidss.security.rbac import Permission
 
 router = APIRouter(tags=["market"], route_class=CommitBeforeResponse)
@@ -78,28 +78,40 @@ def stock_picks(
     session: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
 ) -> StockPickResponse:
-    """Rank stored assets by how many of the horizon's stated conditions they meet.
+    """Rank the whole exchange by how many of the horizon's conditions each meets.
 
-    Reads stored price history only. A screen that collected data would take
-    minutes and would spend provider quota on assets nobody asked about.
+    The universe is every issuer with enough session history - about eight
+    hundred - not the dozen with imported price bars. It used to be the latter,
+    which made a whole-market screener into a watchlist viewer: a list that can
+    only show names somebody already follows cannot surface one they have not
+    thought of, and that is the only thing a screener is for.
+
+    Read from the stored market scan rather than computed here. An indicator
+    snapshot is ~44 ms and the criteria need one per issuer, so screening the
+    exchange live is half a minute - on every page load and every horizon
+    toggle. The scan already computes that snapshot for every issuer, so the
+    four horizons are evaluated there and this is a query.
     """
-    asset_ids: list[uuid.UUID] | None = None
+    tickers: list[str] | None = None
     if watchlist_only:
-        asset_ids = [
+        # Now a filter over the same pass rather than a different universe, so
+        # a criterion means the same thing whichever way the box is ticked.
+        tickers = [
             row[0]
             for row in session.execute(
-                select(WatchlistItem.asset_id)
+                select(Asset.ticker)
+                .join(WatchlistItem, WatchlistItem.asset_id == Asset.id)
                 .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
                 .where(Watchlist.user_id == user.id)
                 .distinct()
             ).all()
         ]
 
-    result = screen(
+    result = screen_stored(
         session,
         horizon,
         limit=limit,
-        asset_ids=asset_ids,
+        tickers=tickers,
         min_score=min_score,
         near_limit_only=near_limit_only,
     )
