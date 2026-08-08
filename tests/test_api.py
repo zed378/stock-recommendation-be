@@ -244,10 +244,15 @@ def test_a_category_can_be_created_without_a_ticker(client: TestClient, auth_hea
         "/watchlist/categories", json={"name": "Perbankan"}, headers=auth_headers
     )
     assert response.status_code == 201
-    assert response.json() == {"name": "Perbankan", "count": 0}
+    body = response.json()
+    # Compared field by field rather than whole-dict: the response also carries
+    # the row id now, and an equality assertion turns every added field into a
+    # failure in tests that are not about that field.
+    assert body["name"] == "Perbankan"
+    assert body["count"] == 0
 
     rows = client.get("/watchlist/categories", headers=auth_headers).json()
-    assert {"name": "Perbankan", "count": 0} in rows
+    assert any(row["name"] == "Perbankan" and row["count"] == 0 for row in rows)
 
 
 def test_a_created_category_can_be_filled(client: TestClient, auth_headers) -> None:
@@ -257,9 +262,8 @@ def test_a_created_category_can_be_filled(client: TestClient, auth_headers) -> N
     add(client, auth_headers, "ADRO", "Energi")
 
     rows = client.get("/watchlist/categories", headers=auth_headers).json()
-    assert [row for row in rows if row["name"] == "Energi"] == [
-        {"name": "Energi", "count": 1}
-    ]
+    energi = next(row for row in rows if row["name"] == "Energi")
+    assert energi["count"] == 1
 
 
 def test_creating_a_category_that_exists_is_refused(client: TestClient, auth_headers) -> None:
@@ -308,7 +312,7 @@ def test_an_emptied_category_still_exists(client: TestClient, auth_headers) -> N
     client.delete(f"/watchlist/{item_id}", headers=auth_headers)
 
     rows = client.get("/watchlist/categories", headers=auth_headers).json()
-    assert {"name": "Perbankan", "count": 0} in rows
+    assert any(row["name"] == "Perbankan" and row["count"] == 0 for row in rows)
 
 
 def test_listing_can_be_narrowed_to_one_category(client: TestClient, auth_headers) -> None:
@@ -379,7 +383,9 @@ def test_a_category_can_be_renamed_carrying_its_items(client: TestClient, auth_h
         "/watchlist/categories/Perbankan", json={"name": "Bank"}, headers=auth_headers
     )
     assert renamed.status_code == 200
-    assert renamed.json() == {"name": "Bank", "count": 2}
+    body = renamed.json()
+    assert body["name"] == "Bank"
+    assert body["count"] == 2
 
     listed = client.get("/watchlist", headers=auth_headers).json()
     assert {item["category"] for item in listed} == {"Bank"}
