@@ -40,7 +40,28 @@ const POSITIONS: Group = {
 
 const WATCHING: Group = {
   label: "nav.group.watching",
-  items: [{ to: "/monitoring", label: "nav.monitoring" }],
+  items: [
+    { to: "/monitoring", label: "nav.monitoring" },
+    // The calendar sits with monitoring rather than with research: both are
+    // about things arriving on their own schedule rather than questions the
+    // reader went looking for.
+    { to: "/agenda", label: "nav.agenda" },
+  ],
+};
+
+/**
+ * Settings that belong to the reader rather than to the platform.
+ *
+ * Kept out of Administration, which is a different job: an investor sets their
+ * own horizon and decides who sees their watchlist, and neither needs the
+ * admin role.
+ */
+const YOU: Group = {
+  label: "nav.group.you",
+  items: [
+    { to: "/profile", label: "nav.profile" },
+    { to: "/shared", label: "nav.shared" },
+  ],
 };
 
 /**
@@ -70,6 +91,6 @@ export function useNavigationGroups(): Group[] {
   // Hidden rather than guarded. The route and the API each stand on their own;
   // this only avoids offering a link to somewhere the reader cannot use.
   return user?.role === "admin"
-    ? [RESEARCH, WATCHING, POSITIONS, ADMINISTRATION]
-    : [RESEARCH, WATCHING, POSITIONS];
+    ? [RESEARCH, WATCHING, POSITIONS, YOU, ADMINISTRATION]
+    : [RESEARCH, WATCHING, POSITIONS, YOU];
 }

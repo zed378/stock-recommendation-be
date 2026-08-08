@@ -886,3 +886,25 @@ def enqueue_due_news_sweep(session: Session, *, now: datetime | None = None) -> 
         "already_queued": 0 if result.created else 1,
         "scheduled_for": row.next_run_at.isoformat() if row.next_run_at else None,
     }
+
+
+@register("agenda.extract")
+def extract_agenda(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Read dated corporate events out of coverage already stored and tagged.
+
+    Chained after the news sweep rather than scheduled separately: the only
+    thing that can produce a new calendar entry is a new article, so running
+    this on its own timer would mostly re-read the same rows.
+    """
+    from aidss.news.agenda_extract import extract
+
+    limit = int(payload.get("limit") or 500)
+    return extract(session, limit=max(50, min(limit, 5000)))
+
+
+@register("agenda.notices")
+def raise_agenda_notices(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Raise one alert per watching user for each event inside its notice window."""
+    from aidss.monitoring.agenda import raise_notices
+
+    return raise_notices(session)

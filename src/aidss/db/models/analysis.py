@@ -54,6 +54,18 @@ class AnalysisResult(Base):
     #: traceability (Section 1): any output can be reproduced and audited.
     context_snapshot: Mapped[dict[str, Any]] = mapped_column(default=dict)
 
+    #: The conversation this run was recorded under, which is how the result
+    #: reaches the account that asked for it. Null for scheduled runs, which
+    #: nobody requested and therefore nobody owns.
+    #:
+    #: The engine always knew both ids and stored only one, so "who asked for
+    #: this analysis" was answerable at runtime and not afterwards. Sharing
+    #: needs it answerable afterwards - you may only share what you own - and
+    #: so does the traceability the platform claims.
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ai_conversations.id", ondelete="SET NULL"), default=None, index=True
+    )
+
     recommendations: Mapped[list[Recommendation]] = relationship(
         back_populates="analysis_result", cascade="all, delete-orphan"
     )

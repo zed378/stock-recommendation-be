@@ -37,6 +37,7 @@ from aidss.agents.analyzers import (
 )
 from aidss.agents.base import Agent, AgentRun, AgentRunner, AgentSkip, ConversationRecorder
 from aidss.agents.context import AnalysisContext, ContextBuilder
+from aidss.agents.triage import Triage, triage_for
 from aidss.db.models import AIConversation, AnalysisResult, Asset, Recommendation
 from aidss.domain.types import Timeframe
 from aidss.llm.errors import GatewayError
@@ -93,6 +94,11 @@ class AnalysisRun:
     #: no tokens - the reader is already waiting once, and paying for a
     #: rendering every time somebody flips a switch was the alternative.
     agent_translations: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The pre-analysis decision and the arithmetic behind it. Reported rather
+    #: than kept internal: a run that used the cheap tier produced shallower
+    #: prose for a stated reason, and a reader comparing two analyses of
+    #: different issuers deserves to see which one was triaged down.
+    triage: Triage | None = None
 
     @property
     def synthesis(self) -> AgentRun | None:
@@ -133,6 +139,7 @@ class AnalysisRun:
             "skipped": [{"agent": s.agent, "reason": s.reason} for s in self.skipped],
             "failed": [{"agent": f.agent, "reason": f.reason} for f in self.failed],
             "usage": {"total_tokens": self.total_tokens, "estimated_cost": self.total_cost},
+            "triage": self.triage.as_payload() if self.triage else None,
             "recommendation": (
                 self.recommendation.as_payload() if self.recommendation else None
             ),
@@ -166,6 +173,13 @@ class AnalysisEngine:
         #: every later view. Off for callers that only want the analysis - a
         #: batch backfill, say - where the extra call buys nothing.
         translate_output: bool = True,
+        #: A reader asked about this issuer by name. Skips the triage
+        #: downgrade: somebody opening a stock deliberately has a reason the
+        #: stored numbers do not know about, and serving them the cheap path
+        #: makes the feature feel broken exactly when it is being used on
+        #: purpose. Batch and scheduled callers leave this false, which is
+        #: where the saving actually lives.
+        requested_full: bool = False,
     ) -> AnalysisRun:
         context = self._context_builder.build(asset, timeframe, user_id=user_id)
         run = AnalysisRun(
@@ -191,11 +205,19 @@ class AnalysisEngine:
             recorder = ConversationRecorder(self._session, conversation.id)
             run.conversation_id = conversation.id
 
+        # Decided before a single prompt exists, from figures the platform has
+        # already computed. A full run is a dozen model calls, and without this
+        # they cost the same whether the issuer moved violently or did nothing
+        # at all.
+        triage = triage_for(self._session, asset.ticker, requested_full=requested_full)
+        run.triage = triage
+
         runner = AgentRunner(
             self._gateway,
             self._composer,
             recorder=recorder,
             high_privacy=context.memory.high_privacy,
+            complexity_cap=triage.complexity,
         )
 
         for agent in (MarketAnalyzer(), TechnicalAnalyzer(), FundamentalAnalyzer(), NewsAnalyzer()):
@@ -515,6 +537,9 @@ class AnalysisEngine:
         result = AnalysisResult(
             asset_id=asset.id,
             analysis_type="multi_agent",
+            # Carried onto the row so the requester is answerable later, not
+            # only while this call is on the stack.
+            conversation_id=run.conversation_id,
             model_used=primary.usage.model if primary else None,
             prompt_version=primary.template_version if primary else None,
             # The context snapshot plus the per-agent prompt versions are what

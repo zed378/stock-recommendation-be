@@ -25,6 +25,7 @@ from aidss.db.models import PromptTemplate as PromptTemplateRow
 from aidss.domain.types import ChatMessage
 from aidss.prompts import catalog
 from aidss.prompts.catalog import PromptTemplate
+from aidss.prompts.framing import investor_framing
 from aidss.prompts.language import OutputLanguage
 
 
@@ -155,6 +156,12 @@ class PromptComposer:
         *,
         corrective_instruction: str | None = None,
         language: OutputLanguage | None = None,
+        #: The investor's stated horizon, risk appetite and vocabulary level.
+        #: Appended to the system message rather than left to each template to
+        #: interpolate - a rule repeated in eleven templates is a rule missing
+        #: from the twelfth, which is exactly what happened before: the profile
+        #: reached the prompt variables and no template ever read it.
+        investor: dict[str, Any] | None = None,
     ) -> ComposedPrompt:
         template = self.manager.get(template_name)
         # Falls back to the configured language rather than to silence: a
@@ -163,7 +170,7 @@ class PromptComposer:
         # fact about the text.
         system = template.render_system(
             schema_hint(output_model), language or self.language
-        )
+        ) + investor_framing(investor)
         user = template.user.format(**{k: _render(v) for k, v in context.items()})
 
         messages = [

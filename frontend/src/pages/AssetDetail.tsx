@@ -14,6 +14,7 @@ import {
 } from "@/components/primitives";
 import { PriceChart } from "@/components/PriceChart";
 import { Recommendation } from "@/components/Recommendation";
+import { EvidenceChart } from "@/components/EvidenceChart";
 import { IndicatorSnapshotView } from "@/components/Indicators";
 import { Strategy } from "@/components/Strategy";
 import { LanguageSwitch, TranslationNotice } from "@/components/TranslateToggle";
@@ -173,7 +174,16 @@ export function AssetDetail() {
       {tab === "indicators" && <Indicators ticker={ticker} timeframe={timeframe} />}
       {tab === "fundamentals" && <Fundamentals ticker={ticker} />}
       {tab === "analysis" && <Analysis ticker={ticker} timeframe={timeframe} />}
-      {tab === "strategy" && <Strategy ticker={ticker} />}
+      {/* The chart sits under the strategy rather than on its own tab. What it
+          draws are the levels the strategy is stated in terms of, and putting
+          them a click apart means reading the numbers on one screen and
+          checking them on another. */}
+      {tab === "strategy" && (
+        <div className="space-y-6">
+          <Strategy ticker={ticker} />
+          <EvidenceChart ticker={ticker} />
+        </div>
+      )}
       {tab === "news" && <News ticker={ticker} />}
     </div>
   );

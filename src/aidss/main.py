@@ -28,6 +28,7 @@ from aidss.api.routes import (
     journal,
     knowledge,
     market,
+    personal,
     portfolio,
     reports,
     system,
@@ -108,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs.router)
     app.include_router(market.router)
     app.include_router(admin.router)
+    app.include_router(personal.router)
     app.include_router(events.router)
 
     # One LISTEN connection per process, feeding every socket this process

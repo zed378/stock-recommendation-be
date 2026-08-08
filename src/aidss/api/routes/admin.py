@@ -22,9 +22,11 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -1181,3 +1183,82 @@ def backfill_market_history(
             else f"Planning up to {sessions} sessions, paced so the exchange is not hammered."
         ),
     )
+
+
+@router.post(
+    "/agenda/extract", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def extract_agenda_now(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Re-read stored coverage for dated corporate events.
+
+    Worth a button of its own because the extraction rules change more often
+    than the articles do: tightening a date rule should be testable against
+    what is already in the database without waiting for the next sweep.
+    """
+    minute = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+    result = enqueue(session, "agenda.extract", {}, dedup_key=f"agenda-extract:{minute}")
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="agenda.extract",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note=(
+            "An extraction is already queued; this returns that job."
+            if result.deduplicated
+            else "Scanning tagged coverage for dated events."
+        ),
+    )
+
+
+class AgendaEntryRequest(BaseModel):
+    """One event typed by an operator.
+
+    Manual entry is not a fallback here, it is the authoritative path. The
+    exchange publishes a calendar but not on an endpoint that answers reliably
+    (§9), and dates extracted from coverage are explicitly the weaker source.
+    """
+
+    ticker: str = Field(min_length=1, max_length=20)
+    kind: str
+    scheduled_for: date
+    title: str = Field(min_length=1, max_length=400)
+    detail: str | None = Field(default=None, max_length=2000)
+    source_url: str | None = Field(default=None, max_length=600)
+
+
+@router.post("/agenda", response_model=dict, status_code=status.HTTP_201_CREATED)
+def add_agenda_entry(
+    payload: AgendaEntryRequest,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> dict[str, Any]:
+    """Record a dated event by hand. Upserts on (ticker, kind, date)."""
+    from aidss.db.models import AgendaKind, AgendaSource
+    from aidss.monitoring.agenda import AgendaEntry, store_entries
+
+    try:
+        kind = AgendaKind(payload.kind)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown agenda kind. Known: {[k.value for k in AgendaKind]}",
+        ) from exc
+
+    stored = store_entries(
+        session,
+        [
+            AgendaEntry(
+                ticker=payload.ticker,
+                kind=kind,
+                scheduled_for=payload.scheduled_for,
+                title=payload.title,
+                detail=payload.detail,
+                source=AgendaSource.MANUAL,
+                source_url=payload.source_url,
+            )
+        ],
+    )
+    return {"ticker": payload.ticker.upper(), **stored}

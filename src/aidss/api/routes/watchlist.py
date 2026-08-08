@@ -110,7 +110,9 @@ def _category_response(session: Session, watchlist: Watchlist) -> WatchlistCateg
             WatchlistItem.watchlist_id == watchlist.id
         )
     )
-    return WatchlistCategoryResponse(name=watchlist.name, count=count or 0)
+    return WatchlistCategoryResponse(
+        id=watchlist.id, name=watchlist.name, count=count or 0
+    )
 
 
 @router.get("/categories", response_model=list[WatchlistCategoryResponse])
@@ -125,13 +127,19 @@ def list_categories(
     group as well.
     """
     rows = session.execute(
-        select(Watchlist.name, func.count(WatchlistItem.id))
+        select(Watchlist.id, Watchlist.name, func.count(WatchlistItem.id))
         .outerjoin(WatchlistItem, WatchlistItem.watchlist_id == Watchlist.id)
         .where(Watchlist.user_id == user.id)
-        .group_by(Watchlist.name)
+        # Grouped by id as well as name. The name is unique per user so the
+        # groups are the same either way, but selecting a column that is not
+        # grouped is an error in PostgreSQL rather than a silent pick.
+        .group_by(Watchlist.id, Watchlist.name)
         .order_by(Watchlist.name)
     ).all()
-    return [WatchlistCategoryResponse(name=name, count=count) for name, count in rows]
+    return [
+        WatchlistCategoryResponse(id=row_id, name=name, count=count)
+        for row_id, name, count in rows
+    ]
 
 
 @router.post(

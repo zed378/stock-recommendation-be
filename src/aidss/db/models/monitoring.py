@@ -100,6 +100,11 @@ class AlertKind(StrEnum):
     #: suggestion to take the trade.
     REWARD_TO_RISK_REACHED = "reward_to_risk_reached"
 
+    #: A disclosed, dated event for this issuer falls inside the notice window.
+    #: The alert states the date and what it is; it holds no view on what the
+    #: event will do to the price, because nothing in this platform knows that.
+    AGENDA_UPCOMING = "agenda_upcoming"
+
     #: Price fell a set percentage from its peak since a holding was opened.
     TRAILING_STOP_REACHED = "trailing_stop_reached"
 

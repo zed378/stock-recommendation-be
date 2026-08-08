@@ -1166,10 +1166,19 @@ export interface paths {
         };
         /**
          * Stock Picks
-         * @description Rank stored assets by how many of the horizon's stated conditions they meet.
+         * @description Rank the whole exchange by how many of the horizon's conditions each meets.
          *
-         *     Reads stored price history only. A screen that collected data would take
-         *     minutes and would spend provider quota on assets nobody asked about.
+         *     The universe is every issuer with enough session history - about eight
+         *     hundred - not the dozen with imported price bars. It used to be the latter,
+         *     which made a whole-market screener into a watchlist viewer: a list that can
+         *     only show names somebody already follows cannot surface one they have not
+         *     thought of, and that is the only thing a screener is for.
+         *
+         *     Read from the stored market scan rather than computed here. An indicator
+         *     snapshot is ~44 ms and the criteria need one per issuer, so screening the
+         *     exchange live is half a minute - on every page load and every horizon
+         *     toggle. The scan already computes that snapshot for every issuer, so the
+         *     four horizons are evaluated there and this is a query.
          */
         get: operations["stock_picks_stock_picks_get"];
         put?: never;
@@ -1956,6 +1965,250 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/agenda/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Agenda Now
+         * @description Re-read stored coverage for dated corporate events.
+         *
+         *     Worth a button of its own because the extraction rules change more often
+         *     than the articles do: tightening a date rule should be testable against
+         *     what is already in the database without waiting for the next sweep.
+         */
+        post: operations["extract_agenda_now_admin_agenda_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Agenda Entry
+         * @description Record a dated event by hand. Upserts on (ticker, kind, date).
+         */
+        post: operations["add_agenda_entry_admin_agenda_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Preferences
+         * @description How this investor has said they invest.
+         *
+         *     Defaults are returned for anything unset, and `stated` names which ones are
+         *     real answers - the difference matters, because an inferred or defaulted
+         *     preference must never be reflected back as something the investor told us.
+         */
+        get: operations["read_preferences_me_preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Preferences
+         * @description Set one or more preferences. Only the fields sent are touched.
+         *
+         *     Partial for the same reason the provider PATCH is: a form that saves one
+         *     field must not quietly reset the four beside it.
+         */
+        patch: operations["update_preferences_me_preferences_patch"];
+        trace?: never;
+    };
+    "/me/preferences/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preference Options
+         * @description The permitted values, so the interface does not hardcode a second copy.
+         */
+        get: operations["preference_options_me_preferences_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Agenda
+         * @description Dated events ahead, nearest first.
+         */
+        get: operations["read_agenda_agenda_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{ticker}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recommendation Evidence
+         * @description Price bars plus the levels and factors the stored recommendation named.
+         *
+         *     One payload rather than two requests, so the chart and the prose beside it
+         *     cannot end up describing different analyses.
+         */
+        get: operations["recommendation_evidence_assets__ticker__evidence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Share
+         * @description Show a watchlist or an analysis to one named account.
+         *
+         *     Named accounts only - there is no link form of this, deliberately. A URL
+         *     carrying investment analysis about a named company forwards itself and
+         *     cannot be withdrawn once it is in a group chat, and the audience has to
+         *     stay knowable for the redistribution question in §24 to have an answer.
+         */
+        post: operations["create_share_shares_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/outgoing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outgoing
+         * @description What this account has shared, including what it has withdrawn.
+         */
+        get: operations["list_outgoing_shares_outgoing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/incoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Incoming
+         * @description What others are currently showing this account.
+         */
+        get: operations["list_incoming_shares_incoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{share_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Share */
+        delete: operations["revoke_share_shares__share_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/analysis/{result_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Shared Analysis
+         * @description Read an analysis someone shared, with the recipient's caveat attached.
+         *
+         *     A different caveat from the one its owner sees, and that is the point: the
+         *     recipient did not choose the issuer, did not set the horizon it was framed
+         *     for, and may not know what this platform is.
+         */
+        get: operations["read_shared_analysis_shares_analysis__result_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2161,6 +2414,60 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * AgendaEntryRequest
+         * @description One event typed by an operator.
+         *
+         *     Manual entry is not a fallback here, it is the authoritative path. The
+         *     exchange publishes a calendar but not on an endpoint that answers reliably
+         *     (§9), and dates extracted from coverage are explicitly the weaker source.
+         */
+        AgendaEntryRequest: {
+            /** Ticker */
+            ticker: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Scheduled For
+             * Format: date
+             */
+            scheduled_for: string;
+            /** Title */
+            title: string;
+            /** Detail */
+            detail?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+        };
+        /** AgendaItemResponse */
+        AgendaItemResponse: {
+            /** Ticker */
+            ticker: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Scheduled For
+             * Format: date
+             */
+            scheduled_for: string;
+            /** Title */
+            title: string;
+            /** Detail */
+            detail: string | null;
+            /** Source */
+            source: string;
+            /** Source Url */
+            source_url: string | null;
+        };
+        /** AgendaPage */
+        AgendaPage: {
+            /** Items */
+            items: components["schemas"]["AgendaItemResponse"][];
+            /** Total */
+            total: number;
+            /** Caveat */
+            caveat: string;
         };
         /** AgentSkipResponse */
         AgentSkipResponse: {
@@ -3147,6 +3454,49 @@ export interface components {
             /** Holdings */
             holdings: components["schemas"]["HoldingResponse"][];
         };
+        /** PreferencesResponse */
+        PreferencesResponse: {
+            /**
+             * Investment Horizon
+             * @enum {string}
+             */
+            investment_horizon: "short" | "medium" | "long";
+            /**
+             * Risk Appetite
+             * @enum {string}
+             */
+            risk_appetite: "conservative" | "moderate" | "aggressive";
+            /**
+             * Experience Level
+             * @enum {string}
+             */
+            experience_level: "beginner" | "intermediate" | "advanced";
+            /**
+             * Explanation Depth
+             * @enum {string}
+             */
+            explanation_depth: "brief" | "standard" | "detailed";
+            /**
+             * Privacy Mode
+             * @enum {string}
+             */
+            privacy_mode: "standard" | "high";
+            /** Stated */
+            stated: string[];
+        };
+        /** PreferencesUpdate */
+        PreferencesUpdate: {
+            /** Investment Horizon */
+            investment_horizon?: ("short" | "medium" | "long") | null;
+            /** Risk Appetite */
+            risk_appetite?: ("conservative" | "moderate" | "aggressive") | null;
+            /** Experience Level */
+            experience_level?: ("beginner" | "intermediate" | "advanced") | null;
+            /** Explanation Depth */
+            explanation_depth?: ("brief" | "standard" | "detailed") | null;
+            /** Privacy Mode */
+            privacy_mode?: ("standard" | "high") | null;
+        };
         /** ProviderInventoryResponse */
         ProviderInventoryResponse: {
             /** Registered */
@@ -3340,6 +3690,48 @@ export interface components {
          * @enum {string}
          */
         ScheduleStatus: "active" | "needs_attention";
+        /** ShareRequest */
+        ShareRequest: {
+            /** Recipient Email */
+            recipient_email: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "watchlist" | "analysis";
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** ShareResponse */
+        ShareResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Note */
+            note: string | null;
+            /** Counterpart Email */
+            counterpart_email: string;
+            /** Label */
+            label: string;
+            /** Created At */
+            created_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+        };
         /** SimulationRequest */
         SimulationRequest: {
             /** Changes */
@@ -3515,6 +3907,11 @@ export interface components {
         };
         /** WatchlistCategoryResponse */
         WatchlistCategoryResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Name */
             name: string;
             /** Count */
@@ -6573,6 +6970,341 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_agenda_now_admin_agenda_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+        };
+    };
+    add_agenda_entry_admin_agenda_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgendaEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_preferences_me_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferencesResponse"];
+                };
+            };
+        };
+    };
+    update_preferences_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferencesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preference_options_me_preferences_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    read_agenda_agenda_get: {
+        parameters: {
+            query?: {
+                watchlist_only?: boolean;
+                days?: number;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgendaPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recommendation_evidence_assets__ticker__evidence_get: {
+        parameters: {
+            query?: {
+                timeframe?: components["schemas"]["Timeframe"];
+                bars?: number;
+            };
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_share_shares_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_outgoing_shares_outgoing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareResponse"][];
+                };
+            };
+        };
+    };
+    list_incoming_shares_incoming_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareResponse"][];
+                };
+            };
+        };
+    };
+    revoke_share_shares__share_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_shared_analysis_shares_analysis__result_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                result_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

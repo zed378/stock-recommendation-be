@@ -140,12 +140,19 @@ class AgentRunner:
         recorder: ConversationRecorder | None = None,
         max_validation_retries: int = 1,
         high_privacy: bool = False,
+        #: Ceiling on the tier any agent in this run may reach. Triage sets it
+        #: for issuers whose stored numbers show nothing happening, so a quiet
+        #: name does not buy the same reasoning budget as a violent one. A cap
+        #: only ever lowers: an agent that asked for the cheap tier is never
+        #: promoted by one, because it asked for cheap on its own merits.
+        complexity_cap: TaskComplexity | None = None,
     ) -> None:
         self._gateway = gateway
         self._composer = composer or PromptComposer()
         self._recorder = recorder
         self._max_validation_retries = max_validation_retries
         self._high_privacy = high_privacy
+        self._complexity_cap = complexity_cap
 
     @property
     def language(self) -> OutputLanguage:
@@ -156,6 +163,13 @@ class AgentRunner:
         asked to write in.
         """
         return self._composer.language
+
+    def _tier(self, agent: Agent) -> TaskComplexity:
+        """The agent's own tier, lowered to the cap when one is set."""
+        if self._complexity_cap is None:
+            return agent.complexity
+        order = (TaskComplexity.LIGHT, TaskComplexity.STANDARD, TaskComplexity.COMPLEX)
+        return min(agent.complexity, self._complexity_cap, key=order.index)
 
     def run(
         self,
@@ -187,11 +201,12 @@ class AgentRunner:
                 variables,
                 agent.output_model,
                 corrective_instruction=corrective,
+                investor=context.memory.as_prompt_context(),
             )
             response = self._gateway.complete(
                 LLMRequest(
                     messages=prompt.messages,
-                    complexity=agent.complexity,
+                    complexity=self._tier(agent),
                     sensitivity=sensitivity,
                     expects_json=True,
                     agent=agent.name,

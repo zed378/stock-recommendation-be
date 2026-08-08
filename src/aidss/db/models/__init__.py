@@ -32,6 +32,13 @@ from aidss.db.models.asset import (
     MarketScanResult,
     TechnicalIndicator,
 )
+from aidss.db.models.collaboration import (
+    AgendaKind,
+    AgendaSource,
+    IssuerAgenda,
+    SharedItem,
+    ShareKind,
+)
 from aidss.db.models.monitoring import (
     Alert,
     AlertDirection,
@@ -106,6 +113,8 @@ __all__ = [
     "PortfolioAnalysis",
     "PortfolioHolding",
     "PromptTemplate",
+    "AgendaKind",
+    "AgendaSource",
     "Alert",
     "AlertDirection",
     "AlertKind",
@@ -126,6 +135,9 @@ __all__ = [
     "UserPreference",
     "UserRole",
     "UserStatus",
+    "IssuerAgenda",
+    "SharedItem",
+    "ShareKind",
     "Watchlist",
     "WatchlistItem",
 ]

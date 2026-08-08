@@ -252,6 +252,10 @@ class WatchlistItemResponse(BaseModel):
 
 
 class WatchlistCategoryResponse(BaseModel):
+    #: The row id, not just the name. Sharing points at the watchlist itself,
+    #: because a name can be renamed and a share must not follow the name onto
+    #: whatever group later holds it.
+    id: uuid.UUID
     name: str
     count: int
 
