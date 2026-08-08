@@ -257,3 +257,106 @@ def test_the_scan_and_the_alerts_share_one_vocabulary() -> None:
         "matches must be recorded from the alert candidates themselves, not "
         "from a list the scan keeps separately"
     )
+
+
+# --- searching ---------------------------------------------------------------
+
+
+def test_the_scan_can_be_searched_by_ticker(session) -> None:
+    """Nine hundred rows is too many to scroll, and the code is the thing a
+    reader arrives already knowing."""
+    for ticker in ("BBRI", "BBCA", "ADRO"):
+        seed(session, ticker, sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["BBRI", "BBCA", "ADRO"], on_date=on_date)
+
+    rows, total = results_for(session, on_date=on_date, search="bb")
+
+    assert total == 2
+    assert {row.ticker for row in rows} == {"BBRI", "BBCA"}
+
+
+def test_the_search_composes_with_the_watchlist_scope(session) -> None:
+    """Both tabs are searchable, and the two filters are independent."""
+    for ticker in ("BBRI", "BBCA"):
+        seed(session, ticker, sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["BBRI", "BBCA"], on_date=on_date)
+
+    rows, total = results_for(
+        session, on_date=on_date, tickers=["BBRI", "BBCA"], search="bbri"
+    )
+
+    assert total == 1
+    assert rows[0].ticker == "BBRI"
+
+
+def test_an_empty_search_is_not_a_filter(session) -> None:
+    seed(session, "BBRI", sessions=120)
+    on_date = date(2026, 8, 6)
+    scan_tickers(session, ["BBRI"], on_date=on_date)
+
+    assert results_for(session, on_date=on_date, search="   ")[1] == 1
+
+
+# --- the schedule the operator controls --------------------------------------
+
+
+def test_the_market_import_ships_with_a_working_default() -> None:
+    """Unlike the news sweep this has one. Reading somebody else's feeds on a
+    timer nobody asked for is a decision; this is the exchange publishing about
+    its own market, and a screener idle until an operator finds a setting looks
+    broken."""
+    from aidss.news.schedules import next_run_at
+    from aidss.platform.settings import DEFAULTS, MARKET_SCAN_CRON
+
+    expression = DEFAULTS[MARKET_SCAN_CRON]
+
+    assert expression, "the market schedule must have a default"
+    assert next_run_at(expression), "and it must parse"
+
+
+def test_the_firing_is_spread_rather_than_landing_on_the_second(session) -> None:
+    """A request at exactly 18:00:00.000 every weekday is a schedule, and a
+    schedule is what rate limiting is for."""
+    from datetime import UTC, datetime
+
+    from aidss.jobs.handlers import _jitter
+
+    due = datetime(2026, 8, 6, 11, 0, tzinfo=UTC)
+    offset = _jitter(session, due)
+
+    assert 0 <= offset < 900
+
+
+def test_the_spread_is_stable_for_one_due_time(session) -> None:
+    """Drawn fresh each tick, the delay would wander every minute: the dedup
+    key stops a second job being created, but a start time nobody can predict
+    is one nobody can debug."""
+    from datetime import UTC, datetime
+
+    from aidss.jobs.handlers import _jitter
+
+    due = datetime(2026, 8, 6, 11, 0, tzinfo=UTC)
+
+    assert _jitter(session, due) == _jitter(session, due)
+
+
+def test_the_spread_differs_between_days(session) -> None:
+    from datetime import UTC, datetime
+
+    from aidss.jobs.handlers import _jitter
+
+    monday = datetime(2026, 8, 3, 11, 0, tzinfo=UTC)
+    tuesday = datetime(2026, 8, 4, 11, 0, tzinfo=UTC)
+
+    assert _jitter(session, monday) != _jitter(session, tuesday)
+
+
+def test_clearing_the_market_cron_turns_the_import_off(session) -> None:
+    from aidss.jobs.handlers import enqueue_daily_trading_summary
+    from aidss.platform.settings import MARKET_SCAN_CRON, set_setting
+
+    set_setting(session, MARKET_SCAN_CRON, "")
+
+    assert enqueue_daily_trading_summary(session)["disabled"] is True

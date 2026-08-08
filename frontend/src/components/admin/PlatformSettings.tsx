@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
-import { useI18n } from "@/i18n/context";
+import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import {
   Button,
@@ -27,6 +27,8 @@ export function PlatformSettingsPanel() {
   const toast = useToast();
 
   const [cron, setCron] = useState("");
+  const [marketCron, setMarketCron] = useState("");
+  const [jitter, setJitter] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const settings = useQuery({
@@ -42,11 +44,43 @@ export function PlatformSettingsPanel() {
   // an input whose value is the query result cannot be typed in, and one that
   // never syncs shows a stale schedule after somebody else changes it.
   useEffect(() => {
-    if (settings.data) setCron(settings.data.news_sweep_cron);
+    if (!settings.data) return;
+    setCron(settings.data.news_sweep_cron);
+    setMarketCron(settings.data.market_scan_cron);
+    setJitter(String(settings.data.market_scan_jitter_seconds));
   }, [settings.data]);
 
+  /**
+   * The three manual triggers.
+   *
+   * Separate buttons rather than one, because they fail for different reasons
+   * and are worth retrying apart: the backfill and the fetch talk to the
+   * exchange, the scan needs no network at all and is what you press after a
+   * rule changes.
+   */
+  const trigger = useMutation({
+    mutationFn: async (what: "fetch" | "scan" | "backfill") => {
+      const path = `/admin/market/${what}` as
+        | "/admin/market/fetch"
+        | "/admin/market/scan"
+        | "/admin/market/backfill";
+      const { data, error: failed } = await api.POST(path, {});
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data;
+    },
+    onSuccess: (job) => {
+      toast.show({ title: t("admin.market.queued"), body: job?.note ?? undefined, tone: "success" });
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
   const save = useMutation({
-    mutationFn: async (patch: { registration_open?: boolean; news_sweep_cron?: string }) => {
+    mutationFn: async (patch: {
+      registration_open?: boolean;
+      news_sweep_cron?: string;
+      market_scan_cron?: string;
+      market_scan_jitter_seconds?: number;
+    }) => {
       const { data, error: failed } = await api.PATCH("/admin/settings", { body: patch });
       if (failed) throw new Error(errorMessage(failed, t("common.error")));
       return data;
@@ -95,6 +129,57 @@ export function PlatformSettingsPanel() {
           </label>
           <p className="mt-1 text-xs text-faint">{t("admin.settings.registrationHint")}</p>
         </div>
+
+        <div className="space-y-2 border-t border-line pt-4">
+          <p className="text-sm font-medium text-ink">{t("admin.market.title")}</p>
+          <p className="text-xs text-faint">{t("admin.market.hint")}</p>
+          <div className="flex flex-wrap gap-2">
+            {(["fetch", "scan", "backfill"] as const).map((what) => (
+              <Button
+                key={what}
+                variant="ghost"
+                size="sm"
+                disabled={trigger.isPending}
+                onClick={() => trigger.mutate(what)}
+              >
+                {t(`admin.market.${what}` as MessageKey)}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <Field
+          label={t("admin.settings.marketCron")}
+          hint={t("admin.settings.marketCronHint")}
+        >
+          <div className="flex flex-wrap gap-2">
+            <input
+              className={`${inputClass} min-w-48 flex-1 font-mono text-xs`}
+              value={marketCron}
+              onChange={(event) => setMarketCron(event.target.value)}
+              placeholder="0 18 * * 1-5"
+            />
+            <input
+              type="number"
+              className={`${inputClass} w-28 text-xs`}
+              value={jitter}
+              onChange={(event) => setJitter(event.target.value)}
+              aria-label={t("admin.settings.jitter")}
+            />
+            <Button
+              busy={save.isPending}
+              onClick={() =>
+                save.mutate({
+                  market_scan_cron: marketCron,
+                  market_scan_jitter_seconds: Number(jitter) || 0,
+                })
+              }
+            >
+              {t("common.save")}
+            </Button>
+          </div>
+        </Field>
+        <p className="-mt-3 text-xs text-faint">{t("admin.settings.jitterHint")}</p>
 
         <Field
           label={t("admin.settings.newsCron")}

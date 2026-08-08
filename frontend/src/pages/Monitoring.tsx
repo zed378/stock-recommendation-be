@@ -42,7 +42,12 @@ export function Monitoring() {
   // follow cannot tell you about a stock you have not thought of, which is most
   // of them - and the same criteria are evaluated either way, so the scope is
   // a filter rather than a different feature.
-  const [scope, setScope] = useState<AlertScope>("watchlist");
+  // The whole index by default, as asked: a screen that only shows what you
+  // already follow cannot tell you about a stock you have not thought of.
+  const [scope, setScope] = useState<AlertScope>("global");
+  // One box for both tabs. Two would be two things to clear, and a reader who
+  // typed a ticker on one tab means the same ticker on the other.
+  const [alertSearch, setAlertSearch] = useState("");
 
   const quotes = useQuery({
     queryKey: ["monitoring-quotes"],
