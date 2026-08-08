@@ -1,6 +1,6 @@
 """Yahoo Finance market data via the public chart endpoint.
 
-**Status: unofficial, and chosen deliberately.** Section 6.1 of the planning
+**Status: unofficial, and chosen deliberately.** Section 9 of the planning
 document marks this source grey: there is no published contract, Yahoo's terms
 restrict automated commercial use, and nothing about the endpoint is
 guaranteed. The project owner has accepted that trade-off in exchange for a
@@ -414,7 +414,7 @@ class YahooMarketDataProvider(MarketDataProvider):
     def supports_realtime(self) -> bool:
         # The public endpoint is delayed - typically around 15 minutes for
         # equities. Claiming realtime here would mislead every caller that
-        # checks (Section 6.1).
+        # checks (Section 9).
         return False
 
     def health_check(self) -> bool:

@@ -1,4 +1,4 @@
-"""Group B - Asset & Market Data (Section 8.2)."""
+"""Group B - Asset & Market Data (Section 6.2)."""
 
 from __future__ import annotations
 

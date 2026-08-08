@@ -1,4 +1,4 @@
-"""Normalization - the second stage of the data pipeline (Section 6.2).
+"""Normalization - the second stage of the data pipeline (Section 10).
 
 Aligns timezone, decimal precision, and duplicate handling across providers, so
 a stored row no longer carries the idiosyncrasies of wherever it came from.

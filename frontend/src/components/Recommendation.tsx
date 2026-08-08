@@ -11,7 +11,7 @@ type Rec = components["schemas"]["RecommendationResponse"];
  * particular misreading:
  *
  *  - **Conflicting factors get the same visual weight as supporting ones.**
- *    Section 5.4 requires counter-evidence to be shown; putting it in a
+ *    Section 14.4 requires counter-evidence to be shown; putting it in a
  *    collapsed section below the case *for* would satisfy the letter of that
  *    and defeat the point. They sit side by side.
  *  - **The stance is a label, not a position on a scale.** No green-to-red
@@ -207,7 +207,7 @@ function parseBasis(value: unknown): Basis | null {
  * The three inputs to the calibration, and what each agent contributed.
  *
  * This is the difference between a score a reader has to take on trust and one
- * they can check. Section 5.4's whole point is that confidence is derived from
+ * they can check. Section 14.4's whole point is that confidence is derived from
  * evidence rather than asserted by the model, and a number alone cannot show
  * that - but "coverage 80%, agreement 100%, balance 100%" can, especially when
  * the agent that was missing is named right beneath it.

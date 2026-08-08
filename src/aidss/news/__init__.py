@@ -1,4 +1,4 @@
-"""Scheduled news ingestion (Phase 7, Section 6.3)."""
+"""Scheduled news ingestion (Phase 7, Section 12)."""
 
 from aidss.news.collector import (
     FAILURE_THRESHOLD,

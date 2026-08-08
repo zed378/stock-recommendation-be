@@ -120,7 +120,7 @@ def test_the_stop_is_marked_as_suggested(session) -> None:
 
 def test_contradicting_factors_are_included(session) -> None:
     """A chart drawing only what agrees with the stance is an argument, not an
-    explanation - the same reason §13.4 makes them a required field."""
+    explanation - the same reason Section 14.4 makes them a required field."""
     asset = seed_asset(session)
     seed_recommendation(session, asset)
 

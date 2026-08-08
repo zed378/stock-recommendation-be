@@ -1,4 +1,4 @@
-"""Group A - Users & Personal Data (Section 8.2).
+"""Group A - Users & Personal Data (Section 6.2).
 
 Everything here is the investor's own data: watchlists, portfolios, and the
 decision journal. Portfolio positions are **always** user-entered
@@ -188,7 +188,7 @@ class PortfolioHolding(Base):
     quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     average_price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     # Keeps it unambiguous that this position was entered by the user rather
-    # than automated against a brokerage account (Section 8.2, design notes).
+    # than automated against a brokerage account (Section 6.2, design notes).
     input_method: Mapped[HoldingInputMethod] = mapped_column(
         enum_column(HoldingInputMethod), default=HoldingInputMethod.MANUAL
     )
@@ -203,9 +203,9 @@ class PortfolioHolding(Base):
 
 
 class UserPreference(Base):
-    """Backing store for the Memory Manager (Section 5.2).
+    """Backing store for the Memory Manager (Section 14.2).
 
-    Section 8.2 does not name this table, because the Memory Manager belongs to
+    Section 6.2 does not name this table, because the Memory Manager belongs to
     the AI layer that Phase 4 introduces. Interaction history already has a
     home in ``ai_conversations``/``ai_messages``; what had nowhere to live is
     the stated preference - risk appetite, investment horizon, preferred depth

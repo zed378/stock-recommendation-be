@@ -1,4 +1,4 @@
-"""Memory Manager (Section 5.2).
+"""Memory Manager (Section 14.2).
 
 Holds what the investor has told us about how they invest, so analysis can be
 framed for a long-horizon holder rather than a day trader without asking again
@@ -60,7 +60,7 @@ class InvestorMemory:
 
     @property
     def high_privacy(self) -> bool:
-        """Whether this investor requires self-hosted inference (Section 12.10)."""
+        """Whether this investor requires self-hosted inference (Section 16.10)."""
         return str(self.preferences.get(PreferenceKey.PRIVACY_MODE, "standard")) == "high"
 
     def as_prompt_context(self) -> dict[str, Any]:

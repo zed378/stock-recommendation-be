@@ -1,1 +1,1 @@
-"""HTTP API layer (Section 10)."""
+"""HTTP API layer (Section 8)."""

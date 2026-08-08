@@ -1,9 +1,9 @@
-"""Deterministic confidence calibration and price levels (Section 5.4).
+"""Deterministic confidence calibration and price levels (Section 14.4).
 
 Two things a language model must not be trusted with here, and both are
 handled in this module instead.
 
-**The confidence score.** Section 5.4 requires "a consistently calibrated
+**The confidence score.** Section 14.4 requires "a consistently calibrated
 score, not an arbitrary number from the LLM". A self-reported confidence
 measures how fluent an answer felt, which is close to uncorrelated with how
 much evidence stood behind it - a model with one indicator and no fundamentals
@@ -56,7 +56,7 @@ BALANCE_WEIGHT = 0.20
 #: reminder that this is analysis, not knowledge.
 MAX_CONFIDENCE = 95.0
 
-#: Minimum calibrated confidence a "strong" label must clear (Section 5.4).
+#: Minimum calibrated confidence a "strong" label must clear (Section 14.4).
 STRONG_LABEL_MIN_CONFIDENCE = 70.0
 
 _PRICE_QUANT = Decimal("0.01")
@@ -264,11 +264,11 @@ def _quantize(value: float | Decimal) -> Decimal:
 
 
 def derive_levels(snapshot: dict[str, Any], label: RecommendationLabel) -> DerivedLevels:
-    """Build the price fields of Section 5.4 from computed indicators.
+    """Build the price fields of Section 14.4 from computed indicators.
 
     Every value returned traces back to a swing level or an ATR reading that
     the Indicator Engine measured. When the basis is missing the field stays
-    ``None``: Section 5.4 asks for a target price "if a basis for calculating
+    ``None``: Section 14.4 asks for a target price "if a basis for calculating
     one exists", and inventing one when it does not would be the opposite of
     what that qualification is for.
     """

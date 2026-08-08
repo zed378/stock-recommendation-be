@@ -2,7 +2,7 @@
 
 The exchange does publish a calendar, but not on an endpoint that can be relied
 on: probing its primary API returned JSON on one request and a Cloudflare
-challenge page on the next, which is the same moving-target behaviour §9 records
+challenge page on the next, which is the same moving-target behaviour Section 9 records
 elsewhere. A collector built on it would work in development and go quiet in
 production without failing, which is the specific failure this codebase has
 already paid for once in the news pipeline.
@@ -174,7 +174,7 @@ def extract(session: Session, *, limit: int = 500) -> dict[str, Any]:
 
     Only tagged items. An article nobody could attribute to an issuer cannot
     produce a calendar entry for one, and guessing here would put a date on the
-    wrong company - the same failure mode the tagging rules in §12 are built to
+    wrong company - the same failure mode the tagging rules in Section 12 are built to
     avoid, arriving through a different door.
     """
     rows = session.execute(

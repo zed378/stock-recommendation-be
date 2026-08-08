@@ -1,4 +1,4 @@
-"""Plugin layer (Section 7).
+"""Plugin layer (Section 5).
 
 Importing this package loads every bundled adapter into the registry.
 """

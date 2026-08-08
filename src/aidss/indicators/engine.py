@@ -1,4 +1,4 @@
-"""Indicator Engine (Phase 3, Section 9).
+"""Indicator Engine (Phase 3, Section 7).
 
 Runs every configured indicator over one (asset, timeframe) pair and stores the
 result in ``technical_indicators``. One row per (indicator, params, timestamp),

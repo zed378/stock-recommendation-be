@@ -326,7 +326,7 @@ def create_share(
     Named accounts only - there is no link form of this, deliberately. A URL
     carrying investment analysis about a named company forwards itself and
     cannot be withdrawn once it is in a group chat, and the audience has to
-    stay knowable for the redistribution question in §24 to have an answer.
+    stay knowable for the redistribution question in Section 26 to have an answer.
     """
     try:
         row = sharing.share(

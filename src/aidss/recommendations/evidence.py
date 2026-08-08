@@ -40,7 +40,7 @@ class MarkedLevel:
     key: str
     price: Decimal
     #: Why this number exists. A level with no stated basis is treated by the
-    #: reader as more certain than it is, which §22 makes a rule for the PDF
+    #: reader as more certain than it is, which Section 23 makes a rule for the PDF
     #: export and which applies at least as strongly to a chart.
     basis: str
 
@@ -155,7 +155,7 @@ def for_recommendation(
     for factor in recommendation.conflicting_factors or []:
         # Included, and that is the point. A chart that draws only what agrees
         # with the stance is an argument, not an explanation - the same reason
-        # §13.4 makes contradicting indicators a required field.
+        # Section 14.4 makes contradicting indicators a required field.
         evidence.marks.append({"text": str(factor), "side": "conflicting"})
 
     return evidence

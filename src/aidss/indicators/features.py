@@ -1,4 +1,4 @@
-"""Feature Engineering (Phase 3, Section 6.2).
+"""Feature Engineering (Phase 3, Section 10).
 
 Statistical derivations that are not classical technical indicators:
 multi-horizon returns, volatility, drawdown, and position within the range.

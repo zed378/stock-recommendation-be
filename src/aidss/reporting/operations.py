@@ -1,4 +1,4 @@
-"""Operational overview for the admin dashboard (Phase 8, Sections 9, 12.9).
+"""Operational overview for the admin dashboard (Phase 8, Section 7, 12.9).
 
 Answers the questions an operator actually has: is data flowing, is the AI
 layer working, what is it costing, and what needs attention.
@@ -139,7 +139,7 @@ def build_overview(
         },
         "note": (
             "Costs are estimates from the configured price table, not billed amounts "
-            "(Section 12.9)."
+            "(Section 16.9)."
         ),
     }
 

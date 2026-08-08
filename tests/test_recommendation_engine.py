@@ -1,6 +1,6 @@
-"""Section 5.4 rules and the Recommendation Engine (Phase 5).
+"""Section 14.4 rules and the Recommendation Engine (Phase 5).
 
-Section 15 sets the Phase 5 deliverable as "recommendations pass schema
+Section 28 sets the Phase 5 deliverable as "recommendations pass schema
 validation 100%". The way to achieve that is to make storing an invalid one
 impossible, which is what these tests hold the engine to.
 """
@@ -228,7 +228,7 @@ def test_the_engine_produces_the_full_section_5_4_structure(session, asset) -> N
         "suggested_stop",
         "horizon",
     ):
-        assert field in payload, f"Section 5.4 field missing: {field}"
+        assert field in payload, f"Section 14.4 field missing: {field}"
 
 
 def test_the_published_confidence_is_the_calibrated_one(session, asset) -> None:

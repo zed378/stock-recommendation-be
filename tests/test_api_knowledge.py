@@ -1,4 +1,4 @@
-"""Knowledge base and news-schedule endpoints (Phase 7, Sections 6.3, 10)."""
+"""Knowledge base and news-schedule endpoints (Phase 7, Section 12, 10)."""
 
 from __future__ import annotations
 
@@ -119,7 +119,7 @@ def test_a_custom_expression_is_accepted(client, auth_headers, registered_asset)
 
 
 def test_a_too_frequent_schedule_is_refused(client, auth_headers, registered_asset) -> None:
-    """The Section 6.3.4 guardrail, applied where the user chooses the cadence."""
+    """The Section 12.4 guardrail, applied where the user chooses the cadence."""
     response = client.post(
         "/news-schedules",
         json={"ticker": "BBCA", "cron_expression": "* * * * *"},

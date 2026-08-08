@@ -1,4 +1,4 @@
-"""Recommendation Engine (Phase 5, Section 5.4).
+"""Recommendation Engine (Phase 5, Section 14.4).
 
 Produces the structured recommendation and persists it. The sequence matters:
 
@@ -8,7 +8,7 @@ Produces the structured recommendation and persists it. The sequence matters:
   2. **Ask the model** for the label and the narrative, showing it that
      calibration so it can choose a proportionate label rather than be
      corrected afterwards.
-  3. **Check the Section 5.4 rules.** A violation is fed back as a correction
+  3. **Check the Section 14.4 rules.** A violation is fed back as a correction
      and retried, using the same retry path every other agent uses.
   4. **Attach the measured prices.** Support, resistance, target, and the
      suggested stop come from the Indicator Engine with their method recorded.
@@ -16,7 +16,7 @@ Produces the structured recommendation and persists it. The sequence matters:
      can be explained later rather than merely displayed.
 
 The recommendation is only stored once it has passed the generic validator
-(schema and execution-language) and these rules. Section 15 sets the Phase 5
+(schema and execution-language) and these rules. Section 28 sets the Phase 5
 deliverable as "recommendations pass schema validation 100%"; the way to
 achieve that is to make storing an invalid one impossible.
 """
@@ -71,7 +71,7 @@ class RecommendationResult:
     translations: dict[str, Any] = field(default_factory=dict)
 
     def as_payload(self) -> dict[str, Any]:
-        """The complete Section 5.4 structure, ready for the API."""
+        """The complete Section 14.4 structure, ready for the API."""
         return {
             "label": self.output.label.value,
             # The calibrated score, not the model's self-report.

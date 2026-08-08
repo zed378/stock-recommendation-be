@@ -1,10 +1,10 @@
-"""Scheduled news ingestion (Phase 7, Section 6.3).
+"""Scheduled news ingestion (Phase 7, Section 12).
 
-The nine steps of Section 6.3.1, from a due schedule through to chunks a RAG
+The nine steps of Section 12.1, from a due schedule through to chunks a RAG
 query can reach: fetch incrementally, deduplicate, store, score sentiment,
 chunk, embed, index.
 
-The idempotency rules of Section 6.3.3 are the spine of it:
+The idempotency rules of Section 12.3 are the spine of it:
 
   * ``last_fetched_at`` advances **only** on success, so a job that dies
     halfway re-fetches the same window instead of skipping over it.
@@ -52,7 +52,7 @@ from aidss.rag.engine import RAGEngine
 FIRST_RUN_LOOKBACK_DAYS = 7
 
 #: Consecutive failures before the schedule is flagged for attention
-#: (Section 6.3.3).
+#: (Section 12.3).
 FAILURE_THRESHOLD = 5
 
 #: Articles scored per model call.
@@ -284,7 +284,7 @@ class NewsCollector:
 
 
 class NewsScheduler:
-    """Finds due schedules and runs them (Section 6.3.2)."""
+    """Finds due schedules and runs them (Section 12.2)."""
 
     def __init__(self, session: Session, collector: NewsCollector) -> None:
         self._session = session
@@ -329,7 +329,7 @@ class NewsScheduler:
             schedule.consecutive_failures += 1
             if schedule.consecutive_failures >= FAILURE_THRESHOLD:
                 # Flagged, not disabled. A schedule that silently stopped would
-                # look exactly like one finding no news (Section 6.3.3).
+                # look exactly like one finding no news (Section 12.3).
                 schedule.status = ScheduleStatus.NEEDS_ATTENTION
 
         schedule.next_run_at = next_run_at(schedule.cron_expression, after=now)

@@ -1,8 +1,8 @@
-"""Every ORM model (Section 8.2).
+"""Every ORM model (Section 6.2).
 
 Note what is **not** here, and must never be added: ``orders``, ``executions``,
 or ``brokers`` tables. Their absence is an architectural hard constraint
-(Sections 3, 4, 8), not a deferred feature - and it is enforced automatically
+(Section 3, 4, 8), not a deferred feature - and it is enforced automatically
 by ``tests/test_architecture_constraints.py``.
 """
 

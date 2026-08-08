@@ -1,4 +1,4 @@
-"""Reporting, notification, and the operations overview (Phase 8, Section 9)."""
+"""Reporting, notification, and the operations overview (Phase 8, Section 7)."""
 
 from aidss.reporting.builder import (
     REPORT_DISCLAIMER,

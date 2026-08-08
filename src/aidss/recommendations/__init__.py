@@ -1,4 +1,4 @@
-"""Recommendation Engine (Phase 5, Section 5.4)."""
+"""Recommendation Engine (Phase 5, Section 14.4)."""
 
 from aidss.recommendations.agent import RecommendationAgent
 from aidss.recommendations.calibration import (

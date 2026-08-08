@@ -1,6 +1,6 @@
 """ORM foundation: declarative Base, portable column types, session factory.
 
-Production runs on PostgreSQL (Section 14); tests run on in-memory SQLite. The
+Production runs on PostgreSQL (Section 27); tests run on in-memory SQLite. The
 types below are what let one set of model definitions serve both.
 """
 
@@ -20,7 +20,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from aidss.config import Settings, get_settings
 
-#: JSON that becomes JSONB on PostgreSQL, which is what Section 8.2 specifies.
+#: JSON that becomes JSONB on PostgreSQL, which is what Section 6.2 specifies.
 JSONVariant = JSON().with_variant(JSONB(), "postgresql")
 
 

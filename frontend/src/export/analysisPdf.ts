@@ -83,7 +83,7 @@ const PROSE_ORDER = [
   "watch_items",
 ];
 
-/** The stance vocabulary of Section 21, written out.
+/** The stance vocabulary of Section 20, written out.
  *
  * Mapped rather than printed raw. `entry_candidate` is a value, not a phrase,
  * and the naming rule that keeps it from reading as "buy" only holds if the
@@ -255,7 +255,7 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
       for (const [name, values] of [
         [L.conditions, guidance.conditions],
         // Never omitted, even when empty. A stance with no stated way to be
-        // wrong is the kind people hold longest, and Section 21 requires every
+        // wrong is the kind people hold longest, and Section 20 requires every
         // one of them to say what would invalidate it.
         [L.invalidatedIf, guidance.invalidated_if],
       ] as const) {
@@ -299,7 +299,7 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
 
   // --- the disclaimer, which is not optional --------------------------------
   //
-  // Section 13 requires it on output, and a PDF is the one artefact that
+  // Section 26 requires it on output, and a PDF is the one artefact that
   // leaves the platform entirely: it gets emailed, printed and forwarded with
   // none of the surrounding interface that carries the caveats. It goes on its
   // own page rather than as a footnote for the same reason.

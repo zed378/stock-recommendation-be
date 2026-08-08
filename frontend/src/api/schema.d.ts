@@ -58,7 +58,7 @@ export interface paths {
         };
         /**
          * Budget Status
-         * @description Where AI spend stands against the configured daily ceiling (Section 12.9).
+         * @description Where AI spend stands against the configured daily ceiling (Section 16.9).
          */
         get: operations["budget_status_admin_budget_get"];
         put?: never;
@@ -81,7 +81,7 @@ export interface paths {
          * @description Which adapters are registered, and which one is currently selected.
          *
          *     Swapping a provider is a configuration change, never a code change
-         *     (Section 7, FR-07) - this endpoint exists so an admin can see both halves.
+         *     (Section 5, FR-07) - this endpoint exists so an admin can see both halves.
          */
         get: operations["list_providers_providers_get"];
         put?: never;
@@ -342,7 +342,7 @@ export interface paths {
         };
         /**
          * Get Recommendation
-         * @description The latest stored recommendation (Section 10).
+         * @description The latest stored recommendation (Section 8).
          *
          *     Read from the stored analysis payload rather than the ``recommendations``
          *     row, because the payload also carries the calibration breakdown and the
@@ -722,7 +722,7 @@ export interface paths {
         };
         /**
          * List Presets
-         * @description The Section 6.3.4 presets, so a user need not write cron by hand.
+         * @description The Section 12.4 presets, so a user need not write cron by hand.
          */
         get: operations["list_presets_news_schedules_presets_get"];
         put?: never;
@@ -779,7 +779,7 @@ export interface paths {
         put?: never;
         /**
          * Run Schedule Now
-         * @description Run a schedule immediately, outside its cadence (Section 10).
+         * @description Run a schedule immediately, outside its cadence (Section 8).
          *
          *     Uses the same code path as the scheduler, so a manual run exercises what
          *     the automated one will do rather than a convenient approximation.
@@ -800,7 +800,7 @@ export interface paths {
         };
         /**
          * List News
-         * @description Stored articles and their sentiment for one issuer (Section 10).
+         * @description Stored articles and their sentiment for one issuer (Section 8).
          *
          *     Two ways an article belongs to this ticker, and both count:
          *
@@ -1014,7 +1014,7 @@ export interface paths {
         put?: never;
         /**
          * Reflect On Journal
-         * @description Surface patterns in how this investor decides (Section 5.2).
+         * @description Surface patterns in how this investor decides (Section 14.2).
          */
         post: operations["reflect_on_journal_journal_reflection_post"];
         delete?: never;
@@ -1056,7 +1056,7 @@ export interface paths {
         };
         /**
          * Export Audit Logs
-         * @description Export the append-only audit trail (Section 13).
+         * @description Export the append-only audit trail (Section 26).
          *
          *     Read-only, and there is no endpoint that writes or deletes one. An audit
          *     log an application can edit is not an audit log.
@@ -2119,7 +2119,7 @@ export interface paths {
          *     Named accounts only - there is no link form of this, deliberately. A URL
          *     carrying investment analysis about a named company forwards itself and
          *     cannot be withdrawn once it is in a group chat, and the audience has to
-         *     stay knowable for the redistribution question in §24 to have an answer.
+         *     stay knowable for the redistribution question in Section 22 to have an answer.
          */
         post: operations["create_share_shares_post"];
         delete?: never;
@@ -2421,7 +2421,7 @@ export interface components {
          *
          *     Manual entry is not a fallback here, it is the authoritative path. The
          *     exchange publishes a calendar but not on an endpoint that answers reliably
-         *     (§9), and dates extracted from coverage are explicitly the weaker source.
+         *     (Section 7), and dates extracted from coverage are explicitly the weaker source.
          */
         AgendaEntryRequest: {
             /** Ticker */
@@ -3556,7 +3556,7 @@ export interface components {
         RecommendationLabel: "strong_buy" | "buy" | "watchlist" | "hold" | "reduce" | "sell";
         /**
          * RecommendationResponse
-         * @description The complete Section 5.4 structure.
+         * @description The complete Section 14.4 structure.
          *
          *     Prices are strings so a Decimal survives JSON without being rounded
          *     through a float on the way out.
@@ -3815,7 +3815,7 @@ export interface components {
         };
         /**
          * Timeframe
-         * @description Timeframes the Indicator Engine supports (Section 5.3, multi-timeframe).
+         * @description Timeframes the Indicator Engine supports (Section 14.3, multi-timeframe).
          * @enum {string}
          */
         Timeframe: "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d" | "1w" | "1M";

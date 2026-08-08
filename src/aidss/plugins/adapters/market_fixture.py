@@ -3,7 +3,7 @@
 Not a real data source: every candle comes from a PRNG seeded by the ticker,
 so results are identical on every run. That lets Phase 2 and Phase 3 be tested
 end to end without paid API calls and without depending on sources whose
-licensing status is unclear (Section 6.1).
+licensing status is unclear (Section 9).
 """
 
 from __future__ import annotations

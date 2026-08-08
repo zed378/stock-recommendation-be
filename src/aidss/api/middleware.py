@@ -34,7 +34,7 @@ SECURITY_HEADERS: dict[str, str] = {
 }
 
 #: Paths whose response must not be cached anywhere. Portfolio and journal data
-#: is personal financial information (Section 13); an intermediary caching it
+#: is personal financial information (Section 26); an intermediary caching it
 #: is a disclosure.
 _PRIVATE_PREFIXES = ("/portfolio", "/journal", "/auth", "/notifications")
 
@@ -134,7 +134,7 @@ def _route_template(request: Request) -> str:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """A per-client sliding window (Section 13).
+    """A per-client sliding window (Section 26).
 
     Keyed on the bearer token when present, falling back to client address.
     Token first because several users behind one NAT should not share a budget,

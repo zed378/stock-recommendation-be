@@ -1,6 +1,6 @@
 """Alpha Vantage adapter - the fundamentals source Yahoo stopped being.
 
-Section 6.1 wants a source whose terms permit programmatic access. Yahoo's
+Section 9 wants a source whose terms permit programmatic access. Yahoo's
 ``quoteSummary`` endpoint answers 401 now, and IDX's own JSON sits behind a
 Cloudflare challenge; both were probed rather than assumed. Alpha Vantage
 answered, publishes a documented contract, and issues free keys, so this is
@@ -100,7 +100,7 @@ _METRIC_NAMES: dict[str, str] = {
 #: `AnalystTargetPrice` and the `AnalystRating*` counts are other people's
 #: recommendations. Storing them as fundamentals would let a third party's
 #: opinion enter the evidence base as though it were a reported figure, and
-#: the Fundamental Analyzer would then cite it as one. Section 5.4 wants the
+#: the Fundamental Analyzer would then cite it as one. Section 14.4 wants the
 #: platform's reasoning to rest on data, not on borrowed conclusions.
 #:
 #: `52WeekHigh`, `52WeekLow`, `50DayMovingAverage`, and `200DayMovingAverage`

@@ -1,4 +1,4 @@
-"""Text chunking for retrieval (Phase 7, Section 6.3.3 step 8).
+"""Text chunking for retrieval (Phase 7, Section 12.3 step 8).
 
 Chunking decides what retrieval can ever find. A chunk that splits a sentence
 in half retrieves as a fragment neither half of which answers anything; a chunk

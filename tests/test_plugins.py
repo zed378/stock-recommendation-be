@@ -1,4 +1,4 @@
-"""Plugin layer contract tests (Section 7).
+"""Plugin layer contract tests (Section 5).
 
 FR-07 says a provider must be swappable through configuration alone. These
 tests hold the registry to that promise: the contract is enforced at

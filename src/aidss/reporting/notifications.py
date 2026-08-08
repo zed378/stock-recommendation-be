@@ -1,6 +1,6 @@
-"""Notification service (Phase 8, Section 9 - Notification).
+"""Notification service (Phase 8, Section 7 - Notification).
 
-Alerts about the system, never about what to do with money. Section 9 is
+Alerts about the system, never about what to do with money. Section 7 is
 explicit that this is "not a trading signal - e.g. 'new analysis available',
 'important news'", and the event vocabulary below is closed for exactly that
 reason: there is no event type that could carry an instruction, so no future

@@ -1,4 +1,4 @@
-"""The Recommendation Agent (Phase 5, Section 5.4)."""
+"""The Recommendation Agent (Phase 5, Section 14.4)."""
 
 from __future__ import annotations
 

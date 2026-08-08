@@ -1,4 +1,4 @@
-"""LLM Gateway (Section 12).
+"""LLM Gateway (Section 16).
 
 Everything provider-specific stops here. Agents send a standard request and
 receive a standard response; routing, retry, rate limiting, circuit breaking,
@@ -34,7 +34,7 @@ class LLMRequest:
     temperature: float = 0.2
     max_tokens: int | None = None
     #: When True the gateway asks for JSON and never streams, so the Output
-    #: Validator sees a complete document (Sections 12.5, 12.6).
+    #: Validator sees a complete document (Section 16.5, 12.6).
     expects_json: bool = False
     #: Attributed in the cost breakdown; also stored on ai_messages.
     agent: str | None = None
@@ -156,7 +156,7 @@ class LLMGateway:
 
         Where it does not, the prompt still demands JSON and the Output
         Validator still checks the result - the plan is explicit that provider
-        support alone is not to be relied on (Section 12.5).
+        support alone is not to be relied on (Section 16.5).
         """
         if not request.expects_json:
             return None
@@ -186,7 +186,7 @@ class BindingSpec:
 
 
 #: Default single-provider setup. Real deployments override this from the
-#: `ai_providers` table so routing can change without a redeploy (Section 12.10).
+#: `ai_providers` table so routing can change without a redeploy (Section 16.10).
 DEFAULT_BINDINGS: tuple[BindingSpec, ...] = (
     BindingSpec(
         name="primary",

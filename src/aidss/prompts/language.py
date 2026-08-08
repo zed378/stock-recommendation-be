@@ -1,8 +1,8 @@
-"""The execution-language guard (Section 5.4, hard rule).
+"""The execution-language guard (Section 14.4, hard rule).
 
 The product's whole positioning rests on one distinction: analysis may say
 "this area shows potential, though risk Z applies"; it may not say "buy now".
-Section 17 rates an accidental slip into instruction language as a
+Section 28 rates an accidental slip into instruction language as a
 medium-likelihood, high-impact compliance risk, and notes it needs an explicit
 guardrail rather than good intentions.
 

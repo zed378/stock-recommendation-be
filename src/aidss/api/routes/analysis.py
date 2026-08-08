@@ -1,4 +1,4 @@
-"""Multi-agent analysis endpoints (Phase 4, Section 10).
+"""Multi-agent analysis endpoints (Phase 4, Section 8).
 
 ``POST`` runs the agents and stores the result; ``GET`` returns the most
 recent stored run. Splitting them matters because a run costs real money -
@@ -163,7 +163,7 @@ def get_recommendation(
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
 ) -> RecommendationResponse:
-    """The latest stored recommendation (Section 10).
+    """The latest stored recommendation (Section 8).
 
     Read from the stored analysis payload rather than the ``recommendations``
     row, because the payload also carries the calibration breakdown and the

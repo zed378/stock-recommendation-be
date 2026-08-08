@@ -1,4 +1,4 @@
-"""Prompt engineering layer (Phase 4, Section 11)."""
+"""Prompt engineering layer (Phase 4, Section 15)."""
 
 from aidss.prompts.catalog import ALL_TEMPLATES, BY_NAME, CATALOG_VERSION, PromptTemplate
 from aidss.prompts.language import (

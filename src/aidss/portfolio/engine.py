@@ -1,4 +1,4 @@
-"""Portfolio Intelligence engine (Phase 6, Sections 5.2, 9).
+"""Portfolio Intelligence engine (Phase 6, Section 14.2, 9).
 
 Builds the portfolio context, runs the two analyzers, and persists the result
 to ``portfolio_analysis`` and ``risk_assessments``.

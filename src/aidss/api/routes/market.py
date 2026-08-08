@@ -1,4 +1,4 @@
-"""Stock picks and monitoring (Sections 5.4, 9, 10).
+"""Stock picks and monitoring (Section 14.4, 9, 10).
 
 Two surfaces that would be easy to build as a signal feed and are deliberately
 not one:

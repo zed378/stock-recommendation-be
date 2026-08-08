@@ -1,4 +1,4 @@
-"""Watchlist endpoints (Section 10).
+"""Watchlist endpoints (Section 8).
 
 Items are grouped into **categories**. That is not a new concept bolted on:
 `watchlists` has carried a `name` with a unique constraint per user since the

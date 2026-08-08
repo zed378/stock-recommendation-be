@@ -1,4 +1,4 @@
-"""Multi-agent Analysis Engine (Phase 4, Section 5)."""
+"""Multi-agent Analysis Engine (Phase 4, Section 14)."""
 
 from aidss.agents.analyzers import (
     FundamentalAnalyzer,

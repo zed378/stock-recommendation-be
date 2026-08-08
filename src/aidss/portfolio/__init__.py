@@ -1,4 +1,4 @@
-"""Portfolio Intelligence (Phase 6, Section 5.2).
+"""Portfolio Intelligence (Phase 6, Section 14.2).
 
 Deterministic metrics, risk figures, and what-if simulation over holdings the
 investor entered manually. Nothing in this package writes to a holding, and

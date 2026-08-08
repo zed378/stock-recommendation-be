@@ -1,6 +1,6 @@
-"""Analysis Engine - multi-agent orchestration (Section 5.1).
+"""Analysis Engine - multi-agent orchestration (Section 14.1).
 
-Runs the flow of the Section 5.1 diagram as far as Phase 4 goes: build context,
+Runs the flow of the Section 14.1 diagram as far as Phase 4 goes: build context,
 run the applicable analyzers, synthesise, validate, persist.
 
 Two behaviours are worth stating outright, because both are choices rather
@@ -475,14 +475,14 @@ class AnalysisEngine:
             )
             run.runs.append(run.recommendation.run)
         except RecommendationRejected as exc:
-            # The rules of Section 5.4 were not met even after correction.
+            # The rules of Section 14.4 were not met even after correction.
             # Recorded as a failure rather than stored with a caveat: a
             # recommendation whose evidence has not been weighed should not
             # reach a user at all.
             run.failed.append(
                 AgentFailure(
                     agent="recommendation_agent",
-                    reason=f"rejected by Section 5.4 rules: {exc}",
+                    reason=f"rejected by Section 14.4 rules: {exc}",
                 )
             )
         except ValidationFailure as exc:

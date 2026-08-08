@@ -1,7 +1,7 @@
 """Cross-check every indicator against the naive reference implementations.
 
 Phase 3's stated risk is "a formula error slips through for lack of adequate
-tests" (Section 15). This module is the mitigation.
+tests" (Section 28). This module is the mitigation.
 """
 
 from __future__ import annotations

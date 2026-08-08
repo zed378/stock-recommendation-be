@@ -1,10 +1,10 @@
-"""Structured logging with request correlation (Phase 9, Section 13).
+"""Structured logging with request correlation (Phase 9, Section 26).
 
 JSON lines, because a log an operator has to grep with a regex is a log nobody
 queries. Every record carries the request id, so the twelve lines a single
 analysis produces can be pulled back together.
 
-The redaction filter is the part that matters most. Section 13 requires that
+The redaction filter is the part that matters most. Section 26 requires that
 credentials never appear in logs, and the reliable way to achieve that is not
 to trust every future caller to remember - it is to strip them on the way out.
 """

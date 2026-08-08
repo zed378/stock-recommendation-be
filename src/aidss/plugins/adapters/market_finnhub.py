@@ -1,9 +1,9 @@
-"""Finnhub adapter (Section 6.1 - official, documented, clear rate limits).
+"""Finnhub adapter (Section 9 - official, documented, clear rate limits).
 
 Chosen as the first "real" adapter precisely because it has an official API
 and terms of service that permit programmatic use, unlike the unofficial Yahoo
 Finance endpoints or scraping TradingView/Investing.com, both of which
-Section 6.1 rules out.
+Section 9 rules out.
 """
 
 from __future__ import annotations

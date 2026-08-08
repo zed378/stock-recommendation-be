@@ -104,7 +104,7 @@ class OpenAICompatibleProvider(AIProvider):
             "model": model or self._chat_model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "temperature": temperature,
-            # Section 12.6: streaming stays off for structured output so the
+            # Section 16.6: streaming stays off for structured output so the
             # Output Validator can inspect a complete response.
             "stream": False,
         }
@@ -152,5 +152,5 @@ class OpenAICompatibleProvider(AIProvider):
 
     def supports_structured_output(self) -> bool:
         # Support is uneven across OpenAI-compatible servers, so Core must still
-        # run the Output Validator as a second layer (Section 12.5).
+        # run the Output Validator as a second layer (Section 16.5).
         return False

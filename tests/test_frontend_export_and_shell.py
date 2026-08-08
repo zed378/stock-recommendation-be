@@ -3,7 +3,7 @@
 Static checks, in the Python suite, for the same reason as the other frontend
 guards: it is the suite that runs on every change.
 
-The disclaimer one is not a style rule. Section 13 requires the disclaimer on
+The disclaimer one is not a style rule. Section 26 requires the disclaimer on
 output, and a PDF is the single artefact that leaves the platform completely -
 it gets emailed, printed and forwarded with none of the surrounding interface
 that carries the caveats. An export that drops it publishes model-generated

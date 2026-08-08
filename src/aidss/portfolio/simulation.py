@@ -1,4 +1,4 @@
-"""What-if allocation simulation (Phase 6, Section 10 `/portfolio/simulate`).
+"""What-if allocation simulation (Phase 6, Section 8 `/portfolio/simulate`).
 
 Answers "what would this portfolio look like if I held X instead of Y" without
 touching anything. Nothing here writes a holding, and nothing here could place

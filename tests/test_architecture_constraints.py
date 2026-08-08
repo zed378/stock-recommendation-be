@@ -1,6 +1,6 @@
 """Executable enforcement of the architecture's hard constraint.
 
-The planning document states repeatedly (Sections 1, 2.3, 3, 4, 8, 10) that
+The planning document states repeatedly (Section 1, 2.3, 3, 4, 8, 10) that
 this platform has no path to order execution - not a disabled module, but one
 that was never designed or built. A statement in a document degrades over
 time; a failing test does not. These checks fail the build the moment anyone
@@ -58,7 +58,7 @@ def test_no_order_or_broker_tables_exist() -> None:
     tables = set(Base.metadata.tables)
     assert not (tables & FORBIDDEN_TABLES), (
         f"Forbidden tables present: {sorted(tables & FORBIDDEN_TABLES)}. "
-        "This platform is decision-support only (Section 8.2)."
+        "This platform is decision-support only (Section 6.2)."
     )
 
 
@@ -76,7 +76,7 @@ def test_no_execution_endpoints_are_exposed() -> None:
         for fragment in FORBIDDEN_ROUTE_FRAGMENTS
         if fragment in path
     ]
-    assert not offending, f"Forbidden endpoints exposed: {offending} (Section 10)."
+    assert not offending, f"Forbidden endpoints exposed: {offending} (Section 8)."
 
 
 @pytest.mark.parametrize("pattern", FORBIDDEN_IDENTIFIERS)
@@ -107,7 +107,7 @@ def test_portfolio_input_method_has_no_broker_sync_option() -> None:
 
 
 def test_recommendation_labels_are_not_execution_instructions() -> None:
-    """Labels describe a stance, never a command (Section 5.4)."""
+    """Labels describe a stance, never a command (Section 14.4)."""
     from aidss.db.models import RecommendationLabel
 
     assert {member.value for member in RecommendationLabel} == {
@@ -121,7 +121,7 @@ def test_recommendation_labels_are_not_execution_instructions() -> None:
 
 
 def test_stop_loss_field_is_named_as_a_suggestion() -> None:
-    """Section 5.4 requires the stop level be labelled a suggestion, not an order."""
+    """Section 14.4 requires the stop level be labelled a suggestion, not an order."""
     from aidss.db.models import Recommendation
 
     columns = set(Recommendation.__table__.columns.keys())
@@ -130,7 +130,7 @@ def test_stop_loss_field_is_named_as_a_suggestion() -> None:
 
 
 def test_recommendation_requires_conflicting_factors_column() -> None:
-    """Guards against confirmation bias by construction (Section 5.4)."""
+    """Guards against confirmation bias by construction (Section 14.4)."""
     from aidss.db.models import Recommendation
 
     assert "conflicting_factors" in Recommendation.__table__.columns
@@ -151,7 +151,7 @@ def test_agent_output_models_reject_unknown_fields() -> None:
 
 
 def test_ai_provider_interface_exposes_no_write_capability() -> None:
-    """Section 12.4: the AI layer's surface is read-only by construction.
+    """Section 16.4: the AI layer's surface is read-only by construction.
 
     Even a successful prompt injection has nothing to act on, because no
     action-taking method exists to be called.
@@ -185,7 +185,7 @@ def test_portfolio_simulation_cannot_write_a_holding() -> None:
 
 
 def test_portfolio_agents_are_marked_sensitive() -> None:
-    """Positions are personal financial data (Sections 12.10, 13).
+    """Positions are personal financial data (Section 16.10, 13).
 
     Marking it on the agent rather than at the call site means the next
     endpoint to use them cannot forget.
@@ -200,7 +200,7 @@ def test_portfolio_agents_are_marked_sensitive() -> None:
 def test_the_recommendation_schema_has_no_price_field() -> None:
     """A price stated by a language model is a number nobody measured.
 
-    Section 5.4's price fields are derived from the Indicator Engine and
+    Section 14.4's price fields are derived from the Indicator Engine and
     attached afterwards. The model's schema must therefore offer nowhere to put
     one - with `extra="forbid"`, that makes it structurally impossible rather
     than merely discouraged.
@@ -214,7 +214,7 @@ def test_the_recommendation_schema_has_no_price_field() -> None:
 
 
 def test_the_stored_confidence_column_is_range_checked() -> None:
-    """Section 5.4 puts confidence on a 0-100 scale; the database enforces it."""
+    """Section 14.4 puts confidence on a 0-100 scale; the database enforces it."""
     from aidss.db.models import Recommendation
 
     constraints = {
@@ -283,11 +283,11 @@ def test_every_section_10_endpoint_exists() -> None:
         "/providers",
         "/audit-logs",
     ):
-        assert required in paths, f"Section 10 endpoint missing: {required}"
+        assert required in paths, f"Section 8 endpoint missing: {required}"
 
 
 def test_every_section_5_2_agent_exists() -> None:
-    """The agent roster from Section 5.2, checked the same way."""
+    """The agent roster from Section 14.2, checked the same way."""
     from aidss.prompts.schemas import OUTPUT_MODELS
 
     expected = {
@@ -308,7 +308,7 @@ def test_every_section_5_2_agent_exists() -> None:
 
 
 def test_no_notification_event_can_carry_an_instruction() -> None:
-    """Section 9: alerts are about the system, never about what to do with money.
+    """Section 7: alerts are about the system, never about what to do with money.
 
     The event vocabulary is a closed enum, so no future caller can invent an
     instruction-shaped event by passing a different string.
@@ -343,7 +343,7 @@ def test_every_investor_facing_response_carries_a_disclaimer() -> None:
 
 
 def test_credentials_cannot_reach_the_logs() -> None:
-    """Section 13, enforced rather than trusted to every future caller."""
+    """Section 26, enforced rather than trusted to every future caller."""
     from aidss.observability.logging import REDACTED, redact
 
     for secret in (

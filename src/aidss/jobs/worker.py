@@ -51,7 +51,7 @@ logger = logging.getLogger("aidss.worker")
 #: job starts promptly, long enough that an idle worker is not a busy loop.
 IDLE_SLEEP_SECONDS = 2.0
 
-#: How often the scheduler looks for due schedules. Section 6.3.3 suggests
+#: How often the scheduler looks for due schedules. Section 12.3 suggests
 #: about a minute, and the minimum schedule interval is five.
 SCHEDULER_INTERVAL_SECONDS = 60.0
 
@@ -233,7 +233,7 @@ class Worker:
 
 @dataclass
 class Scheduler:
-    """Enqueues jobs for schedules that have come due (Section 6.3.2).
+    """Enqueues jobs for schedules that have come due (Section 12.2).
 
     Several instances may run; only the one holding the leader lease ticks. The
     rest idle and take over automatically if the leader stops renewing, which

@@ -20,7 +20,7 @@ public, free and without a login. What is being got past is bot management,
 not access control. What it does *not* clear is IDX's terms, which prohibit
 redistributing this data to third parties commercially - so this is sound for
 personal research and is a question to revisit before the platform is used
-more widely (Section 13).
+more widely (Section 26).
 
 Practical consequences, all of which the code takes seriously: it can break
 without notice, so the response shape is verified rather than trusted; it is

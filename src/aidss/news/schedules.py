@@ -1,4 +1,4 @@
-"""Cron presets and schedule validation (Phase 7, Section 6.3.4).
+"""Cron presets and schedule validation (Phase 7, Section 12.4).
 
 Users pick a preset; power users write their own expression. Either way the
 same guardrail applies before a schedule is stored: a minimum interval, so a
@@ -21,7 +21,7 @@ from croniter import CroniterBadCronError, croniter
 #: IDX trades on Jakarta time; presets are written and evaluated in it.
 EXCHANGE_TIMEZONE = ZoneInfo("Asia/Jakarta")
 
-#: Section 6.3.4's floor, restated in code. Five minutes is not a technical
+#: Section 12.4's floor, restated in code. Five minutes is not a technical
 #: limit - it is the point below which more requests stop buying more
 #: information and start buying a rate-limit.
 MIN_INTERVAL_SECONDS = 300

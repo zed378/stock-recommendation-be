@@ -1,4 +1,4 @@
-"""LLM Gateway tests (Section 12).
+"""LLM Gateway tests (Section 16).
 
 Time is faked throughout. A test that genuinely waits out a 30-second circuit
 reset is a test someone eventually deletes, and the behaviour it covered goes
@@ -385,7 +385,7 @@ def test_budget_ceiling_stops_further_calls() -> None:
 
 
 def test_json_mode_is_only_requested_where_the_provider_supports_it() -> None:
-    """Section 12.5: provider support is uneven, so it is asked for, not assumed."""
+    """Section 16.5: provider support is uneven, so it is asked for, not assumed."""
     capable = StubProvider(structured=True)
     incapable = StubProvider(structured=False)
 

@@ -1,7 +1,7 @@
-"""Portfolio and Risk Analyzer agents (Phase 6, Section 5.2).
+"""Portfolio and Risk Analyzer agents (Phase 6, Section 14.2).
 
 Both are marked ``SENSITIVE``. Portfolio positions and their valuations are
-personal financial data, and Section 12.10 requires that such work route to
+personal financial data, and Section 16.10 requires that such work route to
 self-hosted inference when the investor has chosen high-privacy mode. Setting
 it on the agent rather than at the call site means it cannot be forgotten by
 whoever wires the next endpoint.

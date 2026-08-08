@@ -1,4 +1,4 @@
-"""Report composition (Phase 8, Section 9 - Reporting).
+"""Report composition (Phase 8, Section 7 - Reporting).
 
 Turns stored analysis into a document a person can read end to end. Reports are
 assembled from what was already persisted rather than by re-running agents:

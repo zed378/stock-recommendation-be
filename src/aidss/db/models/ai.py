@@ -1,8 +1,8 @@
-"""Group E - AI Conversation, Prompt, Knowledge Base (Section 8.2).
+"""Group E - AI Conversation, Prompt, Knowledge Base (Section 6.2).
 
 ``ai_providers`` plus ``ai_messages.provider_id`` answer the question "which
 model produced this output?" - the prerequisite for reproducibility and for
-multi-provider cost tracking (Section 12.9).
+multi-provider cost tracking (Section 16.9).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from aidss.db.base import Base, Embedding, new_uuid, utcnow
 
 
 class AIProviderConfig(Base):
-    """Configured AI providers - the basis of multi-model routing (Section 12.10).
+    """Configured AI providers - the basis of multi-model routing (Section 16.10).
 
     A row points at a registered adapter through ``adapter_name`` and carries
     everything needed to reach it: its own base URL, model, timeout and
@@ -50,7 +50,7 @@ class AIProviderConfig(Base):
     default_model: Mapped[str | None] = mapped_column(String(120), default=None)
     role: Mapped[str] = mapped_column(String(40), default="general")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    #: Position in the fallback chain (Section 12.10); lower wins.
+    #: Position in the fallback chain (Section 16.10); lower wins.
     priority: Mapped[int] = mapped_column(default=100)
     #: Fernet ciphertext, or null when this provider needs no key - which is
     #: the normal case for Ollama, vLLM and LM Studio.
@@ -64,14 +64,14 @@ class AIProviderConfig(Base):
     #: Set by the operator when inference runs on infrastructure they control
     #: but is published at a public domain - indistinguishable from a
     #: third-party API by inspection, and the difference decides whether
-    #: personal financial data may be sent there (Section 13).
+    #: personal financial data may be sent there (Section 26).
     self_hosted: Mapped[bool] = mapped_column(Boolean, default=False)
     #: Result of the last reachability check, so a provider that stopped
     #: answering is distinguishable from one nobody has tried.
     last_status: Mapped[str | None] = mapped_column(String(20), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
     last_checked_at: Mapped[datetime | None] = mapped_column(default=None)
-    #: Pricing for cost estimates (Section 12.9), per 1K tokens.
+    #: Pricing for cost estimates (Section 16.9), per 1K tokens.
     input_cost_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), default=None)
     output_cost_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
@@ -122,7 +122,7 @@ class AIMessage(Base):
 
 class PromptTemplate(Base):
     """Versioning is mandatory - every ai_message records the version it used
-    (Section 11.2), which is what makes an output reproducible."""
+    (Section 15.2), which is what makes an output reproducible."""
 
     __tablename__ = "prompt_templates"
 

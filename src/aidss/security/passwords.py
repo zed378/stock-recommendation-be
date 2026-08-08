@@ -1,4 +1,4 @@
-"""Password hashing with bcrypt (Section 13)."""
+"""Password hashing with bcrypt (Section 26)."""
 
 from __future__ import annotations
 

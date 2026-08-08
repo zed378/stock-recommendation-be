@@ -238,7 +238,7 @@ def test_security_headers_are_present_on_an_error_response(client: TestClient) -
 
 
 def test_personal_data_responses_are_not_cacheable(client: TestClient, auth_headers) -> None:
-    """Portfolio data is personal financial information (Section 13)."""
+    """Portfolio data is personal financial information (Section 26)."""
     response = client.get("/portfolio", headers=auth_headers)
     assert "no-store" in response.headers["Cache-Control"]
 

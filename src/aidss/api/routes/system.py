@@ -1,4 +1,4 @@
-"""Health check and provider inventory endpoints (Section 10)."""
+"""Health check and provider inventory endpoints (Section 8)."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def budget_status(
     settings: Settings = Depends(get_settings),
     _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
 ) -> BudgetStatusResponse:
-    """Where AI spend stands against the configured daily ceiling (Section 12.9)."""
+    """Where AI spend stands against the configured daily ceiling (Section 16.9)."""
     status = daily_status(
         session,
         ceiling=settings.daily_ai_budget,
@@ -74,7 +74,7 @@ def list_providers(
     """Which adapters are registered, and which one is currently selected.
 
     Swapping a provider is a configuration change, never a code change
-    (Section 7, FR-07) - this endpoint exists so an admin can see both halves.
+    (Section 5, FR-07) - this endpoint exists so an admin can see both halves.
     """
     return ProviderInventoryResponse(
         registered=registry_snapshot(),

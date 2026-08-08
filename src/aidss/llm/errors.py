@@ -1,4 +1,4 @@
-"""Exceptions raised by the LLM Gateway (Section 12)."""
+"""Exceptions raised by the LLM Gateway (Section 16)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ class NoEligibleProviderError(GatewayError):
 
     Usually a configuration problem rather than an outage: no provider is
     marked as able to serve this task's complexity, or a privacy-sensitive
-    request found no self-hosted provider (Section 12.10).
+    request found no self-hosted provider (Section 16.10).
     """
 
 
@@ -41,7 +41,7 @@ class CircuitOpenError(GatewayError):
 
 
 class BudgetExceededError(GatewayError):
-    """The configured spend ceiling has been reached (Section 12.9).
+    """The configured spend ceiling has been reached (Section 16.9).
 
     Raised before the call is made: the point of a budget is to stop spending,
     not to report it afterwards.

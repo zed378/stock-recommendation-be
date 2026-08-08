@@ -1,4 +1,4 @@
-"""Agent definitions and the runner that executes them (Section 5).
+"""Agent definitions and the runner that executes them (Section 14).
 
 Agents are declarative: each states which template it uses, which schema its
 answer must satisfy, how much reasoning it needs, and how to turn the shared
@@ -62,7 +62,7 @@ class Agent(ABC):
 
         Skipping is a real outcome, not a failure. Asking an analyzer to
         comment on data that does not exist produces fluent, ungrounded text -
-        the exact failure the AI-quality risk in Section 17 describes.
+        the exact failure the AI-quality risk in Section 28 describes.
         """
         return True
 
@@ -91,7 +91,7 @@ class AgentSkip:
 
 
 class ConversationRecorder:
-    """Writes every model exchange to ``ai_messages`` (Sections 8.2, 12.9).
+    """Writes every model exchange to ``ai_messages`` (Section 6.2, 12.9).
 
     Recording provider, model, prompt version, tokens, and estimated cost is
     what lets someone later ask "which model produced this, from which prompt,
@@ -182,7 +182,7 @@ class AgentRunner:
 
         ``extra_instruction`` seeds the corrective turn on the first attempt.
         It exists so a caller enforcing rules of its own - the Recommendation
-        Engine checking Section 5.4 - can feed a correction back through this
+        Engine checking Section 14.4 - can feed a correction back through this
         same path rather than building a second retry mechanism beside it.
         """
         variables = agent.prompt_context(context)

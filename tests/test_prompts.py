@@ -1,6 +1,6 @@
-"""Prompt layer tests (Sections 5.4, 11, 12.5).
+"""Prompt layer tests (Section 14.4, 11, 12.5).
 
-The execution-language guard gets the most attention here. Section 17 rates an
+The execution-language guard gets the most attention here. Section 28 rates an
 accidental slip into instruction language as the product's highest-impact
 compliance risk, and a guard that has never been tested against real phrasing
 is a guard nobody should trust.

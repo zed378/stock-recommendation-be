@@ -1,8 +1,8 @@
-"""Structured output contracts for each agent (Sections 5.2, 12.5).
+"""Structured output contracts for each agent (Section 14.2, 12.5).
 
 Every agent returns JSON validated against one of these models. Free-form text
 would leave the Summary Agent parsing prose and the UI guessing, and it would
-make the Section 5.4 completeness checks impossible to run programmatically.
+make the Section 14.4 completeness checks impossible to run programmatically.
 
 Note what these models deliberately do not contain: any numeric field the
 Indicator Engine already computes. Agents interpret figures; they never
@@ -32,7 +32,7 @@ class DataSufficiency(StrEnum):
 
     An agent that says 'insufficient' is doing its job. The alternative -
     producing confident narrative from nothing - is exactly the failure mode
-    the plan's AI-quality risk describes (Section 17).
+    the plan's AI-quality risk describes (Section 28).
     """
 
     SUFFICIENT = "sufficient"
@@ -53,7 +53,7 @@ class AgentOutput(BaseModel):
 
 
 class MarketContextOutput(AgentOutput):
-    """Market Analyzer - macro and sector backdrop (Section 5.2)."""
+    """Market Analyzer - macro and sector backdrop (Section 14.2)."""
 
     regime: str = Field(min_length=1, max_length=200)
     sector_note: str = Field(default="", max_length=2000)
@@ -94,7 +94,7 @@ class SynthesisOutput(AgentOutput):
     """Summary Agent - the combined reading across every analyzer.
 
     Phase 4 stops here. The graded Strong Buy - Sell label with its mandatory
-    Section 5.4 structure is the Recommendation Engine's job in Phase 5, and
+    Section 14.4 structure is the Recommendation Engine's job in Phase 5, and
     inventing a partial version of it now would mean two places to keep
     correct.
     """
@@ -103,7 +103,7 @@ class SynthesisOutput(AgentOutput):
     agreements: list[str] = Field(default_factory=list, max_length=15)
     #: Mandatory in spirit and in the prompt: where the analyzers disagree is
     #: usually the most informative part, and hiding it invites confirmation
-    #: bias (Section 5.4).
+    #: bias (Section 14.4).
     disagreements: list[str] = Field(default_factory=list, max_length=15)
     risk_factors: list[str] = Field(default_factory=list, max_length=15)
     watch_items: list[str] = Field(default_factory=list, max_length=15)
@@ -136,7 +136,7 @@ class BatchSentimentOutput(AgentOutput):
     """News Sentiment Scorer - one score per article, in a single call.
 
     Batched deliberately: a per-article call turns twenty new headlines into
-    twenty round trips, and the plan's cost risk (Section 17) is real. The
+    twenty round trips, and the plan's cost risk (Section 28) is real. The
     schema keeps the results separable so each article still gets its own row.
     """
 
@@ -156,7 +156,7 @@ class PortfolioOutput(AgentOutput):
     correlation_note: str = Field(default="", max_length=2000)
     observations: list[str] = Field(default_factory=list, max_length=15)
     #: What the investor may want to weigh - framed as considerations, never
-    #: as transactions to perform (Section 5.4 language rule).
+    #: as transactions to perform (Section 14.4 language rule).
     considerations: list[str] = Field(default_factory=list, max_length=15)
 
 
@@ -174,7 +174,7 @@ class RiskOutput(AgentOutput):
 
 
 class ReflectionOutput(AgentOutput):
-    """Reflection Agent - patterns in how *this investor* decides (Section 5.2).
+    """Reflection Agent - patterns in how *this investor* decides (Section 14.2).
 
     Explicitly not an evaluation of a trading strategy's performance. The
     subject is the person's decision-making, and the aim is self-awareness
@@ -206,7 +206,7 @@ class ConversationOutput(AgentOutput):
 
 
 class RecommendationOutput(AgentOutput):
-    """What the model contributes to a recommendation (Section 5.4).
+    """What the model contributes to a recommendation (Section 14.4).
 
     Note what is **absent**: support, resistance, target price, and the
     suggested stop. Those are prices, and a price stated by a language model is
@@ -215,7 +215,7 @@ class RecommendationOutput(AgentOutput):
     (Section 2.7).
 
     `confidence`, inherited from AgentOutput, is likewise not what gets stored.
-    Section 5.4 requires a consistently calibrated score rather than an
+    Section 14.4 requires a consistently calibrated score rather than an
     arbitrary number from the model; the engine computes one and keeps the
     model's self-report only for comparison.
     """
@@ -225,7 +225,7 @@ class RecommendationOutput(AgentOutput):
     reasoning: str = Field(min_length=1, max_length=4000)
     supporting_factors: list[str] = Field(default_factory=list, max_length=15)
     #: Mandatory and non-empty - enforced by the engine, not merely requested.
-    #: Section 5.4 makes this the structural defence against confirmation bias:
+    #: Section 14.4 makes this the structural defence against confirmation bias:
     #: a recommendation that can find nothing against itself has not been
     #: examined.
     conflicting_factors: list[str] = Field(default_factory=list, max_length=15)

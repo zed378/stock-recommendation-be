@@ -1,7 +1,7 @@
 """Import every adapter so the ``@register`` decorators run.
 
 Adding a provider means adding one module here plus one import line. Core
-Logic does not change at all (Section 7).
+Logic does not change at all (Section 5).
 
 Import order carries no meaning: ``market_composite`` resolves the adapters it
 delegates to by name inside ``from_settings``, which runs long after every

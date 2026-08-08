@@ -1,4 +1,4 @@
-"""Scheduled news ingestion (Phase 7, Section 6.3).
+"""Scheduled news ingestion (Phase 7, Section 12).
 
 The idempotency rules get the most attention, because they are what make a
 retried job safe: a failed run must not skip a window, a repeated fetch must

@@ -1,4 +1,4 @@
-"""Password, token, and RBAC tests (Section 13)."""
+"""Password, token, and RBAC tests (Section 26)."""
 
 from __future__ import annotations
 

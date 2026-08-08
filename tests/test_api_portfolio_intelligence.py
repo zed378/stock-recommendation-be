@@ -1,4 +1,4 @@
-"""Portfolio analysis and simulation endpoints (Phase 6, Section 10)."""
+"""Portfolio analysis and simulation endpoints (Phase 6, Section 8)."""
 
 from __future__ import annotations
 

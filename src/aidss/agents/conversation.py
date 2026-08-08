@@ -1,4 +1,4 @@
-"""Free-form conversation and reflection agents (Section 5.2).
+"""Free-form conversation and reflection agents (Section 14.2).
 
 Three agents share one output schema because they differ in what they retrieve
 and how they explain, not in the shape of an answer:
@@ -10,12 +10,12 @@ and how they explain, not in the shape of an answer:
 
 Plus the **Reflection Agent**, which reads the investor's own journal. That one
 is marked SENSITIVE: a decision journal is a record of someone's thinking about
-their own money, and Section 12.10 requires such work route to self-hosted
+their own money, and Section 16.10 requires such work route to self-hosted
 inference in high-privacy mode.
 
 Retrieved passages reach the model inside delimiters and are labelled as data.
 Combined with a read-only tool surface, a successful injection has nothing to
-act on (Section 13).
+act on (Section 26).
 """
 
 from __future__ import annotations
@@ -211,14 +211,14 @@ class ReflectionContext:
 
 
 class ReflectionAgent(Agent):
-    """Surfaces patterns in how the investor decides (Section 5.2)."""
+    """Surfaces patterns in how the investor decides (Section 14.2)."""
 
     name = "reflection_agent"
     template_name = "decision_review"
     output_model = ReflectionOutput
     complexity = TaskComplexity.COMPLEX
     #: A decision journal is a record of someone's thinking about their own
-    #: money (Sections 12.10, 13).
+    #: money (Section 16.10, 13).
     sensitivity = Sensitivity.SENSITIVE
 
     #: Below this there is no pattern to find, only noise to narrate.

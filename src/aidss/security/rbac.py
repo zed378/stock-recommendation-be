@@ -1,4 +1,4 @@
-"""RBAC (Section 13).
+"""RBAC (Section 26).
 
 Three roles: Viewer (read), Investor (manage their own data), Admin (manage
 providers and system configuration). Per-user ownership is enforced separately

@@ -9,7 +9,7 @@ they are.
 
 Before this adapter, using both meant either editing the core to call two
 providers - defeating the point of the plugin layer - or picking one and
-accepting the hole. Section 7 says provider choice is configuration, so the
+accepting the hole. Section 5 says provider choice is configuration, so the
 combination is configuration too:
 
     AIDSS_MARKET_DATA_PROVIDER=composite

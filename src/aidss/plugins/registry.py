@@ -1,8 +1,8 @@
-"""Plugin Manager (Section 9) - adapter registration, validation, resolution.
+"""Plugin Manager (Section 7) - adapter registration, validation, resolution.
 
 Adapters register through the ``@register`` decorator. Instances are built by
 a factory that takes ``Settings``, so credentials are read at exactly one
-point rather than scattered across the codebase (Section 13).
+point rather than scattered across the codebase (Section 26).
 """
 
 from __future__ import annotations

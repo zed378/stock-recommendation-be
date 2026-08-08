@@ -1,4 +1,4 @@
-"""Knowledge Base and RAG Engine (Phase 7, Sections 6.3, 9)."""
+"""Knowledge Base and RAG Engine (Phase 7, Section 12, 9)."""
 
 from aidss.rag.chunking import Chunk, chunk_article, chunk_text
 from aidss.rag.engine import IndexReport, RAGEngine, RetrievedChunk, cosine_similarity

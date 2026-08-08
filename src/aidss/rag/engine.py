@@ -1,4 +1,4 @@
-"""RAG Engine (Phase 7, Sections 6.3, 9).
+"""RAG Engine (Phase 7, Section 12, 9).
 
 Indexes knowledge base documents and news articles, and retrieves relevant
 context for the agents.
@@ -237,7 +237,7 @@ class RAGEngine:
         """Embed news articles that have not been indexed yet.
 
         Skipping already-indexed items is what stops a retried ingestion job
-        from paying for the same embeddings twice (Section 6.3.3).
+        from paying for the same embeddings twice (Section 12.3).
         """
         report = IndexReport()
 

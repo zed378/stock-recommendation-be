@@ -1,4 +1,4 @@
-"""The core analyzer agents of Phase 4 (Section 5.2).
+"""The core analyzer agents of Phase 4 (Section 14.2).
 
 Market, Technical, Fundamental, and News Analyzers, plus the Summary Agent
 that combines them. Research, Portfolio, Risk, Knowledge, and Reflection
@@ -134,7 +134,7 @@ class NewsAnalyzer(Agent):
             # Article text reaches the model inside <articles> delimiters, as
             # data rather than instruction. Combined with a read-only tool
             # surface, a successful injection has nothing to act on
-            # (Section 13).
+            # (Section 26).
             "articles": context.news,
         }
 
@@ -146,7 +146,7 @@ class SummaryAgent(Agent):
     template_name = "synthesis"
     output_model = SynthesisOutput
     #: The only agent that reasons across sources, so it gets the strongest
-    #: routing tier (Section 12.10).
+    #: routing tier (Section 16.10).
     complexity = TaskComplexity.COMPLEX
 
     def __init__(self, runs: list[AgentRun]) -> None:

@@ -5,7 +5,7 @@ a `hold` on something you do not are the same word describing two different
 situations, and a screen that collapsed them would answer only one of the two
 questions people actually have.
 
-The second thing pinned here is the wording. Section 5.4 puts recommendation
+The second thing pinned here is the wording. Section 14.4 puts recommendation
 labels under a rule - a stance, never a command - and guidance derived from
 them inherits it. These tests fail if a phrasing ever drifts into an
 instruction.
@@ -87,7 +87,7 @@ def test_both_readings_are_always_returned() -> None:
 
 
 def test_a_buy_on_thin_evidence_becomes_wait_rather_than_enter() -> None:
-    """Section 5.4 already refuses a strong label on thin evidence. Acting on a
+    """Section 14.4 already refuses a strong label on thin evidence. Acting on a
     weak one is the same mistake one step later."""
     result = view(RecommendationLabel.BUY, confidence=ENTRY_CONFIDENCE_FLOOR - 1)
     assert result.not_holding.stance is Stance.WAIT_FOR_LEVEL
@@ -148,7 +148,7 @@ FORBIDDEN = (
 
 @pytest.mark.parametrize("label", list(RecommendationLabel))
 def test_no_guidance_reads_as_an_instruction(label: RecommendationLabel) -> None:
-    """Section 5.4 applies to derived text as much as to the labels."""
+    """Section 14.4 applies to derived text as much as to the labels."""
     result = view(label)
     blob = " ".join(
         [

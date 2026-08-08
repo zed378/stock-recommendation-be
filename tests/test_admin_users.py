@@ -1,4 +1,4 @@
-"""Administration of accounts (Section 13).
+"""Administration of accounts (Section 26).
 
 The interesting cases are not "can an admin ban someone" - they are the ways an
 administrator can destroy access for everyone, including themselves, with one

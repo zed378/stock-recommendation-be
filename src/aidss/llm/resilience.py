@@ -107,7 +107,7 @@ class RateLimiter:
 
     Respecting a provider's published limit locally is cheaper than being
     throttled by it: a 429 costs a round trip and, under a circuit breaker,
-    can take a healthy provider out of rotation (Section 6.1 analogue for AI
+    can take a healthy provider out of rotation (Section 9 analogue for AI
     providers).
     """
 

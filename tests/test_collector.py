@@ -1,4 +1,4 @@
-"""Market Data Collector tests (Phase 2, Section 6.2).
+"""Market Data Collector tests (Phase 2, Section 10).
 
 Covers the three things that decide whether downstream analysis can be
 trusted: bad bars never reach storage, provider quirks are normalised away,

@@ -1,4 +1,4 @@
-"""Analysis endpoint tests (Phase 4, Section 10)."""
+"""Analysis endpoint tests (Phase 4, Section 8)."""
 
 from __future__ import annotations
 
@@ -121,9 +121,9 @@ def test_analysis_requires_authentication(client: TestClient) -> None:
     assert client.post("/assets/BBCA/analysis", json={}).status_code == 401
 
 
-# --- Recommendation (Phase 5, Section 5.4) ---------------------------------
+# --- Recommendation (Phase 5, Section 14.4) ---------------------------------
 
-#: Every field Section 5.4 lists as mandatory.
+#: Every field Section 14.4 lists as mandatory.
 SECTION_5_4_FIELDS = (
     "label",
     "confidence",
@@ -149,7 +149,7 @@ def test_analysis_includes_a_complete_recommendation(client, auth_headers, inges
     recommendation = body["recommendation"]
     assert recommendation is not None
     for field in SECTION_5_4_FIELDS:
-        assert field in recommendation, f"Section 5.4 field missing: {field}"
+        assert field in recommendation, f"Section 14.4 field missing: {field}"
 
 
 def test_conflicting_factors_are_never_empty(client, auth_headers, ingested) -> None:
@@ -184,7 +184,7 @@ def test_price_fields_state_the_method_behind_them(client, auth_headers, ingeste
     if recommendation["target_price"] is not None:
         assert recommendation["target_price_method"]
     if recommendation["suggested_stop"] is not None:
-        # Section 5.4 requires the wording, not only the field name.
+        # Section 14.4 requires the wording, not only the field name.
         assert "suggestion" in recommendation["suggested_stop_method"].lower()
 
 

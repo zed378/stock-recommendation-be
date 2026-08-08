@@ -1,4 +1,4 @@
-"""Context Builder (Section 5.2).
+"""Context Builder (Section 14.2).
 
 Assembles everything the agents will reason over into one structured object
 before a single prompt is composed. Two reasons it is a separate stage rather

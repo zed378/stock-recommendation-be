@@ -19,7 +19,7 @@ the confidence that were already validated and stored.
 **Stances, not orders.** Every phrasing here describes a position and the
 condition attached to it. `entry_candidate`, not "buy now". `exit_candidate`,
 not "sell". The platform cannot place an order and does not tell anyone to;
-Section 5.4 puts the wording under the same rule as the labels themselves.
+Section 14.4 puts the wording under the same rule as the labels themselves.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class Stance(StrEnum):
 
 
 #: A stance strong enough to warrant an entry needs evidence behind it. Below
-#: this, a `buy` becomes "wait for a level" rather than "enter": Section 5.4
+#: this, a `buy` becomes "wait for a level" rather than "enter": Section 14.4
 #: already refuses a strong label on thin evidence, and the same reasoning
 #: applies to acting on a weak one.
 ENTRY_CONFIDENCE_FLOOR = 55.0

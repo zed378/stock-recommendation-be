@@ -1,4 +1,4 @@
-"""Authentication endpoints (Section 10: /auth/login)."""
+"""Authentication endpoints (Section 8: /auth/login)."""
 
 from __future__ import annotations
 

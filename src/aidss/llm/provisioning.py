@@ -1,4 +1,4 @@
-"""Builds a gateway from configuration rather than from code (Section 12.10).
+"""Builds a gateway from configuration rather than from code (Section 16.10).
 
 Bindings come from the ``ai_providers`` table when it has rows, so an
 administrator can add a model, reorder the fallback chain, or move sensitive
@@ -38,7 +38,7 @@ _ROLE_HANDLES: dict[str, frozenset[TaskComplexity]] = {
 }
 
 #: Adapters that run on infrastructure we control, and may therefore receive
-#: sensitive data in high-privacy mode (Sections 12.10, 13).
+#: sensitive data in high-privacy mode (Section 16.10, 13).
 SELF_HOSTED_ADAPTERS = frozenset({"fixture"})
 
 

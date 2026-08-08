@@ -1,4 +1,4 @@
-"""Output Validator (Sections 5.4, 11.2, 12.5).
+"""Output Validator (Section 14.4, 11.2, 12.5).
 
 Two checks run on every model response before it is stored or shown:
 
@@ -7,13 +7,13 @@ Two checks run on every model response before it is stored or shown:
 
 The second is why this module exists as a separate stage rather than a
 `model_validate` call at the call site. Provider JSON mode is uneven across the
-servers this platform supports (Section 12.5), and a prompt instruction is a
+servers this platform supports (Section 16.5), and a prompt instruction is a
 request the model may ignore. Validation is the layer that does not depend on
 the model cooperating.
 
 A failure here is recoverable: `ValidationFailure` carries corrective feedback
 the caller can append to a retry, which is the "retry with corrective
-instruction" arrow in the Section 11.2 flow.
+instruction" arrow in the Section 15.2 flow.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Token usage and cost estimation (Section 12.9).
+"""Token usage and cost estimation (Section 16.9).
 
 Costs are estimates derived from the configured price table, not billed
 amounts. They are still worth recording: the plan's risk register lists AI

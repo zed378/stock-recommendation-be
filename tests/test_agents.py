@@ -1,4 +1,4 @@
-"""Context Builder, Memory Manager, agents, and Analysis Engine (Section 5)."""
+"""Context Builder, Memory Manager, agents, and Analysis Engine (Section 14)."""
 
 from __future__ import annotations
 

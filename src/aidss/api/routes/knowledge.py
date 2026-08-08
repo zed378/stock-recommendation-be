@@ -1,4 +1,4 @@
-"""Knowledge base and news-schedule endpoints (Phase 7, Sections 6.3, 10)."""
+"""Knowledge base and news-schedule endpoints (Phase 7, Section 12, 10)."""
 
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ def search_news(
     return RetrievalResponse(query=q, results=[r.as_dict() for r in results])
 
 
-# --- News schedules (Section 6.3) -----------------------------------------
+# --- News schedules (Section 12) -----------------------------------------
 
 
 def _resolve_asset(session: Session, ticker: str, exchange: str = "IDX") -> Asset:
@@ -176,7 +176,7 @@ def _to_response(schedule: TickerNewsSchedule, ticker: str) -> NewsScheduleRespo
 def list_presets(
     _: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
 ) -> list[CronPresetResponse]:
-    """The Section 6.3.4 presets, so a user need not write cron by hand."""
+    """The Section 12.4 presets, so a user need not write cron by hand."""
     return [
         CronPresetResponse(
             key=p.key, label=p.label, expression=p.expression, suited_to=p.suited_to
@@ -263,7 +263,7 @@ def run_schedule_now(
     session: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.TRIGGER_INGESTION)),
 ) -> ScheduleRunResponse:
-    """Run a schedule immediately, outside its cadence (Section 10).
+    """Run a schedule immediately, outside its cadence (Section 8).
 
     Uses the same code path as the scheduler, so a manual run exercises what
     the automated one will do rather than a convenient approximation.
@@ -303,7 +303,7 @@ def list_news(
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
 ) -> list[dict]:
-    """Stored articles and their sentiment for one issuer (Section 10).
+    """Stored articles and their sentiment for one issuer (Section 8).
 
     Two ways an article belongs to this ticker, and both count:
 

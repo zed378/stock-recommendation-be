@@ -1,8 +1,8 @@
-"""Investment journal, conversation, and audit log endpoints (Section 10).
+"""Investment journal, conversation, and audit log endpoints (Section 8).
 
 The journal is FR-10 and the Reflection Agent's only input. What makes it work
 is that it records what the investor *decided*, not what the platform
-recommended - Section 5.2 is explicit that reflection is about the person's
+recommended - Section 14.2 is explicit that reflection is about the person's
 decision-making, and a journal that only stored agreement with the platform
 would have nothing to reflect on.
 """
@@ -184,7 +184,7 @@ def reflect_on_journal(
     session: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
 ) -> ReflectionResponse:
-    """Surface patterns in how this investor decides (Section 5.2)."""
+    """Surface patterns in how this investor decides (Section 14.2)."""
     context = ReflectionContextBuilder(session).build(user.id)
     agent = ReflectionAgent()
 
@@ -215,7 +215,7 @@ def reflect_on_journal(
     )
 
 
-# --- Conversation (Section 10 `/chat`) -------------------------------------
+# --- Conversation (Section 8 `/chat`) -------------------------------------
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -272,7 +272,7 @@ def chat(
     )
 
 
-# --- Audit log (Sections 10, 13) -------------------------------------------
+# --- Audit log (Section 8, 13) -------------------------------------------
 
 
 @router.get("/audit-logs", response_model=Page[AuditLogResponse])
@@ -284,7 +284,7 @@ def export_audit_logs(
     session: Session = Depends(get_db),
     _: User = Depends(require_permission(Permission.READ_AUDIT_LOG)),
 ) -> Page[AuditLogResponse]:
-    """Export the append-only audit trail (Section 13).
+    """Export the append-only audit trail (Section 26).
 
     Read-only, and there is no endpoint that writes or deletes one. An audit
     log an application can edit is not an audit log.

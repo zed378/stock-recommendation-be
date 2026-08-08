@@ -1,4 +1,4 @@
-"""Portfolio endpoints (Section 10).
+"""Portfolio endpoints (Section 8).
 
 Every position here is entered by the user (``input_method``). There is no
 broker synchronisation, and the schema has no value that would represent one -

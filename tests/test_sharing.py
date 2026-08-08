@@ -326,7 +326,7 @@ def test_reading_requires_a_live_grant(session) -> None:
 
 def test_a_share_points_at_the_original_not_a_copy(session) -> None:
     """A copy would turn every share into a second authoritative version of an
-    analysis, which is the thing §16.1 rules out for translations."""
+    analysis, which is the thing Section 17.1 rules out for translations."""
     owner = account(session, "owner@example.com")
     account(session, "friend@example.com")
     watchlist = a_watchlist(session, owner, name="Banks")

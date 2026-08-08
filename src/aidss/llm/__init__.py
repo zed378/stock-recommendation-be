@@ -1,4 +1,4 @@
-"""LLM Gateway (Phase 4, Section 12).
+"""LLM Gateway (Phase 4, Section 16).
 
 The single place where provider differences are absorbed: routing, retry,
 rate limiting, circuit breaking, fallback, and cost accounting.

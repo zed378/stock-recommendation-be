@@ -110,14 +110,14 @@ class SharedItem(Base):
     watchlist the owner edits stays current for whoever it was shared with, and
     revoking removes access to the thing itself rather than to one snapshot of
     it. A copy would also quietly turn every share into a second authoritative
-    version of an analysis, which §16.1 rules out for translations for exactly
+    version of an analysis, which Section 17.1 rules out for translations for exactly
     the same reason.
 
     **Recipients are named accounts, not links.** A shareable URL is a bearer
     token for financial analysis about a named company, forwardable by anyone
     who receives it and unrevokable once it is in a group chat. Naming the
     recipient keeps the audience knowable, which is the only property that
-    makes the redistribution question answerable at all (§24).
+    makes the redistribution question answerable at all (Section 26).
     """
 
     __tablename__ = "shared_items"
@@ -137,7 +137,7 @@ class SharedItem(Base):
     subject_id: Mapped[uuid.UUID] = mapped_column()
 
     #: Optional line from the sender. Free text, and therefore never fed to a
-    #: model as anything but data (§24, prompt injection).
+    #: model as anything but data (Section 26, prompt injection).
     note: Mapped[str | None] = mapped_column(String(500), default=None)
 
     created_at: Mapped[datetime] = mapped_column(default=utcnow)

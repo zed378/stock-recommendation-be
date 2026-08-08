@@ -1,4 +1,4 @@
-"""Cleaning & Validation - the first stage of the data pipeline (Section 6.2).
+"""Cleaning & Validation - the first stage of the data pipeline (Section 10).
 
 Provider data is not always clean: bars arrive with negative volume, a high
 below the close, a zero price during a halt, or an absurd jump caused by a

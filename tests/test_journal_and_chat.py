@@ -1,6 +1,6 @@
 """Journal, reflection, conversation, audit log, and fundamentals.
 
-Completes Section 10's endpoint surface and Section 5.2's agent roster.
+Completes Section 8's endpoint surface and Section 14.2's agent roster.
 """
 
 from __future__ import annotations

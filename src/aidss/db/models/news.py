@@ -1,4 +1,4 @@
-"""Group C - News, Sentiment & Scheduled Ingestion (Section 8.2).
+"""Group C - News, Sentiment & Scheduled Ingestion (Section 6.2).
 
 The full pipeline (scheduled fetch -> sentiment -> embedding) is Phase 7, but
 the schema is defined in Phase 1 so it never needs a second migration.
@@ -20,7 +20,7 @@ from aidss.db.base import Base, Embedding, enum_column, new_uuid, utcnow
 class ScheduleStatus(StrEnum):
     ACTIVE = "active"
     #: Repeated failures flag the schedule rather than silently disabling it
-    #: (Section 6.3.3) - a schedule that stops without the user noticing is worse.
+    #: (Section 12.3) - a schedule that stops without the user noticing is worse.
     NEEDS_ATTENTION = "needs_attention"
 
 
@@ -120,7 +120,7 @@ class NewsItem(Base):
     headline: Mapped[str] = mapped_column(String(500))
     body_summary: Mapped[str | None] = mapped_column(Text, default=None)
     published_at: Mapped[datetime] = mapped_column(index=True)
-    #: Prevents paying for the same embedding twice on retry (Section 6.3.3).
+    #: Prevents paying for the same embedding twice on retry (Section 12.3).
     is_indexed: Mapped[bool] = mapped_column(Boolean, default=False)
     fetched_at: Mapped[datetime] = mapped_column(default=utcnow)
 
@@ -151,7 +151,7 @@ class SentimentScore(Base):
 
 class NewsEmbedding(Base):
     """Kept separate from ``knowledge_chunks``: news has a time dimension and a
-    per-ticker filter, so its retention strategy differs (Section 8.2)."""
+    per-ticker filter, so its retention strategy differs (Section 6.2)."""
 
     __tablename__ = "news_embeddings"
 

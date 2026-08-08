@@ -1,4 +1,4 @@
-"""Technical indicator maths - purely deterministic (Section 5.3).
+"""Technical indicator maths - purely deterministic (Section 14.3).
 
 There is no LLM in this module, and there must never be one. Every number is
 computed here so the AI layer only ever *interprets* settled values rather than

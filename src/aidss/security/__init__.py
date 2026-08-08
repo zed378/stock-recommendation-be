@@ -1,4 +1,4 @@
-"""Security layer (Section 13): passwords, tokens, RBAC."""
+"""Security layer (Section 26): passwords, tokens, RBAC."""
 
 from aidss.security.passwords import (
     PasswordPolicyError,

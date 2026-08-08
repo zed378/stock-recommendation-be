@@ -1,4 +1,4 @@
-"""Deterministic portfolio metrics (Phase 6, Section 5.2).
+"""Deterministic portfolio metrics (Phase 6, Section 14.2).
 
 The same division of labour as everywhere else in this codebase: the numbers
 are computed here, and the AI layer only interprets them. Concentration,

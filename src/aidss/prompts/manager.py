@@ -1,4 +1,4 @@
-"""Prompt Manager and Prompt Composer (Section 11).
+"""Prompt Manager and Prompt Composer (Section 15).
 
 The Manager owns which template version is active; the Composer turns a
 template plus context into the messages the gateway sends.
@@ -7,7 +7,7 @@ Templates resolve from the database first and fall back to the built-in
 catalog. That ordering matters in both directions: a fresh install works
 before anyone seeds anything, and an operator can edit a prompt in the
 database without a redeploy. Either way the version that was used is recorded
-on the message, so an output stays explainable (Section 11.2).
+on the message, so an output stays explainable (Section 15.2).
 """
 
 from __future__ import annotations

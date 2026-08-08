@@ -1,7 +1,7 @@
-"""Group D - Analysis, Recommendation, Risk (Section 8.2).
+"""Group D - Analysis, Recommendation, Risk (Section 6.2).
 
 Populated from Phase 4 onward. ``recommendations`` deliberately gives every
-mandatory Section 5.4 field its own column rather than a free-text blob, so the
+mandatory Section 14.4 field its own column rather than a free-text blob, so the
 Output Validator can check completeness programmatically and the UI can render
 a consistent structure.
 """
@@ -85,7 +85,7 @@ class Recommendation(Base):
     reasoning: Mapped[str] = mapped_column(Text)
     supporting_factors: Mapped[list[Any]] = mapped_column(default=list)
     #: Mandatory - an explicitly required counterweight to confirmation bias
-    #: (Section 5.4).
+    #: (Section 14.4).
     conflicting_factors: Mapped[list[Any]] = mapped_column(default=list)
     risk_factors: Mapped[list[Any]] = mapped_column(default=list)
     bullish_scenario: Mapped[str] = mapped_column(Text)
@@ -94,7 +94,7 @@ class Recommendation(Base):
     resistance_level: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     target_price_method: Mapped[str | None] = mapped_column(String(200), default=None)
-    #: Named `suggested_stop`: a suggestion, never an instruction (Section 5.4).
+    #: Named `suggested_stop`: a suggestion, never an instruction (Section 14.4).
     suggested_stop: Mapped[Decimal | None] = mapped_column(Numeric(24, 8), default=None)
     horizon: Mapped[InvestmentHorizon] = mapped_column(enum_column(InvestmentHorizon, length=10))
 

@@ -1,6 +1,6 @@
-"""Daily AI spend governance (Phase 9, Section 12.9).
+"""Daily AI spend governance (Phase 9, Section 16.9).
 
-Section 17 lists AI cost growing with scale as a real operational risk. The
+Section 28 lists AI cost growing with scale as a real operational risk. The
 mitigation has two halves and both matter:
 
   * a **warning** at a configurable fraction of the ceiling, so someone hears

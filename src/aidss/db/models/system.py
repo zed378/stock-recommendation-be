@@ -1,4 +1,4 @@
-"""Group F - Notification, Audit, Config, Scheduler (Section 8.2)."""
+"""Group F - Notification, Audit, Config, Scheduler (Section 6.2)."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ class Notification(Base):
 
 
 class AuditLog(Base):
-    """Append-only (Section 13). The absence of an updated_at column is deliberate."""
+    """Append-only (Section 26). The absence of an updated_at column is deliberate."""
 
     __tablename__ = "audit_logs"
 

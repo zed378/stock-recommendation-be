@@ -1,4 +1,4 @@
-"""Issuing and verifying JWT access tokens (Section 13)."""
+"""Issuing and verifying JWT access tokens (Section 26)."""
 
 from __future__ import annotations
 

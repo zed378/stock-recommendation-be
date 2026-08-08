@@ -1,4 +1,4 @@
-"""API request and response schemas (Section 10)."""
+"""API request and response schemas (Section 8)."""
 
 from __future__ import annotations
 
@@ -143,14 +143,14 @@ class AnalysisRequest(BaseModel):
 
 
 class RecommendationResponse(BaseModel):
-    """The complete Section 5.4 structure.
+    """The complete Section 14.4 structure.
 
     Prices are strings so a Decimal survives JSON without being rounded
     through a float on the way out.
     """
 
     label: RecommendationLabel
-    #: The calibrated score. Section 5.4 requires a consistent calibration
+    #: The calibrated score. Section 14.4 requires a consistent calibration
     #: rather than an arbitrary number from the model.
     confidence: float = Field(ge=0, le=100)
     #: How that score was reached, so it can be explained rather than trusted.
@@ -205,7 +205,7 @@ class AnalysisResponse(BaseModel):
     ticker: str
     timeframe: Timeframe
     analysis_result_id: uuid.UUID | None
-    #: Absent when it was not requested, or when the Section 5.4 rules rejected
+    #: Absent when it was not requested, or when the Section 14.4 rules rejected
     #: every attempt - in which case the reason appears under `failed`.
     recommendation: RecommendationResponse | None = None
     #: Keyed by agent name; each value is that agent's validated output plus
@@ -563,7 +563,7 @@ class ReflectionResponse(BaseModel):
     language: str = "id"
 
 
-# --- Conversation (Section 10 `/chat`) -------------------------------------
+# --- Conversation (Section 8 `/chat`) -------------------------------------
 
 
 class ChatRequest(BaseModel):
@@ -593,7 +593,7 @@ class ChatResponse(BaseModel):
     disclaimer: str
 
 
-# --- Audit log (Sections 10, 13) -------------------------------------------
+# --- Audit log (Section 8, 13) -------------------------------------------
 
 
 class AuditLogResponse(BaseModel):
@@ -634,7 +634,7 @@ class RetrievalResponse(BaseModel):
     results: list[dict[str, Any]]
 
 
-# --- Scheduled news ingestion (Section 6.3) --------------------------------
+# --- Scheduled news ingestion (Section 12) --------------------------------
 
 
 class CronPresetResponse(BaseModel):
@@ -761,7 +761,7 @@ class OperationsOverviewResponse(BaseModel):
     inventory: dict[str, Any]
     ingestion: dict[str, Any]
     #: Token and cost totals, per agent. Estimates from the configured price
-    #: table, not billed amounts (Section 12.9).
+    #: table, not billed amounts (Section 16.9).
     ai_usage: dict[str, Any]
     #: Things an operator should look at: flagged schedules, recent failures.
     attention: list[dict[str, Any]]
@@ -775,7 +775,7 @@ class BudgetStatusResponse(BaseModel):
     spent: str
     ceiling: str | None
     #: ok / warning / exceeded. `exceeded` means further AI calls are blocked
-    #: until the 24-hour window rolls forward (Section 12.9).
+    #: until the 24-hour window rolls forward (Section 16.9).
     state: str
     utilisation: float | None
     window_start: str

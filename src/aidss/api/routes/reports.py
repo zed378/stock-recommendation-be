@@ -1,4 +1,4 @@
-"""Report, notification, and admin dashboard endpoints (Phase 8, Sections 9, 10)."""
+"""Report, notification, and admin dashboard endpoints (Phase 8, Section 7, 10)."""
 
 from __future__ import annotations
 

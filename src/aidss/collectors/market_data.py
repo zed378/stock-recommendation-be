@@ -1,4 +1,4 @@
-"""Market Data Collector (Phase 2, Section 9).
+"""Market Data Collector (Phase 2, Section 7).
 
 The flow: fetch from a MarketDataProvider -> Cleaning & Validation ->
 Normalization -> upsert into ``historical_prices``. Upsert rather than insert

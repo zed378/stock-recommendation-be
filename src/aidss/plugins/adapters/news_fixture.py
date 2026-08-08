@@ -1,6 +1,6 @@
 """A deterministic NewsProvider for development and CI.
 
-The full scheduled news pipeline is Phase 7 (Section 6.3); this adapter exists
+The full scheduled news pipeline is Phase 7 (Section 12); this adapter exists
 from Phase 1 so the ``NewsProvider`` contract is pinned down and exercised.
 """
 
@@ -65,7 +65,7 @@ class FixtureNewsProvider(NewsProvider):
                 NewsArticle(
                     source="fixture-newswire",
                     # The collector deduplicates on a hash of URL and headline
-                    # (Section 6.3.3, step 7), so both are stable per slot.
+                    # (Section 12.3, step 7), so both are stable per slot.
                     source_url=f"https://fixture.invalid/{ticker}/{slot}",
                     headline=f"{headline.format(ticker=ticker)} ({slot})",
                     summary=summary.format(ticker=ticker),

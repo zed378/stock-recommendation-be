@@ -1,4 +1,4 @@
-"""Reporting, notifications, and the operations overview (Phase 8, Section 9)."""
+"""Reporting, notifications, and the operations overview (Phase 8, Section 7)."""
 
 from __future__ import annotations
 
@@ -183,7 +183,7 @@ def test_the_row_is_written_before_delivery_is_attempted(session, user) -> None:
 
 
 def test_no_event_type_can_carry_an_instruction() -> None:
-    """Section 9: alerts are about the system, never about what to do with money."""
+    """Section 7: alerts are about the system, never about what to do with money."""
     for event in NotificationEvent:
         subject = SUBJECTS[event].lower()
         for word in ("buy", "sell", "trade", "order"):

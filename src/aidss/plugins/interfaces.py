@@ -1,10 +1,10 @@
-"""Provider plugin contracts (Section 7).
+"""Provider plugin contracts (Section 5).
 
 Four abstraction points: AIProvider, MarketDataProvider, NewsProvider, and
 StorageProvider. Core Logic talks *only* to these interfaces, so adding a
 provider means writing one adapter rather than editing the core.
 
-Hard constraint (Sections 4, 8, 10): there is no interface here for a broker,
+Hard constraint (Section 4, 8, 10): there is no interface here for a broker,
 an order, or a trade execution - and none may be added. Every interface is
 read-only with respect to external systems; the sole exception is
 StorageProvider, which writes to the platform's own storage.
@@ -56,7 +56,7 @@ class ProviderPlugin(ABC):
 
 
 class MarketDataProvider(ProviderPlugin, ABC):
-    """A source of price and market data (Section 6.1)."""
+    """A source of price and market data (Section 9)."""
 
     kind: ClassVar[str] = "market_data"
 
@@ -75,7 +75,7 @@ class MarketDataProvider(ProviderPlugin, ABC):
         """Historical candles over [start, end], in ascending time order."""
 
     def supports_realtime(self) -> bool:
-        """Not every provider offers a realtime channel (Section 6.1)."""
+        """Not every provider offers a realtime channel (Section 9)."""
         return False
 
     def get_fundamentals(self, ticker: str) -> list[FundamentalPoint]:
@@ -106,7 +106,7 @@ class MarketDataProvider(ProviderPlugin, ABC):
 
 
 class NewsProvider(ProviderPlugin, ABC):
-    """A source of per-ticker news (Section 6.3)."""
+    """A source of per-ticker news (Section 12)."""
 
     kind: ClassVar[str] = "news"
 
@@ -141,16 +141,16 @@ class AIProvider(ProviderPlugin, ABC):
         """Section 12.3. The embedding model is configured separately from chat."""
 
     def supports_tool_calling(self) -> bool:
-        """Section 12.4 - support is uneven across providers."""
+        """Section 16.4 - support is uneven across providers."""
         return False
 
     def supports_structured_output(self) -> bool:
-        """Section 12.5 - when False, Core falls back to prompt-enforced JSON."""
+        """Section 16.5 - when False, Core falls back to prompt-enforced JSON."""
         return False
 
 
 class StorageProvider(ProviderPlugin, ABC):
-    """Storage for knowledge base documents, reports, and backups (Section 7)."""
+    """Storage for knowledge base documents, reports, and backups (Section 5)."""
 
     kind: ClassVar[str] = "storage"
 

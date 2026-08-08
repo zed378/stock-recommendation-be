@@ -1,6 +1,6 @@
 """Domain types exchanged between layers.
 
-These are the provider-agnostic contract: every provider adapter (Section 7)
+These are the provider-agnostic contract: every provider adapter (Section 5)
 must return these shapes, so Core Logic never sees a vendor's raw schema.
 """
 
@@ -13,7 +13,7 @@ from enum import StrEnum
 
 
 class Timeframe(StrEnum):
-    """Timeframes the Indicator Engine supports (Section 5.3, multi-timeframe)."""
+    """Timeframes the Indicator Engine supports (Section 14.3, multi-timeframe)."""
 
     M1 = "1m"
     M5 = "5m"

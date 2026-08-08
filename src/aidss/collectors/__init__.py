@@ -1,4 +1,4 @@
-"""Data collection layer (Phase 2, Section 6.2)."""
+"""Data collection layer (Phase 2, Section 10)."""
 
 from aidss.collectors.market_data import (
     FundamentalCollector,

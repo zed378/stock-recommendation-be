@@ -1,6 +1,6 @@
 """Showing a watchlist or an analysis to another account.
 
-The feature is small. The care around it is not, and the reason is in §24: a
+The feature is small. The care around it is not, and the reason is in Section 26: a
 recommendation carrying a label and a confidence score, sent from one person to
 another, is closer to distributing investment research than anything else this
 platform does. That does not make it impermissible - it makes it the one

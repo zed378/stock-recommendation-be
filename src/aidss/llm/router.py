@@ -1,4 +1,4 @@
-"""Model Router and provider bindings (Section 12.10).
+"""Model Router and provider bindings (Section 16.10).
 
 Routing is by task complexity and by privacy. Sending a light extraction job to
 an expensive reasoning model wastes money; sending portfolio data to a hosted
@@ -31,7 +31,7 @@ class Sensitivity(StrEnum):
     PUBLIC = "public"
     #: Portfolio positions, journal entries - personal financial data. When the
     #: user has chosen high-privacy mode these must not leave self-hosted
-    #: infrastructure (Sections 12.10, 13).
+    #: infrastructure (Section 16.10, 13).
     SENSITIVE = "sensitive"
 
 

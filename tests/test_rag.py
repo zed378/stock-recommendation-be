@@ -1,4 +1,4 @@
-"""Chunking and RAG retrieval (Phase 7, Sections 6.3, 9)."""
+"""Chunking and RAG retrieval (Phase 7, Section 12, 9)."""
 
 from __future__ import annotations
 
@@ -210,7 +210,7 @@ def test_news_indexing_marks_items_as_indexed(session, engine: RAGEngine, asset)
 
 
 def test_already_indexed_items_are_not_embedded_again(session, engine: RAGEngine, asset) -> None:
-    """Section 6.3.3: a retry must not pay for the same vectors twice."""
+    """Section 12.3: a retry must not pay for the same vectors twice."""
     item = add_news(session, asset, "BBCA reports growth", "Net profit rose in the quarter.")
     engine.index_news([item])
 

@@ -112,7 +112,7 @@ def get_current_user(
 
 
 def require_permission(permission: str):
-    """Dependency factory that enforces RBAC (Section 13)."""
+    """Dependency factory that enforces RBAC (Section 26)."""
 
     def _dependency(user: User = Depends(get_current_user)) -> User:
         if not has_permission(user.role, permission):

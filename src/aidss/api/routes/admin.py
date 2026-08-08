@@ -1,4 +1,4 @@
-"""Administration of accounts and news sources (Section 13).
+"""Administration of accounts and news sources (Section 26).
 
 Two things live here, and they share one property: both are actions taken by
 one person against something another person depends on. So every one of them
@@ -1218,7 +1218,7 @@ class AgendaEntryRequest(BaseModel):
 
     Manual entry is not a fallback here, it is the authoritative path. The
     exchange publishes a calendar but not on an endpoint that answers reliably
-    (§9), and dates extracted from coverage are explicitly the weaker source.
+    (Section 7), and dates extracted from coverage are explicitly the weaker source.
     """
 
     ticker: str = Field(min_length=1, max_length=20)
@@ -1243,7 +1243,7 @@ def add_agenda_entry(
         kind = AgendaKind(payload.kind)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown agenda kind. Known: {[k.value for k in AgendaKind]}",
         ) from exc
 

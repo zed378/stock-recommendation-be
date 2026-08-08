@@ -1,4 +1,4 @@
-"""Asset, market data ingestion, and indicator endpoints (Section 10).
+"""Asset, market data ingestion, and indicator endpoints (Section 8).
 
 Note what is absent here and must stay absent: there is no ``/orders``,
 ``/execute``, or any other endpoint capable of sending an instruction to a

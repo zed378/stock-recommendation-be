@@ -11,7 +11,7 @@ import { useEvents } from "@/realtime/useEvents";
  * The application shell.
  *
  * The disclaimer sits in the footer of every page rather than behind a dialog
- * that gets dismissed once and never seen again. Section 13 requires it to be
+ * that gets dismissed once and never seen again. Section 26 requires it to be
  * present on output, and a modal accepted six months ago is not present.
  */
 export function Layout() {

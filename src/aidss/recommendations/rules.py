@@ -1,13 +1,13 @@
-"""Recommendation-specific validation rules (Section 5.4).
+"""Recommendation-specific validation rules (Section 14.4).
 
 The generic Output Validator already guarantees that a response is valid JSON,
 matches its schema, and contains no execution instruction. These rules add the
 checks that only make sense for a recommendation:
 
-  * **Completeness** - every mandatory Section 5.4 field is actually populated.
+  * **Completeness** - every mandatory Section 14.4 field is actually populated.
     Pydantic proves a field exists; it does not prove someone filled it in with
     something. An empty list satisfies the type and fails the requirement.
-  * **Conflicting factors are non-empty.** Section 5.4 makes this mandatory
+  * **Conflicting factors are non-empty.** Section 14.4 makes this mandatory
     precisely because a recommendation that can find nothing against itself has
     not been examined. This is the single rule most worth enforcing here.
   * **The label must not contradict its own evidence.** Only fires when the
@@ -15,7 +15,7 @@ checks that only make sense for a recommendation:
     rather than second-guessing every judgement call.
   * **A strong label must be backed by calibrated confidence.** "Strong Buy" on
     thin, one-sided evidence is exactly the misleading output the plan's
-    AI-quality risk describes (Section 17).
+    AI-quality risk describes (Section 28).
 
 Each failure carries a corrective instruction, so the runner's existing retry
 path can tell the model precisely what to fix.
@@ -33,7 +33,7 @@ from aidss.recommendations.calibration import (
     evidence_direction,
 )
 
-#: Fields Section 5.4 requires to carry actual content, not just to exist.
+#: Fields Section 14.4 requires to carry actual content, not just to exist.
 REQUIRED_NARRATIVE_FIELDS = ("reasoning", "bullish_scenario", "bearish_scenario")
 
 _DIRECTION_WORD = {1: "constructive", 0: "neutral", -1: "cautious"}
@@ -88,7 +88,7 @@ def _check_narrative_completeness(output: RecommendationOutput, report: RuleRepo
                     rule="completeness",
                     detail=f"{name} is empty",
                     correction=(
-                        f"`{name}` must be filled in. Section 5.4 requires both scenarios "
+                        f"`{name}` must be filled in. Section 14.4 requires both scenarios "
                         "and the reasoning behind the label."
                     ),
                 )

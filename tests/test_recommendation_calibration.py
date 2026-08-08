@@ -1,6 +1,6 @@
-"""Confidence calibration and derived price levels (Section 5.4).
+"""Confidence calibration and derived price levels (Section 14.4).
 
-Section 5.4 asks for "a consistently calibrated score, not an arbitrary number
+Section 14.4 asks for "a consistently calibrated score, not an arbitrary number
 from the LLM". These tests are what makes that claim checkable: the score is a
 pure function of the evidence, and the model's own number never reaches it.
 """
@@ -65,7 +65,7 @@ def test_calibration_is_deterministic() -> None:
 
 
 def test_the_models_own_confidence_never_reaches_the_score() -> None:
-    """Section 5.4's central requirement, stated as a test.
+    """Section 14.4's central requirement, stated as a test.
 
     Two analyzer sets identical in every respect except the number the model
     reported must calibrate identically.
@@ -329,7 +329,7 @@ def test_a_cautious_label_targets_the_nearest_support() -> None:
 
 
 def test_a_neutral_label_gets_no_target() -> None:
-    """Section 5.4 asks for a target only where a basis exists."""
+    """Section 14.4 asks for a target only where a basis exists."""
     levels = derive_levels(SNAPSHOT, RecommendationLabel.HOLD)
     assert levels.target_price is None
     assert levels.suggested_stop is None
@@ -343,7 +343,7 @@ def test_the_stop_is_two_atr_from_price_and_on_the_right_side() -> None:
 
 
 def test_the_stop_is_labelled_a_suggestion_not_an_order() -> None:
-    """Section 5.4 requires the wording as well as the field name."""
+    """Section 14.4 requires the wording as well as the field name."""
     method = derive_levels(SNAPSHOT, RecommendationLabel.BUY).suggested_stop_method
     assert "suggestion" in method.lower()
     assert "not an order" in method.lower()

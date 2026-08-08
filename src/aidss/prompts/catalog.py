@@ -2,7 +2,7 @@
 
 Templates live in code as the source of truth and are seeded into
 ``prompt_templates`` so they can be versioned, edited, and audited from the
-database (Section 11.2). Every ``ai_message`` records the version it used, so
+database (Section 15.2). Every ``ai_message`` records the version it used, so
 an output produced six months ago can still be explained.
 
 Each template carries the same two non-negotiables:
@@ -70,7 +70,7 @@ class PromptTemplate:
 
 
 # ---------------------------------------------------------------------------
-# The ten categories of Section 11.1
+# The ten categories of Section 15.1
 # ---------------------------------------------------------------------------
 
 TECHNICAL_ANALYSIS = PromptTemplate(

@@ -1,4 +1,4 @@
-"""End-to-end API tests (Section 10)."""
+"""End-to-end API tests (Section 8)."""
 
 from __future__ import annotations
 

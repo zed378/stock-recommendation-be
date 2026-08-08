@@ -1,8 +1,8 @@
-"""Global configuration (Section 9, Configuration module).
+"""Global configuration (Section 7, Configuration module).
 
 Every value is read from the environment with the ``AIDSS_`` prefix. Provider
 selection (AI / market data / news / storage) is configuration rather than a
-constant in code, which is what makes FR-07 and Section 7 hold.
+constant in code, which is what makes FR-07 and Section 5 hold.
 """
 
 from __future__ import annotations
@@ -40,12 +40,12 @@ class Settings(BaseSettings):
     # --- Database ---
     database_url: str = "postgresql+psycopg://aidss:aidss@localhost:5432/aidss"
 
-    # --- Security (Section 13) ---
+    # --- Security (Section 26) ---
     jwt_secret: str = Field(default="dev-only-change-me", min_length=8)
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 60
 
-    # --- Active provider selection (Section 7) ---
+    # --- Active provider selection (Section 5) ---
     market_data_provider: str = "fixture"
     #: `rss` reads feeds an administrator configures in the database. The
     #: default stays `fixture` so tests and a fresh checkout are deterministic,
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     ai_provider: str = "openai_compatible"
     storage_provider: str = "local"
 
-    # --- Provider credentials (Section 13: never hardcoded) ---
+    # --- Provider credentials (Section 26: never hardcoded) ---
     finnhub_api_key: str | None = None
     alphavantage_api_key: str | None = None
 
@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     #: dangerous direction.
     #:
     #: It gates the agents that handle personal financial data - portfolio,
-    #: risk, journal reflection (Sections 12.10, 13). With this False they
+    #: risk, journal reflection (Section 16.10, 13). With this False they
     #: refuse to run rather than send positions to a third party, which is the
     #: safe default and the reason it is False.
     #:
@@ -177,7 +177,7 @@ class Settings(BaseSettings):
     # --- Local storage ---
     local_storage_root: str = "./var/storage"
 
-    # --- Operational guardrail (Section 6.3.4) ---
+    # --- Operational guardrail (Section 12.4) ---
     min_schedule_interval_seconds: int = 300
 
     #: Outbound fundamentals calls allowed per UTC day, per provider account.
@@ -223,7 +223,7 @@ class Settings(BaseSettings):
     #: Daily AI spend ceiling. None means unlimited - a deliberate default,
     #: because a surprise cap in production is worse than a surprise bill.
     daily_ai_budget: float | None = None
-    #: Fraction of the budget at which a warning is raised (Section 12.9).
+    #: Fraction of the budget at which a warning is raised (Section 16.9).
     budget_warning_threshold: float = 0.8
 
     @field_validator(

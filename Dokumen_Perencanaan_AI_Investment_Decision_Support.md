@@ -89,7 +89,7 @@ Investor individu punya akses ke banyak data (harga, laporan keuangan, berita) t
 | FR-01 | Sistem mengambil data pasar/fundamental/berita dari provider terkonfigurasi | Must |
 | FR-02 | Sistem menghitung indikator teknikal multi-timeframe | Must |
 | FR-03 | AI menghasilkan analisis teknikal, fundamental, dan sentimen terpisah maupun tergabung | Must |
-| FR-04 | AI menghasilkan rekomendasi bertingkat (Strong Buy–Sell) dengan struktur lengkap (§13.4) | Must |
+| FR-04 | AI menghasilkan rekomendasi bertingkat (Strong Buy–Sell) dengan struktur lengkap (§14.4) | Must |
 | FR-05 | Sistem mendukung evaluasi portofolio yang diinput/disinkron manual oleh user | Must |
 | FR-06 | Sistem menyediakan knowledge base + RAG untuk edukasi & konteks analisis | Should |
 | FR-07 | AI provider dapat diganti via konfigurasi tanpa mengubah kode (OpenAI-compatible) | Must |
@@ -109,7 +109,7 @@ Investor individu punya akses ke banyak data (harga, laporan keuangan, berita) t
 | Scalability | Setiap layer (data collector, AI engine, RAG) scale independen |
 | Maintainability | Provider baru (AI/data) ditambah via plugin, tanpa ubah core |
 | Observability | Metrics & tracing di seluruh pipeline, termasuk biaya token per request |
-| Security | Lihat §24 |
+| Security | Lihat §26 |
 | Auditability | Setiap output AI & keputusan sistem tercatat lengkap dengan konteksnya |
 | Performance | Analisis on-demand < 10 detik untuk kasus umum; laporan mendalam bisa async |
 | Caching | Data pasar & hasil analisis yang belum stale di-cache agresif untuk kurangi biaya API |
@@ -289,12 +289,12 @@ flowchart TB
 
 | Interface | Kontrak Method Kunci | Alasan Desain |
 |---|---|---|
-| `AIProvider` | `chatCompletion()`, `embed()`, `streamCompletion()` | Detail per §15 |
+| `AIProvider` | `chatCompletion()`, `embed()`, `streamCompletion()` | Detail per §16 |
 | `MarketDataProvider` | `getQuote()`, `getHistoricalCandles()`, `subscribeRealtime()` | Setiap provider data (§9) punya adapter sendiri |
 | `NewsProvider` | `getNews(ticker, range)`, `getSentiment()` (jika provider menyediakan native) | Bisa dikombinasi dengan sentiment analysis internal jika provider tidak menyediakan skor sentimen |
 | `StorageProvider` | `store()`, `retrieve()`, `delete()` | Untuk knowledge base document, laporan, backup |
 
-**Prinsip:** Menambah provider baru = menulis satu adapter baru yang mengimplementasikan interface yang sudah ada, plus entry konfigurasi (`ai_providers`/`data_providers` table, §7) — **tanpa mengubah kode Core Logic**. Konfigurasi mendukung multi-provider aktif sekaligus (mis. AI provider berbeda untuk task ringan vs task kompleks — lihat multi-model routing §15.10).
+**Prinsip:** Menambah provider baru = menulis satu adapter baru yang mengimplementasikan interface yang sudah ada, plus entry konfigurasi (`ai_providers`/`data_providers` table, §7) — **tanpa mengubah kode Core Logic**. Konfigurasi mendukung multi-provider aktif sekaligus (mis. AI provider berbeda untuk task ringan vs task kompleks — lihat multi-model routing §16.10).
 
 ---
 
@@ -369,16 +369,16 @@ erDiagram
 | Tabel | Kolom Kunci | Catatan |
 |---|---|---|
 | `analysis_results` | id, asset_id (FK), analysis_type, generated_at, model_used, prompt_version | Satu record per run analisis |
-| `recommendations` | id, analysis_result_id (FK), label, confidence, reasoning, supporting_factors (JSONB), conflicting_factors (JSONB), bullish_scenario, bearish_scenario, support_level, resistance_level, target_price, suggested_stop, horizon | Sesuai struktur wajib §13.4 |
+| `recommendations` | id, analysis_result_id (FK), label, confidence, reasoning, supporting_factors (JSONB), conflicting_factors (JSONB), bullish_scenario, bearish_scenario, support_level, resistance_level, target_price, suggested_stop, horizon | Sesuai struktur wajib §14.4 |
 | `risk_assessments` | id, analysis_result_id (FK) nullable, portfolio_id (FK) nullable, risk_type, score, detail (JSONB) | Bisa per-asset maupun per-portofolio |
 | `portfolio_analysis` | id, portfolio_id (FK), diversification_score, sector_concentration (JSONB), correlation_matrix (JSONB), simulated_at | Hasil Portfolio Analyzer |
 
 **E. AI Conversation, Prompt, Knowledge Base**
 | Tabel | Kolom Kunci | Catatan |
 |---|---|---|
-| `ai_providers` | id, name, type (openai-compatible), base_url, is_active, priority | Basis multi-provider config (§15) |
+| `ai_providers` | id, name, type (openai-compatible), base_url, is_active, priority | Basis multi-provider config (§16) |
 | `ai_conversations` | id, user_id (FK), context_type, created_at | Sesi tanya-jawab bebas maupun terstruktur |
-| `ai_messages` | id, conversation_id (FK), agent_name, role, content, provider_id (FK), tokens_used, cost_estimate | `cost_estimate` mendukung cost monitoring (§15.9) |
+| `ai_messages` | id, conversation_id (FK), agent_name, role, content, provider_id (FK), tokens_used, cost_estimate | `cost_estimate` mendukung cost monitoring (§16.9) |
 | `prompt_templates` | id, name, category, template_text, version, is_active | Versioning wajib |
 | `knowledge_base` | id, title, source, category, uploaded_at | Dokumen sumber RAG |
 | `knowledge_chunks` | id, knowledge_base_id (FK), embedding (vector), chunk_text | Untuk retrieval |
@@ -394,8 +394,8 @@ erDiagram
 
 **Alasan desain menyeluruh:**
 - **Tidak ada tabel `orders`/`executions`/`brokers`** — konsisten dengan hard constraint arsitektur (§3, 4).
-- **`recommendations` menyimpan seluruh field struktur wajib** (§13.4) sebagai kolom eksplisit (bukan blob teks bebas) agar Output Validator bisa memvalidasi kelengkapan secara terprogram, dan agar UI bisa render konsisten.
-- **`ai_providers` + `ai_messages.provider_id`** memungkinkan audit "model/provider mana yang menghasilkan rekomendasi ini" — penting untuk reproducibility & cost tracking multi-provider (§15).
+- **`recommendations` menyimpan seluruh field struktur wajib** (§14.4) sebagai kolom eksplisit (bukan blob teks bebas) agar Output Validator bisa memvalidasi kelengkapan secara terprogram, dan agar UI bisa render konsisten.
+- **`ai_providers` + `ai_messages.provider_id`** memungkinkan audit "model/provider mana yang menghasilkan rekomendasi ini" — penting untuk reproducibility & cost tracking multi-provider (§16).
 - **`portfolio_holdings.input_method`** menjaga kejelasan bahwa data portofolio adalah input pengguna, bukan hasil automation — relevan untuk audit & ekspektasi produk.
 - **`investment_journal.recommendation_ref`** menghubungkan keputusan investor dengan rekomendasi yang pernah diberikan (jika relevan), menjadi basis Reflection Agent tanpa mengasumsikan investor selalu mengikuti rekomendasi AI.
 - **`ticker_news_schedules` terpisah dari `scheduler_jobs` generik** karena punya siklus hidup & atribut spesifik (per user+emiten, status `needs_attention`) yang akan janggal bila dipaksakan ke tabel job generik; `scheduler_jobs`/`job_queue` tetap dipakai di lapisan eksekusi (§12.2) sebagai mekanisme dispatch umum.
@@ -417,10 +417,10 @@ erDiagram
 | News Collector | Ambil berita per-emiten sesuai jadwal cron pengguna (§6.3) | Fetch incremental, deduplikasi, trigger sentiment analysis & indexing RAG | `ticker_news_schedules` yang jatuh tempo | raw news tersimpan + trigger embedding | NewsProvider plugin, Scheduler |
 | Knowledge Base | Simpan dokumen sumber pengetahuan | Manajemen dokumen (istilah, laporan, strategi) | dokumen | dokumen tersimpan | StorageProvider plugin |
 | RAG Engine | Retrieval kontekstual dari Knowledge Base | Chunking, embedding, similarity search | query | konteks relevan | Knowledge Base, LLM Gateway (embedding) |
-| LLM Gateway | Abstraksi provider AI (§15) | Routing, retry, fallback, rate limit | request terstandar | response terstandar | AIProvider plugin |
+| LLM Gateway | Abstraksi provider AI (§16) | Routing, retry, fallback, rate limit | request terstandar | response terstandar | AIProvider plugin |
 | Prompt Manager | Kelola template & versi prompt | Simpan, versi, sajikan template sesuai kategori | request kategori | template terkompilasi | — |
-| Analysis Engine | Orkestrasi multi-agent (§13) | Jalankan seluruh agent sesuai alur | data + konteks | Analysis Result | Indicator Engine, RAG, LLM Gateway |
-| Recommendation Engine | Susun rekomendasi terstruktur final | Validasi kelengkapan struktur (§13.4) | Analysis Result | Recommendation | Analysis Engine, Output Validator |
+| Analysis Engine | Orkestrasi multi-agent (§14) | Jalankan seluruh agent sesuai alur | data + konteks | Analysis Result | Indicator Engine, RAG, LLM Gateway |
+| Recommendation Engine | Susun rekomendasi terstruktur final | Validasi kelengkapan struktur (§14.4) | Analysis Result | Recommendation | Analysis Engine, Output Validator |
 | Portfolio Analyzer | Evaluasi portofolio pengguna | Diversifikasi, konsentrasi, simulasi | Portfolio data | Portfolio Analysis | Analysis Engine |
 | Risk Analyzer | Evaluasi risiko asset/portofolio | Estimasi risiko, drawdown, korelasi | Data historis + portfolio | Risk Assessment | Analysis Engine |
 | Reporting | Hasilkan laporan (PDF/dashboard) | Kompilasi hasil analisis jadi laporan | request laporan | file/laporan | Analysis Result, Recommendation |
@@ -442,7 +442,7 @@ erDiagram
 |---|---|---|
 | `/auth/login` | POST | Login user |
 | `/assets/{ticker}/analysis` | POST | Trigger/ambil analisis terbaru untuk suatu asset |
-| `/assets/{ticker}/recommendation` | GET | Ambil rekomendasi terbaru (struktur §13.4) |
+| `/assets/{ticker}/recommendation` | GET | Ambil rekomendasi terbaru (struktur §14.4) |
 | `/portfolio` | GET/POST | Kelola data portofolio (input manual) |
 | `/portfolio/analysis` | GET | Ambil Portfolio Analysis terbaru |
 | `/portfolio/simulate` | POST | Simulasikan perubahan alokasi (what-if, read-only) |
@@ -455,18 +455,18 @@ erDiagram
 | `/assets/{ticker}/news` | GET | Ambil berita & sentimen tersimpan untuk suatu emiten |
 | `/providers` | GET/PUT | Kelola konfigurasi AI/data provider aktif (admin) |
 | `/audit-logs` | GET | Ekspor audit trail |
-| `/assets/{ticker}/strategy` | GET | Pembacaan sikap tersimpan dari dua sisi posisi (§19) |
-| `/stock-picks` | GET | Penyaringan emiten per horizon, termasuk kandidat dekat-ARA (§18) |
-| `/monitoring/quotes` | GET | Observasi harga terakhir untuk emiten yang dipantau (§20) |
+| `/assets/{ticker}/strategy` | GET | Pembacaan sikap tersimpan dari dua sisi posisi (§20) |
+| `/stock-picks` | GET | Penyaringan emiten per horizon, termasuk kandidat dekat-ARA (§19) |
+| `/monitoring/quotes` | GET | Observasi harga terakhir untuk emiten yang dipantau (§21) |
 | `/monitoring/poll` | POST | Observasi manual di luar interval worker |
 | `/alerts` | GET | Alert yang terbentuk untuk pengguna |
 | `/alerts/{id}/acknowledge` | POST | Tandai alert sudah dibaca |
 | `/watchlist/categories` | GET | Daftar kelompok watchlist beserta jumlah anggotanya |
 | `/watchlist/categories` | POST | Buat kelompok kosong tanpa harus menambah emiten |
 | `/watchlist/categories/{name}` | PATCH/DELETE | Ganti nama / hapus kelompok (anggota pindah ke `Default`) |
-| `/translate` | POST | Render prosa analisis tersimpan ke bahasa lain (§16) |
-| `/ws/events` | WS | Kanal event per pengguna; token dikirim di frame pertama (§21) |
-| `/alerts/acknowledge`, `/alerts/delete` (+ `-all`) | POST | Aksi massal atas alert, dibatasi pemiliknya (§20.5) |
+| `/translate` | POST | Render prosa analisis tersimpan ke bahasa lain (§17) |
+| `/ws/events` | WS | Kanal event per pengguna; token dikirim di frame pertama (§22) |
+| `/alerts/acknowledge`, `/alerts/delete` (+ `-all`) | POST | Aksi massal atas alert, dibatasi pemiliknya (§21.5) |
 | `/admin/news-sources/fetch-all` | POST | Antre pembacaan seluruh feed aktif (§12.6) |
 | `/admin/issuers`, `/admin/issuers/sync` | GET/POST | Direktori emiten dan penyegarannya dari IDX (§12.7) |
 | `/admin/news/retag` | POST | Menandai ulang berita tersimpan setelah alias diperbaiki (§12.9) |
@@ -489,7 +489,7 @@ Bab ini menetapkan dari mana angka pada platform ini berasal. Ia dibagi dua kare
 
 Harga yang dibayar dinyatakan terbuka: endpoint tak berdokumen bisa berubah tanpa pemberitahuan, batas lajunya tidak diumumkan, dan status lisensinya tidak sejelas API berbayar. Kode menanggungnya dengan cara yang spesifik — bentuk respons diperiksa alih-alih dipercaya, permintaan dijeda, dan setiap kegagalan pembacaan disimpan agar sumber yang mati bisa dibedakan dari sumber yang memang sepi.
 
-Yang **tidak** ditanggung: syarat IDX melarang redistribusi komersial. Ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (§24).
+Yang **tidak** ditanggung: syarat IDX melarang redistribusi komersial. Ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (§26).
 
 ### Survei penyedia data
 
@@ -529,7 +529,7 @@ Semua yang berikut ditetapkan dengan pengujian terhadap endpoint sungguhan, buka
 
 **Alpha Vantage tidak meliput fundamental IDX.** Diuji dengan kunci sungguhan: `BBCA.JKT`, `BBCA.JK`, dan `BBRI.JKT` semuanya mengembalikan kosong. Tepat untuk ekuitas AS, keliru untuk pasar ini.
 
-**Fundamental IDX diambil dari API statistik bursa sendiri**, melalui klien yang menyajikan sidik jari TLS peramban karena endpoint-nya di balik Cloudflare. Tidak ada akun, kredensial, atau paywall di sana — yang dilewati adalah manajemen bot, bukan kontrol akses. Yang **tidak** dilewati adalah syarat IDX yang melarang redistribusi komersial: ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (§24). Konsekuensi praktis yang ditanggung kode: endpoint bisa berubah tanpa pemberitahuan sehingga bentuk responsnya diperiksa alih-alih dipercaya, dan batasnya tidak dipublikasikan sehingga permintaannya dijeda.
+**Fundamental IDX diambil dari API statistik bursa sendiri**, melalui klien yang menyajikan sidik jari TLS peramban karena endpoint-nya di balik Cloudflare. Tidak ada akun, kredensial, atau paywall di sana — yang dilewati adalah manajemen bot, bukan kontrol akses. Yang **tidak** dilewati adalah syarat IDX yang melarang redistribusi komersial: ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (§26). Konsekuensi praktis yang ditanggung kode: endpoint bisa berubah tanpa pemberitahuan sehingga bentuk responsnya diperiksa alih-alih dipercaya, dan batasnya tidak dipublikasikan sehingga permintaannya dijeda.
 
 **Satuan IDX tidak berdokumen, dan salah menanganinya adalah galat seratus atau semiliar kali lipat yang tidak tertangkap pemeriksaan tipe apa pun.** Uang dalam miliar rupiah — aset BBCA datang sebagai `1433701.78`, berarti Rp 1.434 triliun. `roa`, `roe`, dan `npm` dalam persen sementara penyedia lain memakai pecahan: IDX menulis `20.82` dan Alpha Vantage `0.345` untuk konsep yang sama. Keduanya ditetapkan dengan membandingkan emiten lintas tiga orde besaran.
 
@@ -537,7 +537,7 @@ Semua yang berikut ditetapkan dengan pengujian terhadap endpoint sungguhan, buka
 
 **Retrieval berjalan tanpa model embedding.** Banyak gateway swakelola hanya melayani model chat dan menjawab `/embeddings` dengan 404. Pencarian token eksak — kode emiten, nama metrik, rasio — tidak terpengaruh; yang hilang adalah pencocokan parafrasa.
 
-**Gateway AI swakelola punya batas waktunya sendiri, dan batas itu bergerak.** Pada satu pengukuran, prompt seukuran analyzer (1.170 token masuk, 600 token keluar) dijawab HTTP 504 pada detik ke-90 sementara permintaan 10 token butuh 16 detik; pada pengukuran berikutnya gateway yang sama menjawab dalam 167 milidetik. Karena itu timeout adalah kolom per penyedia, bukan konstanta: menaikkan timeout klien tidak bisa menembus batas di sisi gateway, tetapi menyamakan semua penyedia pada satu angka membuat yang cepat menunggu selama yang lambat. Memecah pekerjaan menjadi job-job yang lebih pendek (§16.2) mengurangi paparannya; menaikkan batas gateway itu sendiri adalah pekerjaan operatornya.
+**Gateway AI swakelola punya batas waktunya sendiri, dan batas itu bergerak.** Pada satu pengukuran, prompt seukuran analyzer (1.170 token masuk, 600 token keluar) dijawab HTTP 504 pada detik ke-90 sementara permintaan 10 token butuh 16 detik; pada pengukuran berikutnya gateway yang sama menjawab dalam 167 milidetik. Karena itu timeout adalah kolom per penyedia, bukan konstanta: menaikkan timeout klien tidak bisa menembus batas di sisi gateway, tetapi menyamakan semua penyedia pada satu angka membuat yang cepat menunggu selama yang lambat. Memecah pekerjaan menjadi job-job yang lebih pendek (§17.2) mengurangi paparannya; menaikkan batas gateway itu sendiri adalah pekerjaan operatornya.
 
 ---
 
@@ -567,7 +567,7 @@ flowchart LR
 | Feature Engineering | Turunan fitur (return, volatility rolling) untuk indikator & AI |
 | Indicator Engine | Hitung seluruh indikator teknikal deterministik |
 | Context Builder | Susun konteks final (data + memory + knowledge) sebelum AI |
-| AI Analysis | Multi-agent reasoning (§13) |
+| AI Analysis | Multi-agent reasoning (§14) |
 | Output Validator | Validasi struktur & bahasa sebelum disimpan/ditampilkan |
 | Dashboard/Notification | Penyajian ke pengguna |
 | Investment Journal → Reflection | Loop pembelajaran personal investor (bukan pembelajaran strategi trading otomatis) |
@@ -724,9 +724,9 @@ sequenceDiagram
 | **3. Simpan Jadwal** | Scheduler / DB | Disimpan sebagai record `ticker_news_schedules` (§6.2, tabel baru) — satu record per kombinasi (user/akun, emiten, cron) |
 | **4. Trigger Scheduler** | Scheduler | Proses berjalan berkala (mis. tiap 1 menit) memeriksa jadwal mana yang `next_run_at <= now()` dan `is_active = true`, lalu men-dispatch job ke Queue |
 | **5. Fetch Berita** | Worker Pool → News Collector → NewsProvider plugin | Fetch **incremental**: hanya berita sejak `last_fetched_at` untuk menghindari duplikasi & menghemat kuota API provider |
-| **6. Sentiment Analysis** | News Analyzer (AI Agent, §13.2) | Setiap berita baru dianalisis: skor sentimen + alasan singkat, mengikuti kategori prompt "Ringkasan Berita" (§14.1) |
+| **6. Sentiment Analysis** | News Analyzer (AI Agent, §14.2) | Setiap berita baru dianalisis: skor sentimen + alasan singkat, mengikuti kategori prompt "Ringkasan Berita" (§15.1) |
 | **7. Simpan ke Database** | News Collector | `news_items` (berita mentah) dan `sentiment_scores` (hasil analisis) disimpan; deduplikasi berbasis `source_url`/hash konten sebelum insert |
-| **8. Chunking + Embedding** | RAG Engine | Konten berita (judul + ringkasan/isi) dipecah jadi chunk sesuai ukuran optimal untuk embedding, lalu di-embed lewat LLM Gateway (`embed()`, §15.3) |
+| **8. Chunking + Embedding** | RAG Engine | Konten berita (judul + ringkasan/isi) dipecah jadi chunk sesuai ukuran optimal untuk embedding, lalu di-embed lewat LLM Gateway (`embed()`, §16.3) |
 | **9. Upsert ke Vector DB** | RAG Engine | Chunk + vector disimpan dengan metadata (`ticker`, `published_at`, `sentiment_score`) agar retrieval bisa difilter per-emiten/rentang waktu saat dipakai Research Agent atau Knowledge Agent |
 
 **Idempotency & error handling:**
@@ -799,11 +799,33 @@ Agar user tidak perlu menulis cron expression manual (kecuali power user), Dashb
 
 ---
 
+## 13. Kalender Agenda Emiten
+
+Ini satu-satunya permukaan pada platform yang menghadap ke depan, dan karena itu yang paling mungkin dibaca sebagai ramalan. Setiap keputusan di bawah mendorong ke arah sebaliknya.
+
+**Yang dinyatakan adalah jadwal, bukan akibat.** "TLKM merilis laporan pada 30 April" adalah fakta. "TLKM merilis laporan pada 30 April, pertimbangkan masuk sebelumnya" adalah sinyal trading berpakaian entri kalender — dan tidak adanya kolom tempat kalimat kedua bisa hidup adalah penjaganya. Alert yang lahir dari kalender ini menyebut tanggal dan berhenti.
+
+**Sumbernya tiga, dan urutannya adalah urutan kepercayaan.** Entri manual operator; tanggal yang diekstraksi dari liputan yang sudah ditandai ke emiten; dan bursa, bila endpoint-nya menjawab. Setiap baris membawa sumbernya sendiri ke layar, karena tanggal dari filing bursa dan tanggal yang diangkat dari judul berita bukan klaim yang sama.
+
+**Bursa memang menerbitkan kalender, tetapi tidak pada endpoint yang bisa diandalkan.** Diuji langsung: satu permintaan dijawab JSON, permintaan berikutnya dijawab halaman tantangan Cloudflare. Kolektor yang dibangun di atasnya akan bekerja saat pengembangan lalu diam-diam berhenti di produksi tanpa gagal — persis kegagalan yang sudah pernah dibayar pipeline berita.
+
+**Ekstraksi dari liputan menukar recall demi presisi, dengan sengaja.** Entri yang hilang berarti pembaca memeriksa di tempat lain; entri yang salah berarti pembaca merencanakan sesuatu di sekitar rapat yang tidak akan terjadi. Karena itu: artikel yang menyebut lebih dari satu tanggal dilewati seluruhnya — jadwal dividen memuat cum, ex, recording, dan pembayaran, dan memilih satu dari empat adalah lemparan koin yang dicetak sebagai entri kalender. Artikel tanpa tanggal juga dilewati. Artikel yang tidak bisa diatribusikan ke emiten mana pun tidak menghasilkan entri, karena menebak di sini berarti menempelkan tanggal pada perusahaan yang salah.
+
+**Tahun yang tidak ditulis ditambatkan pada tanggal terbit artikel, bukan pada hari ini** — supaya menjalankan ulang ekstraktor beberapa bulan kemudian tidak diam-diam menggeser setiap tanggal yang sudah ditemukannya. Dan tanggal yang sudah lewat tidak digulirkan ke tahun depan kecuali hasilnya dekat: artikel Desember yang menyebut "20 Januari" berarti Januari berikutnya, lima puluh satu hari lagi; artikel Agustus yang menyebut "20 Juli" berarti Juli yang baru saja lewat, dan menggulirkannya akan menerbitkan rapat sebelas bulan ke depan yang tidak dijadwalkan siapa pun.
+
+**Pemberitahuan hanya untuk emiten yang dipantau seseorang.** Kalendernya sendiri mencakup seluruh bursa dan bisa dijelajahi utuh, tetapi pemberitahuan tak diminta tentang perusahaan yang tidak diminati siapa pun di sini bukan informasi, melainkan kebisingan yang datang pada jadwalnya sendiri.
+
+**Kuncinya pada peristiwa, bukan pada hari.** Rapat yang seminggu lagi tidak boleh mengumumkan dirinya setiap pagi sampai terjadi. Tanggal ikut ke dalam kunci karena peristiwa yang dijadwal ulang adalah fakta yang berbeda dan layak disebut lagi; pengguna ikut ke dalam kunci karena `dedup_key` unik secara global, sehingga kunci bersama berarti siapa pun yang diproses kedua tidak pernah diberi tahu.
+
+**Tanggal mekanis mendapat jendela lebih panjang.** Ex-date menggeser kuotasi sebesar dividennya, apa pun pendapat siapa pun. Pembaca yang tidak tahu sedang menatap grafik yang tampak jatuh tanpa sebab.
+
+---
+
 
 # Bagian IV — Lapisan AI
 
 
-## 13. Arsitektur Multi-Agent
+## 14. Arsitektur Multi-Agent
 
 ### Diagram Alur Multi-Agent
 
@@ -847,9 +869,9 @@ flowchart TB
 | **Risk Analyzer** | Estimasi risiko per-asset & per-portofolio, drawdown historis | Data historis + portfolio | Risk Assessment terstruktur |
 | **Knowledge Agent** | Retrieval konteks dari Knowledge Base via RAG | Query dari agent lain | Konteks relevan |
 | **Reflection Agent** | Evaluasi pola keputusan investor sendiri (dari Investment Journal) — **bukan** evaluasi strategi trading bot | Journal + hasil historis rekomendasi vs keputusan aktual investor | Insight reflektif untuk investor (mis. "Anda cenderung menahan posisi rugi lebih lama dari rencana awal") |
-| **Summary Agent** | Rangkai seluruh insight jadi Analysis Result & Recommendation terstruktur final | Output seluruh agent | Struktur final (§13.4) |
+| **Summary Agent** | Rangkai seluruh insight jadi Analysis Result & Recommendation terstruktur final | Output seluruh agent | Struktur final (§14.4) |
 | **Context Builder** | Susun konteks input terstandar sebelum prompt (data + memory + preferensi user) | Request + data mentah | Konteks terstruktur |
-| **Prompt Composer** | Rangkai template prompt (§14) + konteks jadi prompt final | Template + konteks | Prompt siap kirim ke LLM Gateway |
+| **Prompt Composer** | Rangkai template prompt (§15) + konteks jadi prompt final | Template + konteks | Prompt siap kirim ke LLM Gateway |
 | **Memory Manager** | Simpan & ambil preferensi investor, riwayat interaksi, horizon investasi yang pernah dinyatakan | Interaksi berjalan | Memory terstruktur |
 | **Output Validator** | Validasi skema output LLM (mis. semua field rekomendasi wajib terisi, confidence dalam rentang valid) | Output mentah LLM | Output tervalidasi / trigger retry |
 
@@ -883,12 +905,45 @@ Setiap rekomendasi yang dihasilkan AI **harus** memenuhi struktur berikut (dival
 | Stop Loss Usulan | **Ditandai eksplisit "usulan", bukan instruksi** — sesuai requirement |
 | Horizon Investasi | Jangka pendek/menengah/panjang sesuai basis analisis |
 
-> **Batasan bahasa output (hard rule, ditegakkan di level Prompt Composer & Output Validator):** Sistem tidak boleh menghasilkan kalimat berbentuk instruksi eksekusi langsung (mis. "Beli sekarang", "Jual semua posisi Anda sekarang juga"). Bahasa selalu bersifat informasional-kondisional (mis. "Berdasarkan analisis X dan Y, area ini menunjukkan potensi ..., namun perlu dipertimbangkan risiko Z"). Ini diperkuat lewat template prompt (§14) dan dicek ulang oleh Output Validator sebagai bagian dari validasi skema/gaya bahasa.
+> **Batasan bahasa output (hard rule, ditegakkan di level Prompt Composer & Output Validator):** Sistem tidak boleh menghasilkan kalimat berbentuk instruksi eksekusi langsung (mis. "Beli sekarang", "Jual semua posisi Anda sekarang juga"). Bahasa selalu bersifat informasional-kondisional (mis. "Berdasarkan analisis X dan Y, area ini menunjukkan potensi ..., namun perlu dipertimbangkan risiko Z"). Ini diperkuat lewat template prompt (§15) dan dicek ulang oleh Output Validator sebagai bagian dari validasi skema/gaya bahasa.
+### Triase sebelum model dipanggil
+
+**Satu run multi-agen adalah belasan panggilan model, dan tanpa triase semuanya berbiaya sama** baik emiten itu bergerak keras maupun diam sepanjang sesi. Pipeline tidak punya cara membedakan keduanya sebelum ia mulai, jadi ia membayar kasus kedua dengan harga kasus pertama.
+
+**Keputusannya aritmetika, diambil sebelum ada prompt.** Yang dibaca adalah angka yang sudah dihitung platform — sinyal tersimpan dari pemindaian, kriteria yang cocok, rentang sesi terhadap ATR emiten itu sendiri. Keluarannya dua hal: seberapa dalam run ini pantas, dan tier model mana yang melayaninya.
+
+**Ini tidak meramalkan apa pun.** Skornya menjawab "seberapa banyak yang sedang terjadi pada emiten ini" — pernyataan tentang beberapa sesi terakhir yang sudah selesai saat dibaca. Ia tidak membawa pandangan arah dan tidak melekatkan probabilitas. Penamaan lebih penting dari biasanya di sini: sebuah angka yang menempel pada kode emiten akan dibaca sebagai ramalan kecuali kodenya berhati-hati, jadi tidak ada apa pun di lapisan ini yang disebut sinyal, prediksi, atau confidence. Dua emiten yang bergerak sama kerasnya — satu naik, satu turun — ditriase identik.
+
+**Membuka sebuah emiten dan menekan "jalankan analisis" selalu mendapat run penuh.** Orang yang bertanya langsung punya alasan yang tidak diketahui angka mana pun, dan melayaninya dengan jalur murah membuat fitur terasa rusak justru saat dipakai dengan sengaja. Penghematannya ada pada pemanggil terjadwal dan batch, bukan pada pembaca.
+
+**Batas hanya pernah menurunkan, tidak pernah menaikkan.** Agen yang meminta tier murah memintanya atas pertimbangannya sendiri, dan batas yang tinggi tidak boleh mempromosikannya.
+
+**Keputusannya menyebutkan alasannya,** dan itu ikut dilaporkan bersama hasil analisis. Run yang ditriase turun menghasilkan prosa yang lebih dangkal karena alasan yang dinyatakan, dan pembaca yang membandingkan dua analisis berhak tahu yang mana yang diturunkan.
+
+**Yang jujur harus dinyatakan: triase tidak bisa membuat analisis mendalam jadi lebih murah.** Ia hanya bisa menghindari membeli analisis mendalam untuk emiten yang tidak sedang mengalami apa pun.
+
+
+### Untuk siapa analisis ini ditulis
+
+**Memory Manager sudah menyimpan horizon dan sikap risiko sejak lapisan AI ada, dan konteks prompt sudah membawanya — tetapi tidak ada satu pun template yang menginterpolasinya.** Akibatnya platform menanyakan bagaimana seseorang berinvestasi lalu menulis setiap analisis dengan cara yang sama. Profil kini disuntikkan ke *system message*, bukan diserahkan ke tiap template: aturan yang harus diulang di sebelas template adalah aturan yang akan hilang di template kedua belas.
+
+**Pembingkaian bukan kesimpulan.** Yang berubah adalah penekanan, urutan, dan seberapa banyak dijelaskan. Yang **tidak** boleh berubah adalah sikap, level, dan confidence — dua investor yang melihat emiten yang sama pada hari yang sama melihat fakta yang sama, dan platform yang mengatakan "jual" kepada yang hati-hati dan "beli" kepada yang agresif bukan sedang mempersonalisasi, ia sedang mengatakan kepada masing-masing apa yang ingin mereka dengar. Instruksi itu ditulis eksplisit di dalam bloknya, termasuk larangan melunakkan risiko atau menjatuhkan indikator yang bertentangan karena profil pembacanya.
+
+| Preferensi | Yang diubahnya |
+|---|---|
+| Horizon | Apa yang layak didalami: level dekat dan likuiditas, struktur tren, atau daya tahan neraca |
+| Sikap risiko | Seberapa rinci sisi buruk dijabarkan — bukan seberapa sering sesuatu disebut layak beli |
+| Kosakata pasar | Apakah istilah teknikal dijelaskan saat pertama muncul |
+| Kedalaman penjelasan | Panjang narasi |
+| Mode privasi | Satu-satunya yang berkonsekuensi di luar kata-kata: mode tinggi mengarahkan data pribadi hanya ke penyedia swakelola |
+
+**Yang belum dinyatakan tidak menghasilkan pembingkaian apa pun.** Bawaan Memory Manager ada supaya kode punya sesuatu untuk dibaca, bukan supaya model diberi tahu bahwa investornya meminta sesuatu. Antarmuka pun menandai mana yang bawaan dan mana yang benar-benar dipilih: preferensi hasil dugaan yang dipantulkan kembali sebagai "Anda mengatakan" adalah cara sebuah produk mulai keliru tentang orang dengan percaya diri.
+
 
 ---
 
 
-## 14. Prompt Engineering
+## 15. Prompt Engineering
 
 ### Kategori Prompt
 
@@ -916,7 +971,7 @@ flowchart TB
     PC -->|pilih template versi aktif| PM[Prompt Manager]
     PM --> LG[LLM Gateway]
     LG --> OV[Output Validator]
-    OV -->|valid & sesuai batasan bahasa §13.4| NEXT[Hasil ke Agent Berikutnya/Final]
+    OV -->|valid & sesuai batasan bahasa §14.4| NEXT[Hasil ke Agent Berikutnya/Final]
     OV -->|invalid/melanggar batasan bahasa| RETRY[Retry dgn instruksi korektif]
     RETRY --> LG
     NEXT --> LOG[Simpan ke ai_messages + analysis_results]
@@ -925,12 +980,12 @@ flowchart TB
 **Prinsip desain prompt:**
 - Setiap template prompt untuk kategori yang menghasilkan output actionable-informational (rekomendasi, target price) menyertakan **instruksi eksplisit anti-instruksi-eksekusi** ("gunakan bahasa kondisional-informasional, jangan berikan perintah beli/jual langsung").
 - Prompt versioned (`prompt_templates.version`); setiap `ai_messages` mencatat versi yang dipakai untuk reproducibility.
-- Output Validator memeriksa dua hal: **kelengkapan struktur** (field wajib §13.4 terisi) dan **kepatuhan bahasa** (tidak ada kalimat instruksi eksekusi) sebelum hasil disimpan/ditampilkan.
+- Output Validator memeriksa dua hal: **kelengkapan struktur** (field wajib §14.4 terisi) dan **kepatuhan bahasa** (tidak ada kalimat instruksi eksekusi) sebelum hasil disimpan/ditampilkan.
 
 ---
 
 
-## 15. Integrasi OpenAI-Compatible
+## 16. Integrasi OpenAI-Compatible
 
 ### Prinsip Abstraksi
 
@@ -959,7 +1014,7 @@ flowchart TB
 ### Chat Completion
 
 - Kontrak internal mengikuti skema `messages[]` (system/user/assistant/tool), `temperature`, `max_tokens`, `stop`.
-- Setiap agent (§13) memanggil lewat kontrak yang sama; perbedaan provider ditangani sepenuhnya di adapter, tidak bocor ke logic agent.
+- Setiap agent (§14) memanggil lewat kontrak yang sama; perbedaan provider ditangani sepenuhnya di adapter, tidak bocor ke logic agent.
 
 ### Embedding
 
@@ -974,7 +1029,7 @@ flowchart TB
 
 ### Structured Output
 
-- Untuk output yang harus mengikuti skema ketat (Recommendation §13.4), gunakan structured output/JSON mode bila provider mendukung; jika tidak, fallback ke *prompt-enforced JSON + Output Validator* sebagai lapisan keamanan tambahan (jangan hanya mengandalkan provider).
+- Untuk output yang harus mengikuti skema ketat (Recommendation §14.4), gunakan structured output/JSON mode bila provider mendukung; jika tidak, fallback ke *prompt-enforced JSON + Output Validator* sebagai lapisan keamanan tambahan (jangan hanya mengandalkan provider).
 
 ### Streaming
 
@@ -1023,7 +1078,7 @@ flowchart TB
 ---
 
 
-## 16. Keluaran Dwibahasa & Respons Bertahap
+## 17. Keluaran Dwibahasa & Respons Bertahap
 
 ### Satu analisis, dua render
 
@@ -1048,7 +1103,7 @@ flowchart TB
 
 **Dirender di dalam run analisis, terjemahan menggandakan waktu sebelum pembaca punya apa pun** — untuk bahasa yang mungkin tidak pernah ia buka. Yang lebih menentukan: setiap detik tambahan di dalam satu job adalah detik tambahan yang harus dilewati **tanpa satu pun panggilan model gagal**. Pekerjaan yang lebih panjang tidak sekadar terasa lambat, ia lebih mungkin tidak selesai sama sekali, dan saat gagal ia membuang analisis yang sudah berhasil bersama terjemahan yang belum.
 
-**Dipecah, kegagalan menjadi parsial alih-alih total.** Terjemahan yang gagal meninggalkan analisis Inggris yang utuh dan terbaca — bentuk yang sama dengan aturan di §16.1, hanya ditegakkan pada tingkat job.
+**Dipecah, kegagalan menjadi parsial alih-alih total.** Terjemahan yang gagal meninggalkan analisis Inggris yang utuh dan terbaca — bentuk yang sama dengan aturan di §17.1, hanya ditegakkan pada tingkat job.
 
 **Di-enqueue di transaksi yang sama dengan penyimpanan hasilnya,** dengan `dedup_key` per `analysis_result_id`. Commit yang sama yang membuat analisis ada juga membuat terjemahannya terantre; tidak ada jendela di mana hasil tersimpan tanpa pekerjaan lanjutan yang menemaninya. Kunci dedup berarti percobaan ulang tidak membayar render kedua atas teks yang sudah dirender.
 
@@ -1066,7 +1121,7 @@ flowchart TB
 # Bagian V — Yang Dilihat Pembaca
 
 
-## 17. Watchlist & Pengelompokan
+## 18. Watchlist & Pengelompokan
 
 **Kelompok bukan konsep baru yang ditempelkan.** `watchlists` membawa `name` dengan batasan unik per pengguna sejak skema awal, dan `watchlist_items` menggantung padanya. Sebuah kelompok *adalah* nama itu.
 
@@ -1083,13 +1138,13 @@ flowchart TB
 ---
 
 
-## 18. Penyaringan Emiten & Horizon
+## 19. Penyaringan Emiten & Horizon
 
 **Ini penyaringan, bukan ramalan.** Perbedaan itu adalah keseluruhan desainnya. Setiap kriteria adalah aturan bernama dan dapat diperiksa atas snapshot indikator yang sudah dihitung mesin. Tidak ada yang meramalkan harga, tidak ada yang melekatkan probabilitas, dan skor adalah **hitungan kondisi yang terpenuhi**, bukan peluang naik.
 
 **Semestanya seluruh bursa** — setiap emiten yang punya rekaman sesi cukup, sekitar delapan ratus, bukan segelintir yang riwayat harganya sudah diimpor. Daftar yang hanya bisa menampilkan nama yang sudah Anda ikuti tidak akan pernah memunculkan nama yang belum Anda pikirkan, padahal itu satu-satunya guna sebuah penyaring. Watchlist adalah **filter di atas pass yang sama**, bukan semesta yang berbeda, sehingga sebuah kriteria berarti hal yang sama baik kotaknya dicentang maupun tidak.
 
-**Peringkatnya dibaca, bukan dihitung saat diminta.** Satu snapshot indikator berbiaya sekitar 44 milidetik dan kriterianya butuh satu per emiten, jadi memeringkat bursa secara langsung berbiaya setengah menit — pada setiap muat halaman dan setiap kali horizon diganti. Pemindaian (§14) sudah menghitung snapshot itu untuk setiap emiten, jadi keempat horizon dievaluasi di sana dan penyajiannya menjadi satu query. Terukur: 800 emiten, sekitar 200 milidetik.
+**Peringkatnya dibaca, bukan dihitung saat diminta.** Satu snapshot indikator berbiaya sekitar 44 milidetik dan kriterianya butuh satu per emiten, jadi memeringkat bursa secara langsung berbiaya setengah menit — pada setiap muat halaman dan setiap kali horizon diganti. Pemindaian (§15) sudah menghitung snapshot itu untuk setiap emiten, jadi keempat horizon dievaluasi di sana dan penyajiannya menjadi satu query. Terukur: 800 emiten, sekitar 200 milidetik.
 
 **Horizon menyebut jendela pembacaan, bukan lama kejadian.** `7d` berarti "kondisi yang lazim dibaca dalam jendela sepekan", bukan "akan naik dalam tujuh hari". Tanpa dinyatakan, angka itu terbaca sebagai yang kedua.
 
@@ -1110,11 +1165,23 @@ flowchart TB
 
 **Setiap kriteria wajib terbukti bisa menyala.** Kriteria yang menguji nilai yang tak pernah diproduksi sumbernya — menguji `"up"` sementara detektornya menjawab `"bullish"` — tidak terlihat rusak: ia terbaca sebagai kondisi yang kebetulan tidak terjadi pada siapa pun, sambil menahan bobotnya dari plafon horizon. Nol kecocokan atas dua belas emiten tidak bisa dibedakan dari pasar yang tenang; atas delapan ratus, ia menonjol. Penjaganya bukan daftar nilai yang sah, karena daftar seperti itu akan basi dengan cara yang sama persis: sebuah tes mengalirkan tujuh bentuk bar melalui mesin indikator sungguhan dan menuntut setiap kriteria menyala setidaknya sekali.
 
+### Menggambar dasar sebuah rekomendasi
+
+**Explainability selama ini hanya teks:** sebuah sikap, satu paragraf, dan dua daftar faktor. Itu bisa diperiksa pada prinsipnya dan sulit diperiksa pada praktiknya — "harga di atas rata-rata 50 bar" meminta pembaca menahan dua angka di kepalanya dan memercayai bahwa platform membandingkannya dengan benar. Digambar, klaim yang sama selesai dalam satu pandangan.
+
+**Setiap tanda horizontal.** Target yang digambar sebagai garis menanjak ke ruang kosong di kanan bar terakhir adalah ramalan, apa pun sebutan legendanya. Maka target adalah garis harga dengan dasar perhitungannya tertulis di sebelahnya — aturan yang sama dengan ekspor PDF, karena alasan yang sama.
+
+**Faktor yang bertentangan ikut digambar.** Grafik yang hanya menampilkan apa yang mendukung sikapnya adalah argumen, bukan penjelasan — alasan yang sama yang membuat §14.4 mewajibkan indikator bertentangan.
+
+**Setiap level menyebut dasarnya pada baris yang sama dengan angkanya.** Angka tanpa dasar yang dinyatakan diperlakukan pembaca sebagai lebih pasti daripada sebenarnya.
+
+**Tidak ada rekomendasi tersimpan berarti keadaan kosong, bukan grafik harga biasa.** Grafik tanpa tanda apa pun akan tampil sebagai grafik harga di bawah judul yang menjanjikan penjelasan.
+
 
 ---
 
 
-## 19. Strategi Dua Sisi Posisi
+## 20. Strategi Dua Sisi Posisi
 
 **Masalah yang diselesaikan.** Satu label menjawab dua pertanyaan berbeda. `hold` pada emiten yang Anda miliki berarti *pertahankan*; `hold` pada emiten yang tidak Anda miliki berarti *tidak ada alasan untuk mulai*. Kata yang sama, dua situasi. Itulah sebabnya orang membaca rekomendasi dan tetap bertanya "jadi saya harus apa?".
 
@@ -1131,14 +1198,14 @@ flowchart TB
 | `reduce` | Hindari | Kandidat kurangi |
 | `sell` | Hindari | Kandidat keluar |
 
-**Aturan penamaan.** `entry_candidate`, bukan "beli"; `exit_candidate`, bukan "jual". §13.4 menempatkan label rekomendasi di bawah aturan sikap-bukan-perintah, dan teks turunan mewarisinya. Setiap sikap wajib menyatakan **apa yang membatalkannya** — sikap tanpa kondisi pembatalan tidak akan pernah bisa dibuktikan keliru, dan justru itulah yang paling lama dipegang orang.
+**Aturan penamaan.** `entry_candidate`, bukan "beli"; `exit_candidate`, bukan "jual". §14.4 menempatkan label rekomendasi di bawah aturan sikap-bukan-perintah, dan teks turunan mewarisinya. Setiap sikap wajib menyatakan **apa yang membatalkannya** — sikap tanpa kondisi pembatalan tidak akan pernah bisa dibuktikan keliru, dan justru itulah yang paling lama dipegang orang.
 
 **Confidence menggerbangi masuk, bukan bertahan.** `buy` di bawah 55 confidence menjadi "tunggu level" bagi yang belum punya, tetapi tetap "pertahankan" bagi yang sudah punya. Confidence rendah adalah alasan untuk tidak memulai, bukan alasan untuk keluar; menyamakan keduanya akan mengaduk posisi atas pandangan yang tidak berubah.
 
 ---
 
 
-## 20. Monitoring, Alert & Notifikasi
+## 21. Monitoring, Alert & Notifikasi
 
 ### Observasi
 
@@ -1201,7 +1268,7 @@ Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
 ---
 
 
-## 21. Pekerjaan Panjang & Event Realtime
+## 22. Pekerjaan Panjang & Event Realtime
 
 **Analisis penuh tidak boleh ditahan di atas satu request HTTP.** Satu run multi-agen adalah belasan panggilan model. Ditahan di request, apa pun yang berada di depan server menjadi batas sebenarnya atas seberapa teliti sebuah analisis boleh dilakukan — dan di balik Cloudflare batas itu **100 detik yang tidak bisa dinaikkan dari sisi origin**. Yang diterima pembaca adalah halaman galat 524, sementara pekerjaannya jalan terus lalu hasilnya dibuang.
 
@@ -1224,7 +1291,7 @@ Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
 ---
 
 
-## 22. Antarmuka & Daftar Panjang
+## 23. Antarmuka & Daftar Panjang
 
 ### Navigasi
 
@@ -1242,7 +1309,7 @@ Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
 
 **Ditulis sebagai teks, bukan ditangkap sebagai gambar.** Tangkapan layar lebih sederhana dan menghasilkan berkas yang tidak bisa dicari, angkanya tidak bisa disalin, dan tidak terbaca pembaca layar — dengan ukuran beberapa kali lipat.
 
-**Disclaimer ikut, dan itu tidak opsional.** PDF adalah satu-satunya artefak yang meninggalkan platform sepenuhnya: ia dikirim lewat surel, dicetak, dan diteruskan tanpa antarmuka di sekelilingnya yang membawa peringatan. Ekspor yang menjatuhkannya menerbitkan prosa investasi hasil model tanpa satu pun keterangan tentang apa itu (§24).
+**Disclaimer ikut, dan itu tidak opsional.** PDF adalah satu-satunya artefak yang meninggalkan platform sepenuhnya: ia dikirim lewat surel, dicetak, dan diteruskan tanpa antarmuka di sekelilingnya yang membawa peringatan. Ekspor yang menjatuhkannya menerbitkan prosa investasi hasil model tanpa satu pun keterangan tentang apa itu (§26).
 
 **Target dan stop membawa metodenya.** Angka tanpa dasar yang dinyatakan adalah angka yang diperlakukan pembaca sebagai lebih pasti daripada sebenarnya.
 
@@ -1260,7 +1327,7 @@ Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
 
 **Aksi batch akun memakai endpoint per akun yang sama.** Tidak ada endpoint massal, disengaja: ia harus menuliskan ulang penjaga "bukan diri sendiri" dan "bukan admin terakhir", lalu memutuskan arti batch yang setengah diterapkan. Batch dijalankan berurutan, setiap akun tetap dicoba meski ada yang gagal, dan hasilnya dilaporkan per akun. Batch yang diam-diam melaporkan sukses untuk yang berhasil saja adalah cara seorang admin percaya empat puluh akun tersuspend padahal tiga puluh delapan.
 
-*(Berbeda dari aksi massal alert di §20.5, yang memakai satu pernyataan SQL. Perbedaannya bukan inkonsistensi: alert tidak punya penjaga per baris untuk dituliskan ulang, akun punya.)*
+*(Berbeda dari aksi massal alert di §21.5, yang memakai satu pernyataan SQL. Perbedaannya bukan inkonsistensi: alert tidak punya penjaga per baris untuk dituliskan ulang, akun punya.)*
 
 ### Membaca daftar panjang
 
@@ -1278,11 +1345,31 @@ Maka aturannya sempit dan mutlak, dan berlaku sama untuk keduanya:
 
 ---
 
+## 24. Berbagi Antar Akun
+
+Fiturnya kecil; kehati-hatian di sekelilingnya tidak. Sebuah rekomendasi yang membawa label dan skor confidence, dikirim dari satu orang ke orang lain, adalah hal terdekat dengan mendistribusikan riset investasi yang dilakukan platform ini. Itu tidak membuatnya terlarang — itu membuatnya satu-satunya permukaan di mana siapa menerima apa harus tetap bisa dijawab.
+
+**Penerima adalah akun yang disebut namanya, tidak pernah tautan.** URL yang membawa analisis investasi tentang emiten tertentu adalah token pembawa: ia meneruskan dirinya sendiri, dan tidak bisa ditarik kembali begitu berada di sebuah grup percakapan. Menyebut penerimanya membuat audiensnya tetap diketahui, dan hanya sifat itulah yang membuat pertanyaan redistribusi (§26) punya jawaban sama sekali.
+
+**Berbagi adalah pemberian akses, bukan salinan.** Barisnya menunjuk aslinya, sehingga watchlist yang disunting pemiliknya tetap mutakhir bagi penerimanya, dan menarik kembali mencabut akses ke bendanya alih-alih ke satu potretnya. Salinan juga akan diam-diam menjadikan setiap berbagi sebagai versi otoritatif kedua dari sebuah analisis — hal yang §17.1 larang untuk terjemahan karena alasan yang persis sama.
+
+**Penerima tidak bisa membagikan ulang.** Kepemilikan yang diperiksa, bukan keterbacaan. Begitu penerima bisa meneruskan, audiensnya berhenti diketahui dan seluruh desain di atas kehilangan pijakannya.
+
+**Analisis yang tidak diminta siapa pun tidak bisa dibagikan siapa pun.** Run terjadwal tidak punya pemohon; membaca "tanpa pemilik" sebagai "milik siapa saja" adalah pembacaan yang tidak aman atas kasus yang ambigu.
+
+**Alamat yang tidak dikenal dan alamat yang bukan pengguna dijawab identik.** Membedakannya menjadikan fitur ini cara menguji apakah seseorang punya akun di sini.
+
+**Penerima melihat peringatan yang berbeda dari yang dilihat pemiliknya.** Ia tidak memilih emitennya, tidak menetapkan horizon yang membingkainya, dan mungkin tidak tahu platform ini apa — sehingga pembaca yang menerima punya konteks *lebih sedikit* daripada yang menjalankannya, bukan lebih banyak.
+
+**Penarikan dicatat, bukan dihapus.** "Ini pernah dibagikan lalu ditarik" adalah pertanyaan yang justru ingin dijawab daftar ini, dan baris yang lenyap tidak bisa menjawabnya.
+
+---
+
 
 # Bagian VI — Operasi
 
 
-## 23. Konfigurasi oleh Operator
+## 25. Konfigurasi oleh Operator
 
 Bab ini tentang satu pemindahan: keputusan yang dulu ada di environment kini ada di sistem yang sedang berjalan. `AIDSS_*` disetel oleh yang men-deploy, berlaku saat boot, dan butuh restart untuk berubah — tepat untuk URL basis data, keliru untuk keputusan yang diambil seseorang pukul sebelas malam.
 
@@ -1321,7 +1408,7 @@ Bab ini tentang satu pemindahan: keputusan yang dulu ada di environment kini ada
 ---
 
 
-## 24. Keamanan
+## 26. Keamanan
 
 | Area | Rekomendasi |
 |---|---|
@@ -1332,15 +1419,15 @@ Bab ini tentang satu pemindahan: keputusan yang dulu ada di environment kini ada
 | **Encryption** | Data sensitif (portofolio, journal) terenkripsi at-rest; TLS wajib untuk semua komunikasi eksternal |
 | **Audit Trail** | `audit_logs` append-only dengan `actor_type` (user/ai/system) |
 | **Rate Limiting** | Di API Gateway (terhadap user) dan di LLM Gateway (terhadap tiap AI provider) |
-| **Prompt Injection Protection** | (1) Perlakukan seluruh teks eksternal (berita, dokumen upload user) sebagai *data*, bukan instruksi — beri delimiter jelas di prompt; (2) Output Validator menolak output yang menyerupai perubahan instruksi sistem atau kebocoran system prompt; (3) tool calling dibatasi hanya ke tool read-only terdaftar (§15.4), sehingga bahkan bila prompt injection berhasil memanipulasi teks, tidak ada aksi berbahaya yang bisa dipicu (tidak ada tool tulis/eksekusi yang tersedia) |
-| **Output Validation** | Validasi skema (§13.4) + validasi bahasa (tidak ada instruksi eksekusi, §13.4) sebelum output disimpan/ditampilkan ke user |
-| **Data Privacy Portofolio** | Karena data portofolio adalah data finansial personal sensitif, terapkan enkripsi field-level tambahan & batasi retensi sesuai kebutuhan; pertimbangkan opsi self-hosted AI provider untuk data ini bila user memilih mode privasi tinggi (§15.10) |
+| **Prompt Injection Protection** | (1) Perlakukan seluruh teks eksternal (berita, dokumen upload user) sebagai *data*, bukan instruksi — beri delimiter jelas di prompt; (2) Output Validator menolak output yang menyerupai perubahan instruksi sistem atau kebocoran system prompt; (3) tool calling dibatasi hanya ke tool read-only terdaftar (§16.4), sehingga bahkan bila prompt injection berhasil memanipulasi teks, tidak ada aksi berbahaya yang bisa dipicu (tidak ada tool tulis/eksekusi yang tersedia) |
+| **Output Validation** | Validasi skema (§14.4) + validasi bahasa (tidak ada instruksi eksekusi, §14.4) sebelum output disimpan/ditampilkan ke user |
+| **Data Privacy Portofolio** | Karena data portofolio adalah data finansial personal sensitif, terapkan enkripsi field-level tambahan & batasi retensi sesuai kebutuhan; pertimbangkan opsi self-hosted AI provider untuk data ini bila user memilih mode privasi tinggi (§16.10) |
 | **Disclaimer & Positioning Legal** | Bukan pengganti nasihat hukum. Rekomendasi: cantumkan disclaimer konsisten di seluruh output ("AI-generated analysis, bukan nasihat investasi dari penasihat berlisensi") dan tinjau dengan penasihat hukum apakah penyediaan rekomendasi Buy/Sell berskor, meski bersifat informasional, memerlukan status/izin tertentu di bawah ketentuan OJK terkait penyedia riset/rekomendasi investasi — terutama jika platform akan dipakai lebih luas dari personal use |
 
 ---
 
 
-## 25. Deployment & Lingkungan
+## 27. Deployment & Lingkungan
 
 ```mermaid
 flowchart LR
@@ -1385,15 +1472,15 @@ flowchart LR
 ---
 
 
-## 26. Analisis Risiko
+## 28. Analisis Risiko
 
 | Risiko | Kategori | Likelihood | Impact | Mitigasi |
 |---|---|---|---|---|
 | AI menghasilkan rekomendasi yang bias/menyesatkan | AI Quality | Sedang | Tinggi | Output Validator, wajib menyertakan indikator bertentangan (mencegah bias konfirmasi), confidence score terkalibrasi |
-| Output AI mengandung bahasa instruksi eksekusi tanpa sengaja | **Compliance/Produk** | Sedang (butuh guardrail eksplisit) | Tinggi (bertentangan dengan positioning produk) | Validasi bahasa di Output Validator, ditegakkan juga pada keluaran terjemahan (§16.1) |
-| Ketergantungan pada satu AI provider (downtime/perubahan harga) | Operasional | Sedang | Sedang | Multi-provider + fallback chain (§15.10) |
+| Output AI mengandung bahasa instruksi eksekusi tanpa sengaja | **Compliance/Produk** | Sedang (butuh guardrail eksplisit) | Tinggi (bertentangan dengan positioning produk) | Validasi bahasa di Output Validator, ditegakkan juga pada keluaran terjemahan (§17.1) |
+| Ketergantungan pada satu AI provider (downtime/perubahan harga) | Operasional | Sedang | Sedang | Multi-provider + fallback chain (§16.10) |
 | Biaya AI membengkak seiring skala pengguna | Finansial/Operasional | Sedang–Tinggi | Sedang | Model routing berbasis kompleksitas, caching hasil analisis yang belum stale, budget alert |
-| Prompt injection lewat berita/dokumen eksternal | Security | Sedang | Sedang (dibatasi karena tidak ada tool tulis) | Delimiter jelas data vs instruksi, tool calling read-only saja (§15.4) |
+| Prompt injection lewat berita/dokumen eksternal | Security | Sedang | Sedang (dibatasi karena tidak ada tool tulis) | Delimiter jelas data vs instruksi, tool calling read-only saja (§16.4) |
 | Penggunaan sumber data yang melanggar ToS (scraping) | **Legal** | Rendah *jika ikuti §9* | Tinggi | Hanya pakai provider dengan API resmi & ToS yang mengizinkan |
 | Rekomendasi berskor (Buy/Sell) dianggap sebagai nasihat investasi berlisensi oleh regulator/pengguna | **Regulatory** | Rendah–Sedang | Tinggi jika terjadi | Disclaimer konsisten, bahasa informasional (bukan instruksi), legal review terhadap posisi produk sebelum skala luas |
 | Kebocoran data portofolio pengguna (sensitif) | Security | Rendah–Sedang | Tinggi | Enkripsi, RBAC, opsi self-hosted AI provider untuk data sensitif |
@@ -1402,7 +1489,7 @@ flowchart LR
 ---
 
 
-## 27. Batas yang Diketahui & Arah Berikutnya
+## 29. Batas yang Diketahui & Arah Berikutnya
 
 Bab penutup ini memisahkan tiga hal yang mudah tertukar: batas yang berasal dari sumber data, batas yang berasal dari keputusan desain, dan arah yang sengaja belum diambil.
 
@@ -1418,15 +1505,10 @@ Bukan karena belum sempat, melainkan karena datanya memang tidak ada. Menyatakan
 | Harga realtime | Kanal gratis tertunda sekitar 15 menit, dan memoll lebih cepat hanya menanyakan angka basi yang sama lebih sering |
 | Pencocokan parafrasa pada retrieval | Banyak gateway swakelola menjawab `/embeddings` dengan 404; pencarian token eksak tidak terpengaruh |
 
-**Riwayat sesi adalah batas yang paling terasa dan satu-satunya yang bisa dicabut.** Tabel rekaman sesi terisi sekitar enam puluh sesi per emiten pada saat ini, sehingga rata-rata 200-bar tidak ada dan horizon 30 hari kehilangan dua kriteria terberatnya. Backfill hingga 320 sesi menyembuhkan ini dan berjalan lewat antrean, satu job per sesi (§14). Sampai itu dijalankan, angka yang dilaporkan horizon panjang benar tetapi sempit — dan platform menyatakannya, alih-alih diam.
+**Riwayat sesi adalah batas yang paling terasa dan satu-satunya yang bisa dicabut.** Tabel rekaman sesi terisi sekitar enam puluh sesi per emiten pada saat ini, sehingga rata-rata 200-bar tidak ada dan horizon 30 hari kehilangan dua kriteria terberatnya. Backfill hingga 320 sesi menyembuhkan ini dan berjalan lewat antrean, satu job per sesi (§15). Sampai itu dijalankan, angka yang dilaporkan horizon panjang benar tetapi sempit — dan platform menyatakannya, alih-alih diam.
 
 ### Arah yang belum diambil
 
-- Model klasifikasi/prediktif kustom untuk skoring awal sebelum reasoning AI, mempercepat & menghemat biaya.
-- Personalisasi lebih dalam: AI menyesuaikan gaya analisis dengan profil risiko & horizon investasi masing-masing pengguna (dari Memory Manager).
-- Mode kolaboratif: berbagi watchlist/analisis antar pengguna (**butuh legal review** bila menyentuh redistribusi rekomendasi ke pihak lain).
-- Integrasi kalender earnings & event-driven alert (bukan sinyal trading, sekadar informasi jadwal).
-- Explainability visual — grafik yang menyorot bagian data yang mendasari suatu rekomendasi.
 
 ### Satu hal yang tidak akan berubah
 

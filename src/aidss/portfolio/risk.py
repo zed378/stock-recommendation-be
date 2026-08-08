@@ -1,4 +1,4 @@
-"""Deterministic risk metrics (Phase 6, Section 5.2).
+"""Deterministic risk metrics (Phase 6, Section 14.2).
 
 Historical drawdown, volatility, and value-at-risk for a single asset or a
 whole portfolio. All of it computed, none of it generated.
