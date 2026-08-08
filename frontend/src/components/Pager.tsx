@@ -1,5 +1,5 @@
 import { useI18n } from "@/i18n/context";
-import { Button, inputClass } from "@/components/primitives";
+import { Button, inlineControlClass } from "@/components/primitives";
 
 /**
  * Moving through a list, and saying how much of it you are looking at.
@@ -55,7 +55,7 @@ export function Pager({
       <label className="flex items-center gap-1.5 text-xs text-faint">
         {t("pager.perPage")}
         <select
-          className={`${inputClass} py-0.5 text-xs`}
+          className={`${inlineControlClass} py-0.5 text-xs`}
           value={page.limit}
           // Back to the start on resize. Keeping the offset would land the
           // reader in the middle of a differently-sized list, at rows they

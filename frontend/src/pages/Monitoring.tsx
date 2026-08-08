@@ -12,6 +12,7 @@ import {
   ConfirmDialog,
   Empty,
   ErrorNote,
+  inputClass,
   Loading,
 } from "@/components/primitives";
 
@@ -33,13 +34,15 @@ export function Monitoring() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchError, setBatchError] = useState<string | null>(null);
   // Deleting is not undoable, so it asks. Acknowledging is, so it does not.
-  const [confirming, setConfirming] = useState<"delete" | "delete-all" | null>(null);
+  const [confirming, setConfirming] = useState<"delete" | "delete-all" | null>(
+    null,
+  );
   const toast = useToast();
   // The whole index by default. A screen that only ever shows what you already
   // follow cannot tell you about a stock you have not thought of, which is most
   // of them - and the same criteria are evaluated either way, so the scope is
   // a filter rather than a different feature.
-  const [scope, setScope] = useState<AlertScope>("global");
+  const [scope, setScope] = useState<AlertScope>("watchlist");
 
   const quotes = useQuery({
     queryKey: ["monitoring-quotes"],
@@ -54,10 +57,16 @@ export function Monitoring() {
   });
 
   const alerts = useQuery({
-    queryKey: ["alerts", unreadOnly],
+    queryKey: ["alerts", unreadOnly, alertSearch],
     queryFn: async () => {
       const { data, error } = await api.GET("/alerts", {
-        params: { query: { unacknowledged_only: unreadOnly, limit: 100 } },
+        params: {
+          query: {
+            unacknowledged_only: unreadOnly,
+            search: alertSearch.trim() || undefined,
+            limit: 100,
+          },
+        },
       });
       if (error) throw new Error(errorMessage(error, t("common.error")));
       return data ?? [];
@@ -78,7 +87,9 @@ export function Monitoring() {
   });
 
   const visibleAlerts = alerts.data ?? [];
-  const unacknowledgedCount = visibleAlerts.filter((a) => !a.acknowledged_at).length;
+  const unacknowledgedCount = visibleAlerts.filter(
+    (a) => !a.acknowledged_at,
+  ).length;
   const allVisibleSelected =
     visibleAlerts.length > 0 && visibleAlerts.every((a) => selected.has(a.id));
 
@@ -130,7 +141,9 @@ export function Monitoring() {
         tone: "success",
       });
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+      queryClient.invalidateQueries({
+        queryKey: ["notifications-unread-count"],
+      });
     },
     onError: (caught: Error) => setBatchError(caught.message),
   });
@@ -148,8 +161,14 @@ export function Monitoring() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-lg font-semibold text-ink">{t("monitoring.title")}</h1>
-        <Button variant="ghost" busy={poll.isPending} onClick={() => poll.mutate()}>
+        <h1 className="text-lg font-semibold text-ink">
+          {t("monitoring.title")}
+        </h1>
+        <Button
+          variant="ghost"
+          busy={poll.isPending}
+          onClick={() => poll.mutate()}
+        >
           {poll.isPending ? t("monitoring.polling") : t("monitoring.pollNow")}
         </Button>
       </div>
@@ -165,27 +184,43 @@ export function Monitoring() {
             onRetry={() => quotes.refetch()}
           />
         ) : !quotes.data?.length ? (
-          <Empty message={t("monitoring.empty")} hint={t("monitoring.emptyHint")} />
+          <Empty
+            message={t("monitoring.empty")}
+            hint={t("monitoring.emptyHint")}
+          />
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-faint">
-                    <th className="pb-2 pr-4 font-medium">{t("portfolio.ticker")}</th>
-                    <th className="pb-2 pr-4 text-right font-medium">{t("asset.price")}</th>
-                    <th className="pb-2 pr-4 text-right font-medium">{t("asset.change")}</th>
-                    <th className="pb-2 pr-4 font-medium">{t("monitoring.observedAt")}</th>
+                    <th className="pb-2 pr-4 font-medium">
+                      {t("portfolio.ticker")}
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium">
+                      {t("asset.price")}
+                    </th>
+                    <th className="pb-2 pr-4 text-right font-medium">
+                      {t("asset.change")}
+                    </th>
+                    <th className="pb-2 pr-4 font-medium">
+                      {t("monitoring.observedAt")}
+                    </th>
                     <th className="pb-2 font-medium" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {quotes.data.map((quote) => {
-                    const price = quote.price === null ? null : Number(quote.price);
+                    const price =
+                      quote.price === null ? null : Number(quote.price);
                     const previous =
-                      quote.previous_close === null ? null : Number(quote.previous_close);
+                      quote.previous_close === null
+                        ? null
+                        : Number(quote.previous_close);
                     const change =
-                      price !== null && previous ? (price - previous) / previous : null;
+                      price !== null && previous
+                        ? (price - previous) / previous
+                        : null;
                     return (
                       <tr key={quote.ticker}>
                         <td className="py-2.5 pr-4">
@@ -242,15 +277,15 @@ export function Monitoring() {
         action={
           <div className="flex flex-wrap items-center gap-3">
             {scope !== "watchlist" ? null : (
-            <label className="flex items-center gap-1.5 text-xs text-muted">
-              <input
-                type="checkbox"
-                checked={unreadOnly}
-                onChange={(e) => setUnreadOnly(e.target.checked)}
-                className="accent-rise"
-              />
-              {t("alerts.unacknowledgedOnly")}
-            </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={unreadOnly}
+                  onChange={(e) => setUnreadOnly(e.target.checked)}
+                  className="accent-rise"
+                />
+                {t("alerts.unacknowledgedOnly")}
+              </label>
             )}
             {/* The two whole-list actions live here rather than in the
                 selection bar, because they do not act on the selection and a
@@ -261,22 +296,22 @@ export function Monitoring() {
                 against this account, so there is nothing to mark or clear. */}
             {scope === "watchlist" && (
               <>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!unacknowledgedCount || batch.isPending}
-              onClick={() => batch.mutate({ action: "acknowledge-all" })}
-            >
-              {t("alerts.readAll")}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!visibleAlerts.length || batch.isPending}
-              onClick={() => setConfirming("delete-all")}
-            >
-              {t("alerts.deleteAll")}
-            </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!unacknowledgedCount || batch.isPending}
+                  onClick={() => batch.mutate({ action: "acknowledge-all" })}
+                >
+                  {t("alerts.readAll")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!visibleAlerts.length || batch.isPending}
+                  onClick={() => setConfirming("delete-all")}
+                >
+                  {t("alerts.deleteAll")}
+                </Button>
               </>
             )}
           </div>
@@ -285,8 +320,8 @@ export function Monitoring() {
         <nav className="mb-3 flex gap-1 border-b border-line">
           {(
             [
-              { id: "global", label: "scan.tab.global" },
               { id: "watchlist", label: "scan.tab.watchlist" },
+              { id: "global", label: "scan.tab.global" },
             ] as { id: AlertScope; label: MessageKey }[]
           ).map((tab) => (
             <button
@@ -308,156 +343,199 @@ export function Monitoring() {
           ))}
         </nav>
 
+        <input
+          className={`${inputClass} mb-3`}
+          value={alertSearch}
+          onChange={(event) => setAlertSearch(event.target.value)}
+          placeholder={t("alerts.searchPlaceholder")}
+          aria-label={t("common.search")}
+        />
+
         {/* The whole index, as the scan computed it this session. Rendered
             inside this card rather than beside it, because it is the same set
             of criteria and a reader should have one place to look. */}
-        {scope === "global" && <MarketScan scope="global" bare />}
+        {scope === "global" && <MarketScan scope="global" bare search={alertSearch} />}
 
         {scope === "watchlist" && (
-        <>
-        {/* Only rendered when something is ticked. A bar of disabled buttons
+          <>
+            {/* Only rendered when something is ticked. A bar of disabled buttons
             occupying the top of the list permanently is noise for the far more
             common case of reading alerts rather than managing them. */}
-        {selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-raised/60 p-2">
-            <span className="text-xs text-muted">
-              {t("alerts.selectedCount", { count: String(selected.size) })}
-            </span>
-            <div className="ml-auto flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                busy={batch.isPending && batch.variables?.action === "acknowledge"}
-                onClick={() => batch.mutate({ action: "acknowledge", ids: [...selected] })}
-              >
-                {t("alerts.readSelected")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                busy={batch.isPending && batch.variables?.action === "delete"}
-                onClick={() => setConfirming("delete")}
-              >
-                {t("alerts.deleteSelected")}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                {t("alerts.clearSelection")}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {batchError && (
-          <div className="mb-3">
-            <ErrorNote message={batchError} onRetry={() => setBatchError(null)} />
-          </div>
-        )}
-
-        {visibleAlerts.length > 0 && (
-          <label className="mb-2 flex items-center gap-2 text-xs text-muted">
-            <input
-              type="checkbox"
-              className="accent-rise"
-              checked={allVisibleSelected}
-              // Indeterminate cannot be expressed as a boolean prop; without
-              // it a partial selection renders as "none selected" and clicking
-              // twice is the only way to work out which way it will go.
-              ref={(node) => {
-                if (node) {
-                  node.indeterminate = selected.size > 0 && !allVisibleSelected;
-                }
-              }}
-              onChange={(event) =>
-                setSelected(
-                  event.target.checked ? new Set(visibleAlerts.map((a) => a.id)) : new Set(),
-                )
-              }
-            />
-            {t("alerts.selectAll")}
-          </label>
-        )}
-
-        {alerts.isLoading ? (
-          <Loading />
-        ) : alerts.isError ? (
-          <ErrorNote
-            message={(alerts.error as Error).message}
-            onRetry={() => alerts.refetch()}
-          />
-        ) : !alerts.data?.length ? (
-          <Empty message={t("alerts.empty")} hint={t("alerts.emptyHint")} />
-        ) : (
-          <ul className="divide-y divide-line">
-            {alerts.data.map((alert) => (
-              <li key={alert.id} className="py-3 first:pt-0 last:pb-0">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <input
-                    type="checkbox"
-                    className="accent-rise"
-                    checked={selected.has(alert.id)}
-                    onChange={() => toggleSelected(alert.id)}
-                    aria-label={t("alerts.selectOne", { ticker: alert.ticker })}
-                  />
-                  <Link
-                    to={`/assets/${alert.ticker}`}
-                    className="font-mono text-sm text-ink hover:text-rise"
+            {selected.size > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-raised/60 p-2">
+                <span className="text-xs text-muted">
+                  {t("alerts.selectedCount", { count: String(selected.size) })}
+                </span>
+                <div className="ml-auto flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    busy={
+                      batch.isPending &&
+                      batch.variables?.action === "acknowledge"
+                    }
+                    onClick={() =>
+                      batch.mutate({
+                        action: "acknowledge",
+                        ids: [...selected],
+                      })
+                    }
                   >
-                    {alert.ticker}
-                  </Link>
-                  <span
-                    className={`rounded border px-1.5 py-0.5 text-xs ${
-                      alert.direction === "up"
-                        ? "border-rise/30 text-rise"
-                        : alert.direction === "down"
-                          ? "border-fall/30 text-fall"
-                          : "border-line text-muted"
-                    }`}
+                    {t("alerts.readSelected")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    busy={
+                      batch.isPending && batch.variables?.action === "delete"
+                    }
+                    onClick={() => setConfirming("delete")}
                   >
-                    {(() => {
-                      let key = `alert.${alert.kind}`;
-                      if (alert.kind === "level_approached") {
-                        key = "alert.resistance_approached";
-                      } else if (alert.kind === "level_crossed") {
-                        if (alert.direction === "up") key = "alert.resistance_broken";
-                        else if (alert.direction === "down") key = "alert.support_broken";
-                      }
-                      return t(key as MessageKey);
-                    })()}
-                  </span>
-                  <span className="ml-auto text-xs text-faint">
-                    {dateTime(alert.triggered_at)}
-                  </span>
-                  {alert.acknowledged_at ? (
-                    <span className="text-xs text-faint">{t("alerts.acknowledged")}</span>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      busy={acknowledge.isPending && acknowledge.variables === alert.id}
-                      onClick={() => acknowledge.mutate(alert.id)}
-                    >
-                      {t("alerts.acknowledge")}
-                    </Button>
-                  )}
+                    {t("alerts.deleteSelected")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelected(new Set())}
+                  >
+                    {t("alerts.clearSelection")}
+                  </Button>
                 </div>
+              </div>
+            )}
 
-                <p className="mt-1 text-sm leading-relaxed text-ink/85">{alert.message}</p>
+            {batchError && (
+              <div className="mb-3">
+                <ErrorNote
+                  message={batchError}
+                  onRetry={() => setBatchError(null)}
+                />
+              </div>
+            )}
 
-                {/* Where a stance travels: as data, next to a link back to the
+            {visibleAlerts.length > 0 && (
+              <label className="mb-2 flex items-center gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  className="accent-rise"
+                  checked={allVisibleSelected}
+                  // Indeterminate cannot be expressed as a boolean prop; without
+                  // it a partial selection renders as "none selected" and clicking
+                  // twice is the only way to work out which way it will go.
+                  ref={(node) => {
+                    if (node) {
+                      node.indeterminate =
+                        selected.size > 0 && !allVisibleSelected;
+                    }
+                  }}
+                  onChange={(event) =>
+                    setSelected(
+                      event.target.checked
+                        ? new Set(visibleAlerts.map((a) => a.id))
+                        : new Set(),
+                    )
+                  }
+                />
+                {t("alerts.selectAll")}
+              </label>
+            )}
+
+            {alerts.isLoading ? (
+              <Loading />
+            ) : alerts.isError ? (
+              <ErrorNote
+                message={(alerts.error as Error).message}
+                onRetry={() => alerts.refetch()}
+              />
+            ) : !alerts.data?.length ? (
+              <Empty message={t("alerts.empty")} hint={t("alerts.emptyHint")} />
+            ) : (
+              <ul className="divide-y divide-line">
+                {alerts.data.map((alert) => (
+                  <li key={alert.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <input
+                        type="checkbox"
+                        className="accent-rise"
+                        checked={selected.has(alert.id)}
+                        onChange={() => toggleSelected(alert.id)}
+                        aria-label={t("alerts.selectOne", {
+                          ticker: alert.ticker,
+                        })}
+                      />
+                      <Link
+                        to={`/assets/${alert.ticker}`}
+                        className="font-mono text-sm text-ink hover:text-rise"
+                      >
+                        {alert.ticker}
+                      </Link>
+                      <span
+                        className={`rounded border px-1.5 py-0.5 text-xs ${
+                          alert.direction === "up"
+                            ? "border-rise/30 text-rise"
+                            : alert.direction === "down"
+                              ? "border-fall/30 text-fall"
+                              : "border-line text-muted"
+                        }`}
+                      >
+                        {(() => {
+                          let key = `alert.${alert.kind}`;
+                          if (alert.kind === "level_approached") {
+                            key = "alert.resistance_approached";
+                          } else if (alert.kind === "level_crossed") {
+                            if (alert.direction === "up")
+                              key = "alert.resistance_broken";
+                            else if (alert.direction === "down")
+                              key = "alert.support_broken";
+                          }
+                          return t(key as MessageKey);
+                        })()}
+                      </span>
+                      <span className="ml-auto text-xs text-faint">
+                        {dateTime(alert.triggered_at)}
+                      </span>
+                      {alert.acknowledged_at ? (
+                        <span className="text-xs text-faint">
+                          {t("alerts.acknowledged")}
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          busy={
+                            acknowledge.isPending &&
+                            acknowledge.variables === alert.id
+                          }
+                          onClick={() => acknowledge.mutate(alert.id)}
+                        >
+                          {t("alerts.acknowledge")}
+                        </Button>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-sm leading-relaxed text-ink/85">
+                      {alert.message}
+                    </p>
+
+                    {/* Where a stance travels: as data, next to a link back to the
                     analysis. Never as a sentence in the message. */}
-                {alert.context?.from && alert.context?.to ? (
-                  <p className="mt-1 text-xs text-muted">
-                    {t("alert.stanceFrom")}{" "}
-                    <span className="font-mono text-faint">{String(alert.context.from)}</span>{" "}
-                    {t("alert.stanceTo")}{" "}
-                    <span className="font-mono text-ink/80">{String(alert.context.to)}</span>
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-        </>
+                    {alert.context?.from && alert.context?.to ? (
+                      <p className="mt-1 text-xs text-muted">
+                        {t("alert.stanceFrom")}{" "}
+                        <span className="font-mono text-faint">
+                          {String(alert.context.from)}
+                        </span>{" "}
+                        {t("alert.stanceTo")}{" "}
+                        <span className="font-mono text-ink/80">
+                          {String(alert.context.to)}
+                        </span>
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
 
         <Caveat>{t("alerts.note")}</Caveat>

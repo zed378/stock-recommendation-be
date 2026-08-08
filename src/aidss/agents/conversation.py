@@ -63,7 +63,13 @@ class ConversationContext:
     question: str
     memory: InvestorMemory
     mode: ChatMode = ChatMode.KNOWLEDGE
+    #: Set whenever an `Asset` row exists. Most issuers have none: an `Asset`
+    #: means "this platform holds price history for it", which is a few dozen
+    #: names, while the market scan covers every issuer the exchange publishes.
     asset: Asset | None = None
+    #: The ticker the reader selected, whether or not it is tracked. This is
+    #: what the bundle is keyed on.
+    ticker: str | None = None
     retrieved: list[RetrievedChunk] = field(default_factory=list)
     asset_context: dict[str, Any] = field(default_factory=dict)
 
@@ -154,7 +160,10 @@ class ResearchAgent(Agent):
     complexity = TaskComplexity.COMPLEX
 
     def is_applicable(self, context: ConversationContext) -> bool:
-        return context.asset is not None
+        # A ticker, not a tracked asset. Requiring the latter refused research
+        # on every issuer the platform scans but does not hold price history
+        # for, which is most of the exchange.
+        return bool(context.ticker)
 
     def skip_reason(self, context: ConversationContext) -> str:
         return "research mode needs a ticker to research"
@@ -174,11 +183,16 @@ class ResearchAgent(Agent):
                 + "\n---\n".join(c.text for c in context.retrieved)
                 + "\n</passages>"
             )
+        bundle = context.asset_context
         return {
-            "ticker": asset.ticker if asset else "unknown",
-            "exchange": asset.exchange if asset else "unknown",
-            "sector": (asset.sector if asset else None) or "unknown",
-            "industry": (asset.industry if asset else None) or "unknown",
+            "ticker": context.ticker or (asset.ticker if asset else "unknown"),
+            "exchange": asset.exchange if asset else "IDX",
+            # Falls back to the exchange directory, which covers every listed
+            # issuer rather than only the tracked ones.
+            "sector": (asset.sector if asset else None) or bundle.get("sector") or "unknown",
+            "industry": (
+                (asset.industry if asset else None) or bundle.get("sub_sector") or "unknown"
+            ),
             "context": "\n\n".join(blocks),
         }
 
@@ -241,15 +255,17 @@ class ConversationContextBuilder:
         user_id: uuid.UUID | None = None,
         ticker: str | None = None,
     ) -> ConversationContext:
+        code = ticker.upper() if ticker else None
         asset: Asset | None = None
-        if ticker:
-            asset = self._session.scalar(select(Asset).where(Asset.ticker == ticker.upper()))
+        if code:
+            asset = self._session.scalar(select(Asset).where(Asset.ticker == code))
 
         context = ConversationContext(
             question=question,
             memory=MemoryManager(self._session).load(user_id),
             mode=mode,
             asset=asset,
+            ticker=code,
         )
 
         # Attached whenever a ticker is named, in every mode - not only in
@@ -257,8 +273,14 @@ class ConversationContextBuilder:
         # selected is asking about *that* issuer, and a model answering "the
         # data was not included in your request" is correct about what it was
         # given and useless to the person who selected it.
-        if asset is not None:
-            context.asset_context = self._asset_context(asset)
+        #
+        # Keyed on the ticker rather than on an `Asset` row, because most
+        # issuers have no such row: the whole-market scan covers everything the
+        # exchange publishes, and requiring a tracked asset would have withheld
+        # the data for all but a few dozen of them. TPIA was one - the platform
+        # held a full scan result for it and the chat was told nothing.
+        if code:
+            context.asset_context = self._asset_context(code, asset)
 
         if self._rag is None:
             return context
@@ -274,7 +296,7 @@ class ConversationContextBuilder:
 
         return context
 
-    def _asset_context(self, asset: Asset) -> dict[str, Any]:
+    def _asset_context(self, ticker: str, asset: Asset | None) -> dict[str, Any]:
         """Everything already computed for this issuer, in one bundle.
 
         The previous version carried four fields - last close, date, structure
@@ -294,9 +316,20 @@ class ConversationContextBuilder:
         from aidss.indicators.engine import IndicatorEngine
         from aidss.indicators.features import compute_features
 
-        bundle: dict[str, Any] = {"ticker": asset.ticker, "name": asset.name}
+        bundle: dict[str, Any] = {"ticker": ticker}
+        if asset is not None and asset.name:
+            bundle["name"] = asset.name
+        bundle |= self._directory_entry(ticker)
 
-        candles = load_candles(self._session, asset.id, Timeframe.D1, limit=400)
+        # Price history exists only for tracked assets. For everything else the
+        # bars come from the exchange's own session records, which the scan
+        # already imports for the whole market - so an untracked issuer is not
+        # a blank, it simply has a different source.
+        candles = (
+            load_candles(self._session, asset.id, Timeframe.D1, limit=400)
+            if asset is not None
+            else self._summary_bars(ticker)
+        )
         if candles:
             snapshot = IndicatorEngine().snapshot(candles)
             bundle |= {
@@ -311,11 +344,40 @@ class ConversationContextBuilder:
                 "features": compute_features(candles),
             }
 
-        bundle |= self._fundamentals(asset)
-        bundle |= self._latest_scan(asset)
-        bundle |= self._latest_stance(asset)
-        bundle |= self._recent_coverage(asset)
-        return bundle
+        if asset is not None:
+            bundle |= self._fundamentals(asset)
+            bundle |= self._latest_stance(asset)
+        bundle |= self._latest_scan(ticker)
+        bundle |= self._recent_coverage(ticker, asset)
+
+        # Nothing but the code itself is nothing. Emitting a data block that
+        # contains only the ticker would tell the model it had been given
+        # figures when it had been given a name it already had from the
+        # question - and the answers that produces are confidently empty.
+        return bundle if set(bundle) - {"ticker"} else {}
+
+    def _summary_bars(self, ticker: str) -> list[Any]:
+        from aidss.collectors.trading_summary import candles_from_summaries, summaries_for
+
+        return candles_from_summaries(summaries_for(self._session, ticker))
+
+    def _directory_entry(self, ticker: str) -> dict[str, Any]:
+        """Who the issuer is, from the exchange directory.
+
+        Worth the query even when nothing else is stored: a model told only
+        "TPIA" is guessing at what the company does, and the sector is often
+        the difference between a useful explanation and a generic one.
+        """
+        from aidss.db.models import Issuer
+
+        row = self._session.scalar(select(Issuer).where(Issuer.ticker == ticker))
+        if row is None:
+            return {}
+        return {
+            "name": row.name,
+            "sector": row.sector,
+            "sub_sector": row.sub_sector,
+        }
 
     def _fundamentals(self, asset: Asset) -> dict[str, Any]:
         """The most recent reported figure for each metric.
@@ -344,13 +406,13 @@ class ConversationContextBuilder:
             }
         return {"fundamentals": latest} if latest else {}
 
-    def _latest_scan(self, asset: Asset) -> dict[str, Any]:
+    def _latest_scan(self, ticker: str) -> dict[str, Any]:
         """What the whole-market scan found for this issuer this session."""
         from aidss.db.models import MarketScanResult
 
         row = self._session.scalar(
             select(MarketScanResult)
-            .where(MarketScanResult.ticker == asset.ticker)
+            .where(MarketScanResult.ticker == ticker)
             .order_by(MarketScanResult.session_date.desc())
         )
         if row is None:
@@ -390,7 +452,7 @@ class ConversationContextBuilder:
             }
         }
 
-    def _recent_coverage(self, asset: Asset) -> dict[str, Any]:
+    def _recent_coverage(self, ticker: str, asset: Asset | None) -> dict[str, Any]:
         """Headlines tagged to this issuer, newest first.
 
         Titles only. The bodies are what retrieval is for; a list of headlines
@@ -399,12 +461,13 @@ class ConversationContextBuilder:
         """
         from aidss.db.models import NewsItem, NewsItemIssuer
 
-        tagged = select(NewsItemIssuer.news_item_id).where(
-            NewsItemIssuer.ticker == asset.ticker
-        )
+        tagged = select(NewsItemIssuer.news_item_id).where(NewsItemIssuer.ticker == ticker)
+        matches = NewsItem.id.in_(tagged)
+        if asset is not None:
+            matches = matches | (NewsItem.asset_id == asset.id)
         rows = self._session.scalars(
             select(NewsItem)
-            .where((NewsItem.asset_id == asset.id) | NewsItem.id.in_(tagged))
+            .where(matches)
             .order_by(NewsItem.published_at.desc())
             .limit(8)
         ).all()

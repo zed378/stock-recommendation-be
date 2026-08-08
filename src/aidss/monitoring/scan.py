@@ -236,6 +236,7 @@ def results_for(
     on_date: date | None = None,
     tickers: list[str] | None = None,
     matched_any: list[AlertKind] | None = None,
+    search: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[MarketScanResult], int]:
@@ -256,6 +257,10 @@ def results_for(
         # An explicit empty list means "nothing is watched", which is a real
         # answer and not the same as "no filter".
         stmt = stmt.where(MarketScanResult.ticker.in_([t.upper() for t in tickers] or [""]))
+    if search and search.strip():
+        # The code, not the signals. Nine hundred rows is too many to scroll,
+        # and the ticker is the thing a reader arrives already knowing.
+        stmt = stmt.where(MarketScanResult.ticker.like(f"%{search.strip().upper()}%"))
     wanted = [kind.value for kind in matched_any or []]
     postgres = bool(session.bind) and session.bind.dialect.name == "postgresql"
     if wanted and postgres:

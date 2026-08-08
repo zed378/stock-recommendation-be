@@ -893,6 +893,8 @@ class PlatformSettingsResponse(BaseModel):
 
     registration_open: bool
     news_sweep_cron: str
+    market_scan_cron: str
+    market_scan_jitter_seconds: int
 
 
 class PlatformSettingsUpdate(BaseModel):
@@ -906,6 +908,10 @@ class PlatformSettingsUpdate(BaseModel):
 
     registration_open: bool | None = None
     news_sweep_cron: str | None = Field(default=None, max_length=120)
+    market_scan_cron: str | None = Field(default=None, max_length=120)
+    #: Zero disables the spread. Capped at an hour: beyond that the schedule
+    #: stops meaning anything, since the firing could land in the next window.
+    market_scan_jitter_seconds: int | None = Field(default=None, ge=0, le=3600)
 
 
 class AIProviderResponse(BaseModel):

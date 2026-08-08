@@ -8,7 +8,7 @@ import {
   Card,
   Caveat,
   Empty,
-  inputClass,
+  inlineControlClass,
   ErrorNote,
   Loading,
 } from "@/components/primitives";
@@ -501,7 +501,11 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-medium text-ink">{t("analysis.title")}</h2>
-        <div className="flex items-center gap-2">
+        {/* Wraps as a group, and nothing inside it wraps its own label: a
+            button whose text breaks across two lines is taller than its
+            neighbours and reads as a layout fault rather than a narrow
+            window. */}
+        <div className="flex flex-wrap items-center gap-2 [&_button]:whitespace-nowrap">
           {/* One control for the whole tab. There used to be one per card, and
               reading a single analysis in the other language meant finding and
               flipping each of them - which also let the agents and the
@@ -531,7 +535,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
           {result && !running && (
             bothLanguagesReady ? (
               <select
-                className={`${inputClass} py-1 text-xs`}
+                className={`${inlineControlClass} text-xs`}
                 value=""
                 disabled={exportPdf.isPending}
                 onChange={(event) => {

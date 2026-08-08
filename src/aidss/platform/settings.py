@@ -28,9 +28,33 @@ REGISTRATION_OPEN = "registration_open"
 #: feeds on a timer nobody asked for is a decision the operator makes.
 NEWS_SWEEP_CRON = "news_sweep_cron"
 
+#: Cron for importing the exchange session record and re-scanning the market.
+#:
+#: Unlike the news sweep this has a default, because the difference matters:
+#: reading somebody else's feeds on a timer nobody asked for is a decision, but
+#: this reads the exchange's own end-of-session publication about its own
+#: market. A platform whose whole screener depends on that data should not sit
+#: idle until an operator discovers a setting.
+#:
+#: 18:00 in exchange time, an hour after the close, on weekdays only. Late
+#: enough that the session record is published and revised, early enough that a
+#: failure still leaves the evening to notice it.
+MARKET_SCAN_CRON = "market_scan_cron"
+
+#: Seconds of random delay added to each firing.
+#:
+#: The endpoint publishes no rate limit, so the risk is not a documented quota
+#: but looking like a bot: a request landing at 18:00:00.000 every weekday is a
+#: schedule, and a schedule is what rate limiting is for. Spreading the actual
+#: call across a window costs nothing - the data does not change in fifteen
+#: minutes - and makes the traffic look like a person.
+MARKET_SCAN_JITTER = "market_scan_jitter_seconds"
+
 DEFAULTS: dict[str, Any] = {
     REGISTRATION_OPEN: True,
     NEWS_SWEEP_CRON: "",
+    MARKET_SCAN_CRON: "0 18 * * 1-5",
+    MARKET_SCAN_JITTER: 900,
 }
 
 

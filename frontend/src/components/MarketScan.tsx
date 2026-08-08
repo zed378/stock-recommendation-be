@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
@@ -29,15 +29,24 @@ export type Scope = "watchlist" | "global";
 export function MarketScan({
   scope,
   bare = false,
+  search = "",
 }: {
   scope: Scope;
   /** Rendered without its own card, for embedding in one. */
   bare?: boolean;
+  /** Ticker filter, owned by the parent so one box serves both tabs. */
+  search?: string;
 }) {
   const { t, money, date } = useI18n();
 
   const [criteria, setCriteria] = useState<string[]>([]);
   const [page, setPage] = useState<PageState>({ limit: 25, offset: 0 });
+
+  // A new term is a different list, so the offset has to go back to the start
+  // or the reader lands on a page that no longer corresponds to anything.
+  useEffect(() => {
+    setPage((current) => ({ ...current, offset: 0 }));
+  }, [search, scope]);
 
   const options = useQuery({
     queryKey: ["scan-criteria"],
@@ -51,11 +60,17 @@ export function MarketScan({
   });
 
   const scan = useQuery({
-    queryKey: ["market-scan", scope, criteria, page],
+    queryKey: ["market-scan", scope, criteria, search, page],
     queryFn: async () => {
       const { data, error } = await api.GET("/market-scan", {
         params: {
-          query: { scope, matched: criteria, limit: page.limit, offset: page.offset },
+          query: {
+            scope,
+            matched: criteria,
+            search: search.trim() || undefined,
+            limit: page.limit,
+            offset: page.offset,
+          },
         },
       });
       if (error) throw new Error(errorMessage(error, t("common.error")));

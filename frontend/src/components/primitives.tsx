@@ -246,6 +246,18 @@ export const inputClass =
   "placeholder:text-faint focus:border-rise/50 focus:outline-none";
 
 /**
+ * A control that sits in a toolbar rather than in a form.
+ *
+ * `inputClass` is `w-full`, which is right for a field stacked in a dialog and
+ * wrong for one in a row of buttons: the select grows to fill the line and
+ * squeezes whatever sits beside it until its label wraps onto two lines. That
+ * is what happened to "Run analysis" next to the export menu.
+ */
+export const inlineControlClass =
+  "w-auto shrink-0 rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm " +
+  "text-ink focus:border-rise/50 focus:outline-none";
+
+/**
  * An empty state that says what to do next.
  *
  * "No data" on its own is a dead end; almost every empty screen here has an

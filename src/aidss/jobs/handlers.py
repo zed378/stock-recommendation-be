@@ -11,6 +11,7 @@ producing three identical errors in the log.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from collections.abc import Callable
@@ -44,7 +45,12 @@ from aidss.monitoring.scan import SCAN_CHUNK, scan_tickers, scannable_tickers
 from aidss.news.collector import NewsCollector, NewsScheduler
 from aidss.news.schedules import next_run_at
 from aidss.news.sweep import sweep_all_sources, tag_untagged
-from aidss.platform.settings import NEWS_SWEEP_CRON, get_setting
+from aidss.platform.settings import (
+    MARKET_SCAN_CRON,
+    MARKET_SCAN_JITTER,
+    NEWS_SWEEP_CRON,
+    get_setting,
+)
 from aidss.plugins.errors import ProviderUnavailableError
 from aidss.plugins.registry import get_market_data_provider, get_news_provider
 from aidss.rag.provisioning import build_rag
@@ -718,29 +724,101 @@ def due_news_schedules(
 def enqueue_daily_trading_summary(
     session: Session, *, now: datetime | None = None
 ) -> dict[str, Any]:
-    """Queue today's exchange summary once per day.
+    """Queue the exchange session record on the operator's schedule.
 
-    Deduplicated on the date rather than on a time bucket, because the record
-    is published once per session and re-importing it is only useful when the
-    exchange revises it - which one retry a day covers.
+    Cron-driven rather than fired on every scheduler tick, so the operator
+    decides when the platform touches the exchange. It ships with a default -
+    weekdays at 18:00 exchange time - because this is the exchange publishing
+    about its own market, and a screener that sits idle until somebody finds a
+    setting is a screener that looks broken.
 
-    Queued unconditionally rather than gated on a market calendar this platform
-    does not have: a weekend returns no rows and the handler reports the day as
-    closed, which is cheaper than being wrong about a public holiday.
+    **The firing is jittered.** The endpoint publishes no rate limit, so the
+    risk is not a documented quota but looking like a bot: a request landing at
+    18:00:00.000 every weekday is a schedule, and a schedule is what rate
+    limiting is for. The offset is derived from the due time rather than drawn
+    randomly, so a scheduler that ticks twice inside the window computes the
+    same delay both times and enqueues one job - a fresh random number each
+    tick would queue a new one every minute.
+
+    The scan is chained by the import handler once the rows are in, so nothing
+    here needs to schedule it separately.
     """
     now = now or datetime.now(UTC)
+    expression = str(get_setting(session, MARKET_SCAN_CRON) or "").strip()
+
+    row = session.scalar(
+        select(SchedulerJob).where(SchedulerJob.job_type == "market.trading_summary")
+    )
+    if not expression:
+        # Turned off. Deactivated rather than deleted, so switching it back on
+        # does not lose the schedule's history.
+        if row is not None and row.is_active:
+            row.is_active = False
+        return {"enqueued": 0, "disabled": True}
+
+    if row is None:
+        row = SchedulerJob(
+            job_type="market.trading_summary", cron_expr=expression, is_active=True
+        )
+        session.add(row)
+        session.flush()
+    if row.cron_expr != expression or not row.is_active:
+        # Re-anchored on change: a new expression must not inherit a due time
+        # computed from the old one.
+        row.cron_expr = expression
+        row.is_active = True
+        row.next_run_at = None
+
+    try:
+        if row.next_run_at is None:
+            row.next_run_at = next_run_at(expression, after=now)
+            return {"enqueued": 0, "scheduled_for": row.next_run_at.isoformat()}
+        if row.next_run_at > now:
+            return {"enqueued": 0, "scheduled_for": row.next_run_at.isoformat()}
+    except Exception as exc:  # noqa: BLE001 - the parser raises its own types
+        logger.warning(
+            "market scan schedule is not usable",
+            extra={"cron": expression, "error": f"{type(exc).__name__}: {exc}"},
+        )
+        row.is_active = False
+        return {"enqueued": 0, "disabled": True, "error": str(exc)}
+
+    due = row.next_run_at
     on_date = now.date().isoformat()
     result = queue.enqueue(
         session,
         "market.trading_summary",
         {"date": on_date},
+        # Deduplicated on the date rather than the due time: the record is
+        # published once per session, and re-importing it is only useful when
+        # the exchange revises it.
         dedup_key=f"trading-summary:{on_date}",
+        available_at=due + timedelta(seconds=_jitter(session, due)),
     )
+    if result.created:
+        row.next_run_at = next_run_at(expression, after=now)
     return {
         "enqueued": 1 if result.created else 0,
         "already_queued": 0 if result.created else 1,
         "date": on_date,
+        "scheduled_for": row.next_run_at.isoformat() if row.next_run_at else None,
     }
+
+
+def _jitter(session: Session, due: datetime) -> int:
+    """A stable offset inside the configured window.
+
+    Derived from the due time by hashing rather than drawn from `random`, and
+    that is load-bearing: a scheduler ticking every minute would otherwise
+    compute a different `available_at` on each pass. The dedup key stops a
+    second job being created, but the delay would still wander, and a job whose
+    start time moves every minute is one nobody can predict or debug.
+    """
+    window = int(get_setting(session, MARKET_SCAN_JITTER) or 0)
+    if window <= 0:
+        return 0
+    digest = hashlib.sha256(due.isoformat().encode()).digest()
+    return int.from_bytes(digest[:4], "big") % window
 
 
 def enqueue_due_news_sweep(session: Session, *, now: datetime | None = None) -> dict[str, Any]:

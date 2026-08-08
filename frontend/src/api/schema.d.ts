@@ -1883,6 +1883,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/market/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch Market Now
+         * @description Import today's exchange record now, without waiting for the schedule.
+         *
+         *     The scan is chained by the import handler once the rows are in, so this one
+         *     button covers both. Running the scan first would report yesterday's market
+         *     as though it were today's.
+         */
+        post: operations["fetch_market_now_admin_market_fetch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/market/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Market Now
+         * @description Re-evaluate every criterion over the stored history, without re-importing.
+         *
+         *     Separate from the fetch because the two fail for different reasons and are
+         *     worth being able to retry apart: a scan re-run after a rule changes needs no
+         *     network at all.
+         */
+        post: operations["scan_market_now_admin_market_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/market/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Backfill Market History
+         * @description Fill in the history the scan needs, one queued job per session date.
+         *
+         *     A trading year is a few hundred requests. Held in one job that is a unit of
+         *     work running for many minutes which restarts from the beginning when it
+         *     fails near the end; split, each date retries on its own and the queue paces
+         *     the rest.
+         */
+        post: operations["backfill_market_history_admin_market_backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3005,6 +3078,10 @@ export interface components {
             registration_open: boolean;
             /** News Sweep Cron */
             news_sweep_cron: string;
+            /** Market Scan Cron */
+            market_scan_cron: string;
+            /** Market Scan Jitter Seconds */
+            market_scan_jitter_seconds: number;
         };
         /**
          * PlatformSettingsUpdate
@@ -3020,6 +3097,10 @@ export interface components {
             registration_open?: boolean | null;
             /** News Sweep Cron */
             news_sweep_cron?: string | null;
+            /** Market Scan Cron */
+            market_scan_cron?: string | null;
+            /** Market Scan Jitter Seconds */
+            market_scan_jitter_seconds?: number | null;
         };
         /** PortfolioAnalysisResponse */
         PortfolioAnalysisResponse: {
@@ -5451,6 +5532,8 @@ export interface operations {
         parameters: {
             query?: {
                 unacknowledged_only?: boolean;
+                /** @description Matches the ticker code */
+                search?: string | null;
                 limit?: number;
             };
             header?: never;
@@ -5621,6 +5704,8 @@ export interface operations {
                 scope?: "watchlist" | "global";
                 /** @description Criteria to require. Repeatable; several are combined with OR. */
                 matched?: string[];
+                /** @description Matches the ticker code */
+                search?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6417,6 +6502,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AIProviderTestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fetch_market_now_admin_market_fetch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+        };
+    };
+    scan_market_now_admin_market_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
+                };
+            };
+        };
+    };
+    backfill_market_history_admin_market_backfill_post: {
+        parameters: {
+            query?: {
+                sessions?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAcceptedResponse"];
                 };
             };
             /** @description Validation Error */

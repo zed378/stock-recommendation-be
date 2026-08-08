@@ -211,13 +211,59 @@ def test_the_bundle_carries_tagged_headlines(session) -> None:
     assert bundle["recent_headlines"][0]["headline"] == "Chandra Asri announces expansion"
 
 
-def test_an_unknown_ticker_produces_no_bundle(session) -> None:
+def test_a_ticker_with_nothing_stored_produces_no_bundle(session) -> None:
+    """Nothing but the code itself is nothing. A block containing only the
+    ticker would tell the model it had been given figures when it had been
+    given a name it already had from the question."""
     built = ConversationContextBuilder(session).build(
         "q", mode=ChatMode.LEARN, ticker="NOPE"
     )
 
     assert built.asset_context == {}
     assert built.asset is None
+    assert built.ticker == "NOPE", "the ticker is still recorded, just not as data"
+
+
+def test_an_untracked_issuer_still_gets_its_scan(session) -> None:
+    """The gap the whole-market scan opened. An `Asset` row means the platform
+    holds price history, which is a few dozen names; the scan covers every
+    issuer the exchange publishes. Keying the bundle on the asset withheld the
+    data for all but a handful - TPIA had a full scan result and the chat was
+    told nothing about it.
+    """
+    session.add(
+        MarketScanResult(
+            ticker="TPIA",
+            session_date=date_of(2026),
+            matched=["rsi_oversold"],
+            matched_count=1,
+            signals={"rsi": "28.5", "obv": "-274459500"},
+        )
+    )
+    session.flush()
+
+    built = ConversationContextBuilder(session).build(
+        "q", mode=ChatMode.LEARN, ticker="TPIA"
+    )
+
+    assert built.asset is None, "this issuer is deliberately not tracked"
+    assert built.asset_context["scan"]["signals"]["obv"] == "-274459500"
+    assert "-274459500" in LearningAssistant().prompt_context(built)["context"]
+
+
+def test_research_does_not_require_a_tracked_asset(session) -> None:
+    """Requiring one refused research on most of the exchange."""
+    session.add(
+        MarketScanResult(
+            ticker="TPIA", session_date=date_of(2026), matched=[], matched_count=0, signals={}
+        )
+    )
+    session.flush()
+    built = ConversationContextBuilder(session).build(
+        "q", mode=ChatMode.RESEARCH, ticker="TPIA"
+    )
+
+    assert ResearchAgent().is_applicable(built)
 
 
 def test_an_issuer_with_nothing_stored_still_names_itself(session) -> None:

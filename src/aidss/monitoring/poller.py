@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss.collectors.market_data import load_candles
@@ -400,10 +400,22 @@ def recent_alerts(
     *,
     limit: int = 50,
     unacknowledged_only: bool = False,
+    search: str | None = None,
 ) -> list[Alert]:
+    """One user's alerts, newest first.
+
+    `search` matches the ticker rather than the message. A message search would
+    find "support" in half of them - the text is generated from a template, so
+    the words repeat and only the code distinguishes one row from another.
+    """
     stmt = select(Alert).where(Alert.user_id == user_id)
     if unacknowledged_only:
         stmt = stmt.where(Alert.acknowledged_at.is_(None))
+    if search and search.strip():
+        pattern = f"%{search.strip().lower()}%"
+        stmt = stmt.join(Asset, Asset.id == Alert.asset_id).where(
+            func.lower(Asset.ticker).like(pattern)
+        )
     return list(
         session.scalars(stmt.order_by(Alert.triggered_at.desc()).limit(limit)).all()
     )

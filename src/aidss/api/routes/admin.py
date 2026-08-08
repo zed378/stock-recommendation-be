@@ -75,6 +75,8 @@ from aidss.news.tagging import (
     normalise,
 )
 from aidss.platform.settings import (
+    MARKET_SCAN_CRON,
+    MARKET_SCAN_JITTER,
     NEWS_SWEEP_CRON,
     REGISTRATION_OPEN,
     all_settings,
@@ -796,19 +798,26 @@ def update_platform_settings(
     the news are the kind of decisions someone asks about a month later, and an
     audit row is the only answer that does not depend on memory.
     """
-    if payload.news_sweep_cron is not None and payload.news_sweep_cron.strip():
-        # Validated here rather than discovered by the scheduler at 3am, where
-        # the failure is a sweep that silently never runs.
-        try:
-            next_run_at(payload.news_sweep_cron.strip())
-        except Exception as exc:  # noqa: BLE001 - the parser raises its own types
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Not a usable cron expression: {exc}",
-            ) from exc
+    # Validated here rather than discovered by the scheduler at 3am, where the
+    # failure is a job that silently never runs.
+    for field in (payload.news_sweep_cron, payload.market_scan_cron):
+        if field is not None and field.strip():
+            try:
+                next_run_at(field.strip())
+            except Exception as exc:  # noqa: BLE001 - the parser raises its own types
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Not a usable cron expression: {exc}",
+                ) from exc
 
-    cron = None if payload.news_sweep_cron is None else payload.news_sweep_cron.strip()
-    for key, value in ((REGISTRATION_OPEN, payload.registration_open), (NEWS_SWEEP_CRON, cron)):
+    sweep = None if payload.news_sweep_cron is None else payload.news_sweep_cron.strip()
+    scan = None if payload.market_scan_cron is None else payload.market_scan_cron.strip()
+    for key, value in (
+        (REGISTRATION_OPEN, payload.registration_open),
+        (NEWS_SWEEP_CRON, sweep),
+        (MARKET_SCAN_CRON, scan),
+        (MARKET_SCAN_JITTER, payload.market_scan_jitter_seconds),
+    ):
         if value is not None:
             set_setting(session, key, value, by=actor.id)
 
@@ -1074,3 +1083,101 @@ def _provider_audit(row: AIProviderConfig) -> dict[str, object]:
         "self_hosted": row.self_hosted,
         "has_api_key": bool(row.api_key_ciphertext),
     }
+
+
+@router.post(
+    "/market/fetch", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def fetch_market_now(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Import today's exchange record now, without waiting for the schedule.
+
+    The scan is chained by the import handler once the rows are in, so this one
+    button covers both. Running the scan first would report yesterday's market
+    as though it were today's.
+    """
+    on_date = datetime.now(UTC).date().isoformat()
+    result = enqueue(
+        session,
+        "market.trading_summary",
+        {"date": on_date},
+        dedup_key=f"trading-summary:{on_date}",
+    )
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="market.trading_summary",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note=(
+            "Today's record is already queued; this returns that job."
+            if result.deduplicated
+            else "Importing the session record. The scan follows once it lands."
+        ),
+    )
+
+
+@router.post(
+    "/market/scan", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def scan_market_now(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Re-evaluate every criterion over the stored history, without re-importing.
+
+    Separate from the fetch because the two fail for different reasons and are
+    worth being able to retry apart: a scan re-run after a rule changes needs no
+    network at all.
+    """
+    minute = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+    result = enqueue(
+        session, "market.scan", {}, dedup_key=f"market-scan-manual:{minute}"
+    )
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="market.scan",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note=(
+            "A scan is already queued; this returns that job."
+            if result.deduplicated
+            else "Scanning every issuer with enough stored history."
+        ),
+    )
+
+
+@router.post(
+    "/market/backfill", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def backfill_market_history(
+    sessions: int = Query(default=320, ge=1, le=1000),
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> JobAcceptedResponse:
+    """Fill in the history the scan needs, one queued job per session date.
+
+    A trading year is a few hundred requests. Held in one job that is a unit of
+    work running for many minutes which restarts from the beginning when it
+    fails near the end; split, each date retries on its own and the queue paces
+    the rest.
+    """
+    minute = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M")
+    result = enqueue(
+        session,
+        "market.summary_backfill",
+        {"sessions": sessions},
+        dedup_key=f"market-backfill:{minute}",
+    )
+    return JobAcceptedResponse(
+        job_id=result.job_id,
+        job_type="market.summary_backfill",
+        deduplicated=result.deduplicated,
+        poll_url=f"/jobs/{result.job_id}",
+        note=(
+            "A backfill is already queued; this returns that job."
+            if result.deduplicated
+            else f"Planning up to {sessions} sessions, paced so the exchange is not hammered."
+        ),
+    )

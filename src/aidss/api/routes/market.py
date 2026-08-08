@@ -264,12 +264,17 @@ def poll_now(
 @router.get("/alerts", response_model=list[AlertResponse])
 def list_alerts(
     unacknowledged_only: bool = Query(default=False),
+    search: str | None = Query(default=None, description="Matches the ticker code"),
     limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
 ) -> list[AlertResponse]:
     alerts = recent_alerts(
-        session, user.id, limit=limit, unacknowledged_only=unacknowledged_only
+        session,
+        user.id,
+        limit=limit,
+        unacknowledged_only=unacknowledged_only,
+        search=search,
     )
     tickers = {
         asset_id: ticker
@@ -413,6 +418,7 @@ def market_scan(
         default_factory=list,
         description="Criteria to require. Repeatable; several are combined with OR.",
     ),
+    search: str | None = Query(default=None, description="Matches the ticker code"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_db),
@@ -449,7 +455,12 @@ def market_scan(
         )
 
     rows, total = results_for(
-        session, tickers=tickers, matched_any=kinds or None, limit=limit, offset=offset
+        session,
+        tickers=tickers,
+        matched_any=kinds or None,
+        search=search,
+        limit=limit,
+        offset=offset,
     )
     return Page(
         items=[
