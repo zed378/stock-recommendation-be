@@ -574,3 +574,75 @@ def test_the_test_endpoint_calls_a_method_the_adapter_actually_has(
     # call never reached the adapter at all.
     assert "AttributeError" not in (body.get("error") or ""), body
     assert ChatCompletion  # the shape the endpoint reads back
+
+
+# --- market controls in the admin dashboard ---------------------------------
+
+
+def test_the_market_triggers_need_an_admin(client, auth_headers) -> None:
+    """These reach out to the exchange and enqueue whole-market work. An
+    ordinary reader must not be able to press them."""
+    for path in ("/admin/market/fetch", "/admin/market/scan", "/admin/market/backfill"):
+        assert client.post(path, headers=auth_headers).status_code == 403
+
+
+def test_pressing_import_queues_rather_than_runs(client, admin_headers) -> None:
+    """The queue is what holds SKIP LOCKED and the dedup key. Importing inline
+    from the request races the running worker, and the result is a unique
+    constraint violation that reads like a schema bug when it is really two
+    writers to the same row."""
+    response = client.post("/admin/market/fetch", headers=admin_headers)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["job_type"] == "market.trading_summary"
+
+
+def test_pressing_import_twice_does_not_queue_twice(client, admin_headers) -> None:
+    """A button somebody clicks again because nothing visibly happened must not
+    double the exchange's traffic."""
+    first = client.post("/admin/market/fetch", headers=admin_headers).json()
+    second = client.post("/admin/market/fetch", headers=admin_headers).json()
+
+    assert first["deduplicated"] is False
+    assert second["deduplicated"] is True
+    assert second["job_id"] == first["job_id"]
+
+
+def test_scanning_and_backfilling_are_separate_buttons(client, admin_headers) -> None:
+    """They fail for different reasons - the backfill talks to the exchange,
+    the scan needs no network at all - so each is worth retrying on its own."""
+    scan = client.post("/admin/market/scan", headers=admin_headers).json()
+    backfill = client.post("/admin/market/backfill", headers=admin_headers).json()
+
+    assert scan["job_type"] == "market.scan"
+    assert backfill["job_type"] == "market.summary_backfill"
+
+
+def test_the_market_schedule_is_editable_without_a_redeploy(client, admin_headers) -> None:
+    from aidss.platform.settings import MARKET_SCAN_CRON, MARKET_SCAN_JITTER
+
+    response = client.patch(
+        "/admin/settings",
+        headers=admin_headers,
+        json={"market_scan_cron": "30 19 * * 1-5", "market_scan_jitter_seconds": 600},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["market_scan_cron"] == "30 19 * * 1-5"
+    db = get_sessionmaker()()
+    try:
+        assert get_setting(db, MARKET_SCAN_CRON) == "30 19 * * 1-5"
+        assert get_setting(db, MARKET_SCAN_JITTER) == 600
+    finally:
+        db.close()
+
+
+def test_an_unparseable_market_cron_is_refused_at_the_edge(client, admin_headers) -> None:
+    """Stored and then failing inside the scheduler, the operator would see the
+    setting saved and the import silently never run."""
+    response = client.patch(
+        "/admin/settings", headers=admin_headers, json={"market_scan_cron": "every friday"}
+    )
+
+    assert response.status_code == 422

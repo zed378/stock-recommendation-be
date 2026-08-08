@@ -42,8 +42,9 @@ export function Monitoring() {
   // follow cannot tell you about a stock you have not thought of, which is most
   // of them - and the same criteria are evaluated either way, so the scope is
   // a filter rather than a different feature.
-  // The whole index by default, as asked: a screen that only shows what you
-  // already follow cannot tell you about a stock you have not thought of.
+  // Opens on the watchlist. The scan itself always covers the whole index -
+  // that is what makes the global tab worth opening - but the first thing a
+  // reader wants on arriving is the handful of names they already hold.
   const [scope, setScope] = useState<AlertScope>("watchlist");
   // One box for both tabs. Two would be two things to clear, and a reader who
   // typed a ticker on one tab means the same ticker on the other.

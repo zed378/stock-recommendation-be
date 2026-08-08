@@ -1336,6 +1336,22 @@ Keduanya adalah pelajaran yang sama: sebuah kriteria hanya bisa dinilai terhadap
 
 **Seluruh hasil satu run berbagi satu tanggal.** Dikunci pada sesi terakhir tiap emiten, penyaring hanya akan mengembalikan nama yang berdagang pada tanggal paling akhir — yang diam-diam membuang setiap emiten tidak likuid, justru bagian pasar tempat penyaring paling berguna. Seberapa segar bar tiap baris disimpan di dalam sinyalnya.
 
+**Pencarian ada di kedua tab.** Yang dicocokkan adalah kodenya, bukan teks sinyal: pesan alert dibangun dari template, jadi kata-katanya berulang di ratusan baris dan mencocokkannya mengembalikan hampir semuanya. Kode emiten adalah hal yang sudah dibawa pembaca saat tiba.
+
+**Tab dibuka pada watchlist.** Pemindaiannya sendiri selalu seluruh indeks — itulah yang membuat tab global layak dibuka — tetapi hal pertama yang dicari pembaca ketika membuka layar adalah segelintir nama yang ia pegang.
+
+### 30.4 Kendali operator
+
+**Impor berjalan dari cron, bukan tiap tick penjadwal.** Operator yang memutuskan kapan platform menyentuh bursa. Bedanya dengan sapuan berita: jadwal ini punya bawaan — `0 18 * * 1-5`, sejam setelah penutupan, hari kerja saja — karena ini bursa yang menerbitkan tentang pasarnya sendiri, dan penyaring yang diam sampai seseorang menemukan setelan adalah penyaring yang terlihat rusak. Ekspresinya dibaca dalam waktu bursa (WIB), bukan UTC.
+
+**Pemicunya disebar acak.** Endpoint-nya tidak mengumumkan batas laju, jadi risikonya bukan kuota tertulis melainkan terlihat seperti bot: permintaan yang mendarat tepat pukul 18:00:00.000 setiap hari kerja adalah jadwal, dan jadwal itulah yang jadi sasaran pembatasan laju. Offsetnya diturunkan dari waktu jatuh tempo dengan hash, bukan diundi dari `random` — penjadwal yang berdetak dua kali di dalam jendela menghitung penundaan yang sama pada kedua kali dan mengantre satu pekerjaan; angka acak baru tiap detik akan mengantre pekerjaan baru tiap menit.
+
+**Tiga pemicu manual, terpisah.** Impor menarik rekaman sesi hari ini lalu merantai pemindaian; pemindaian saja menghitung ulang tanpa jaringan dan itulah yang ditekan setelah sebuah aturan berubah; backfill mengisi riwayat satu pekerjaan per sesi. Dipisah karena ketiganya gagal karena alasan berbeda dan layak dicoba ulang sendiri-sendiri.
+
+**Menekan tombol berarti mengantre, bukan menjalankan.** Antreanlah yang memegang `SKIP LOCKED` dan kunci dedup. Menjalankan impor langsung dari permintaan HTTP berlomba dengan worker yang sedang berjalan, dan hasilnya adalah pelanggaran unique constraint yang terbaca seperti bug skema padahal sebenarnya dua penulis atas baris yang sama.
+
+**Menunya ada di dasbor admin, bukan di monitoring.** Yang diatur adalah kapan platform menarik data, bukan apa yang dilihat seorang pembaca.
+
 ---
 
 ## 31. Kendala Nyata Sumber Data Publik
