@@ -8,6 +8,7 @@ import {
   Card,
   Caveat,
   Empty,
+  inputClass,
   ErrorNote,
   Loading,
 } from "@/components/primitives";
@@ -422,6 +423,14 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   //
   // Called unconditionally, above the early return below: a hook behind a
   // condition changes the hook order between renders.
+  // What the stored prose is actually in, which is what a single-language
+  // export has to produce. Read off the agents rather than assumed, because a
+  // deployment can change the setting between runs.
+  const analysisLanguage = useMemo(() => {
+    const agents = (result?.agents ?? {}) as Record<string, AgentPayload>;
+    return Object.values(agents)[0]?.language ?? "en";
+  }, [result]);
+
   const translation = useTranslation(
     (result?.recommendation ?? {}) as unknown as Record<string, unknown>,
   );
@@ -444,10 +453,11 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   });
 
   const exportPdf = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (language: string) => {
       const { buildAnalysisPdf, downloadPdf } = await import("@/export/analysisPdf");
       const blob = await buildAnalysisPdf({
         ticker: ticker.toUpperCase(),
+        language,
         timeframe,
         generatedAt: dateTime(new Date().toISOString()),
         recommendation: result?.recommendation ?? null,
@@ -475,7 +485,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
           page: t("export.page"),
         },
       });
-      downloadPdf(blob, `${ticker.toUpperCase()}-analysis.pdf`);
+      downloadPdf(blob, `${ticker.toUpperCase()}-analysis-${language}.pdf`);
     },
   });
 
@@ -514,14 +524,39 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
           )}
           {/* Only once there is something to export. A button that produces an
               empty document teaches the reader it does not work. */}
+          {/* A choice only when there is one. Until the translation job has
+              finished there is a single rendering, and a language menu whose
+              other option silently produces the same document is worse than a
+              plain button - it claims something the file will not deliver. */}
           {result && !running && (
-            <Button
-              variant="ghost"
-              busy={exportPdf.isPending}
-              onClick={() => exportPdf.mutate()}
-            >
-              {t("export.pdf")}
-            </Button>
+            bothLanguagesReady ? (
+              <select
+                className={`${inputClass} py-1 text-xs`}
+                value=""
+                disabled={exportPdf.isPending}
+                onChange={(event) => {
+                  if (event.target.value) exportPdf.mutate(event.target.value);
+                  // Reset, so the control reads as an action rather than as a
+                  // setting that now claims to be "Indonesian".
+                  event.target.value = "";
+                }}
+                aria-label={t("export.pdf")}
+              >
+                <option value="">
+                  {exportPdf.isPending ? t("export.building") : t("export.pdf")}
+                </option>
+                <option value="en">{t("export.inEnglish")}</option>
+                <option value="id">{t("export.inIndonesian")}</option>
+              </select>
+            ) : (
+              <Button
+                variant="ghost"
+                busy={exportPdf.isPending}
+                onClick={() => exportPdf.mutate(analysisLanguage)}
+              >
+                {t("export.pdf")}
+              </Button>
+            )
           )}
           {runButton}
         </div>

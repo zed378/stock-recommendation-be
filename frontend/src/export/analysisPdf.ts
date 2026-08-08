@@ -22,6 +22,17 @@ type Strategy = components["schemas"]["StrategyResponse"];
 
 export type ExportInput = {
   ticker: string;
+  /**
+   * Which rendering to print.
+   *
+   * A document is read away from the screen that made it, often by somebody
+   * else, so the language is chosen at export rather than inherited from
+   * whatever the interface happened to be showing. Where a payload has no
+   * rendering in the chosen language its original prose is printed instead -
+   * a half-translated document with silent gaps would be worse than one
+   * plainly in the other language.
+   */
+  language: string;
   timeframe: string;
   generatedAt: string;
   recommendation?: Recommendation | null;
@@ -96,6 +107,27 @@ function label(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type Translatable = {
+  language?: string;
+  translations?: Record<string, { fields?: Record<string, unknown> } | undefined>;
+  [key: string]: unknown;
+};
+
+/**
+ * One payload, in the requested language.
+ *
+ * The stored rendering covers prose only - labels, prices, confidence and
+ * model names are carried across untouched, because a translated stance label
+ * is a value absent from the enum and a translated price is not a number.
+ * Overlaying the rendered fields onto the original is what keeps both true.
+ */
+function inLanguage<T extends Translatable>(payload: T | null | undefined, language: string): T {
+  if (!payload) return {} as T;
+  const rendered = payload.translations?.[language]?.fields;
+  if (!rendered || payload.language === language) return payload;
+  return { ...payload, ...rendered };
+}
+
 function asLines(value: unknown): string[] {
   if (value === null || value === undefined) return [];
   if (Array.isArray(value)) {
@@ -162,7 +194,8 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
 
   // --- recommendation -------------------------------------------------------
   if (input.recommendation) {
-    const r = input.recommendation;
+    const r = inLanguage(input.recommendation as Translatable, input.language) as
+      typeof input.recommendation;
     heading(L.recommendation);
     write(String(r.label ?? "").toUpperCase().replace(/_/g, " "), 14, "bold");
     field(L.confidence, r.confidence === null || r.confidence === undefined ? "" : `${r.confidence}`);
@@ -205,17 +238,18 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
   // it, and their positions are not the same.
   if (input.strategy) {
     heading(L.strategy);
+    const strategy = input.strategy as unknown as Translatable;
     for (const [side, guidance] of [
-      [L.notHolding, input.strategy.not_holding],
-      [L.holding, input.strategy.holding],
-    ] as const) {
+      [L.notHolding, inLanguage(strategy.not_holding as Translatable, input.language)],
+      [L.holding, inLanguage(strategy.holding as Translatable, input.language)],
+    ] as [string, Record<string, unknown>][]) {
       if (!guidance) continue;
       breakIfNeeded(LINE * 4);
       write(side, 11, "bold");
       // The stance, then what it rests on. Never the other way round: a list
       // of conditions read before the stance they qualify is a list of
       // unattached facts.
-      write(stanceLabel(guidance.stance), 10, "bold");
+      write(stanceLabel(String(guidance.stance ?? "")), 10, "bold");
       if (guidance.rationale) write(String(guidance.rationale), 10);
 
       for (const [name, values] of [
@@ -232,7 +266,9 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
         for (const line of lines) write(line, 9);
       }
 
-      const levels = Object.entries(guidance.reference_levels ?? {});
+      const levels = Object.entries(
+        (guidance.reference_levels as Record<string, string>) ?? {},
+      );
       if (levels.length) {
         y += 2;
         write(levels.map(([key, value]) => `${label(key)}: ${value}`).join("    "), 9);
@@ -246,7 +282,7 @@ export async function buildAnalysisPdf(input: ExportInput): Promise<Blob> {
   if (agentNames.length) {
     heading(L.agents);
     for (const name of agentNames) {
-      const payload = input.agents[name] ?? {};
+      const payload = inLanguage(input.agents[name] as Translatable, input.language);
       write(label(name), 11, "bold");
       let wrote = false;
       for (const key of PROSE_ORDER) {

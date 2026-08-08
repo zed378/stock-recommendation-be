@@ -19,6 +19,9 @@ export const id = {
   "app.tagline": "Alat bantu keputusan — bukan bot trading",
 
   "export.pdf": "Ekspor PDF",
+  "export.building": "Menyusun…",
+  "export.inEnglish": "PDF — Bahasa Inggris",
+  "export.inIndonesian": "PDF — Bahasa Indonesia",
   "export.entry": "Harga masuk",
   "export.generated": "Dibuat",
   "export.timeframe": "Kerangka waktu",
@@ -821,6 +824,9 @@ export const en: Record<MessageKey, string> = {
   "app.tagline": "A decision-support tool — not a trading bot",
 
   "export.pdf": "Export PDF",
+  "export.building": "Building…",
+  "export.inEnglish": "PDF — English",
+  "export.inIndonesian": "PDF — Indonesian",
   "export.entry": "Entry price",
   "export.generated": "Generated",
   "export.timeframe": "Timeframe",

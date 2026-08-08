@@ -8,27 +8,34 @@ import { MultiSelect } from "@/components/MultiSelect";
 import { Card, Empty, ErrorNote, Loading } from "@/components/primitives";
 
 /**
- * What the whole-market scan found, narrowed to a watchlist or not.
+ * Today's criteria matches across the exchange, optionally narrowed to a
+ * watchlist.
  *
- * Two tabs over one dataset rather than two screens. The scan evaluates every
- * criterion for every issuer with enough history; the only difference between
- * "my tickers" and "the market" is a filter, and building them as separate
- * features is how the two come to disagree about what a criterion means.
+ * Not a separate feature from the alerts, and deliberately not presented as
+ * one: these are the same conditions the alert rules evaluate, run over every
+ * issuer rather than only the ones somebody happens to follow. It lives inside
+ * the alerts card so a reader has one place to look, with the whole index as
+ * the default and their own tickers a filter away.
  *
- * The global tab is the one that can surface something new. A monitoring
- * screen that only ever shows what you already follow cannot tell you about a
- * stock you have not thought of, which is most of them.
+ * Nothing here is acknowledgeable, and that is the honest difference from a
+ * stored alert. An alert is an event that happened to *you* and stays until
+ * you have seen it; this is the state of the market today, recomputed every
+ * session. Offering "mark read" on a row that will simply be recalculated
+ * tomorrow would be a control that does nothing.
  */
 
-type Scope = "watchlist" | "global";
+export type Scope = "watchlist" | "global";
 
-export function MarketScan({ defaultScope = "watchlist" }: { defaultScope?: Scope } = {}) {
+export function MarketScan({
+  scope,
+  bare = false,
+}: {
+  scope: Scope;
+  /** Rendered without its own card, for embedding in one. */
+  bare?: boolean;
+}) {
   const { t, money, date } = useI18n();
 
-  // The monitoring screen opens on what you follow; the screener opens on the
-  // whole exchange, because a screener that starts from your watchlist can
-  // only ever return things you already knew about.
-  const [scope, setScope] = useState<Scope>(defaultScope);
   const [criteria, setCriteria] = useState<string[]>([]);
   const [page, setPage] = useState<PageState>({ limit: 25, offset: 0 });
 
@@ -59,34 +66,8 @@ export function MarketScan({ defaultScope = "watchlist" }: { defaultScope?: Scop
 
   const rows = scan.data?.items ?? [];
 
-  const tabs: { id: Scope; label: MessageKey }[] = [
-    { id: "watchlist", label: "scan.tab.watchlist" },
-    { id: "global", label: "scan.tab.global" },
-  ];
-
-  return (
-    <Card title={t("scan.title")}>
-      <nav className="mb-3 flex gap-1 border-b border-line">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              setScope(tab.id);
-              // The two tabs are different lists, so an offset carried across
-              // lands on a page that does not correspond to anything.
-              setPage((current) => ({ ...current, offset: 0 }));
-            }}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-              scope === tab.id
-                ? "border-rise text-ink"
-                : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            {t(tab.label)}
-          </button>
-        ))}
-      </nav>
-
+  const body = (
+    <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <MultiSelect
           label={t("scan.criteria")}
@@ -159,6 +140,8 @@ export function MarketScan({ defaultScope = "watchlist" }: { defaultScope?: Scop
         page={page}
         onChange={setPage}
       />
-    </Card>
+    </>
   );
+
+  return bare ? body : <Card title={t("scan.title")}>{body}</Card>;
 }

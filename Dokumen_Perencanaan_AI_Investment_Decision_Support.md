@@ -1294,7 +1294,51 @@ Bab ini tentang satu pemindahan: keputusan yang dulu ada di environment kini ada
 
 ---
 
-## 30. Kendala Nyata Sumber Data Publik
+## 30. Pemindaian Seluruh Bursa
+
+**Alert dan penyaring dulu menjawab pertanyaannya masing-masing dengan caranya masing-masing.** Poller monitoring mengevaluasi kondisi untuk emiten yang kebetulan dipantau seseorang; penyaring stock pick menerapkan daftar aturannya sendiri pada kandidatnya sendiri. Dua akibatnya sama-sama buruk. Sebuah kriteria bisa berarti satu hal di layar monitoring dan hal lain yang berbeda tipis di layar picks. Dan penyaring yang hanya melihat apa yang sudah diikuti seseorang tidak bisa memunculkan apa pun yang baru — padahal itu satu-satunya gunanya penyaring.
+
+**Satu pass, satu kosakata, dua pembaca.** Kriteria yang sama dijalankan atas setiap emiten yang riwayatnya cukup, hasilnya disimpan. Alert membacanya untuk emiten yang dipantau; penyaring membacanya untuk seluruh pasar. Bedanya satu filter.
+
+**Kecocokan direkam dari kandidat alert itu sendiri, bukan dari daftar terpisah.** Penyaring yang punya daftar aturan sendiri adalah cara keduanya menyimpang.
+
+### 30.1 Dari mana datanya
+
+**Satu permintaan per sesi memberi OHLCV untuk seluruh 963 emiten.** Rekaman akhir sesi bursa memuat open, high, low, close, volume, nilai, frekuensi, serta pembelian dan penjualan asing. Setahun perdagangan untuk seluruh bursa karena itu berbiaya beberapa ratus permintaan, bukan beberapa ratus ribu — dan itulah yang membuat pemindaian seluruh pasar terjangkau sama sekali.
+
+**Backfill dipecah satu job per tanggal, bukan satu job untuk setahun.** Ditahan dalam satu job, tiga ratus permintaan berurutan adalah satu unit kerja yang berjalan berpuluh menit, mengulang dari awal ketika gagal di permintaan kedua ratus, dan tampak persis seperti hang selama itu. Dipecah, tiap tanggal punya retry sendiri, batas konkurensi antrean menahan lajunya, dan satu kegagalan berbiaya satu sesi.
+
+**Akhir pekan dilewati saat perencanaan, bukan ditemukan handler.** Bursa menjawab dengan daftar kosong, yang berbiaya satu permintaan untuk mempelajari sesuatu yang sudah diketahui kalender.
+
+**Sesi tanpa volume bukan sebuah bar.** IDX tetap menerbitkan emitennya dengan high, low, dan open bernilai nol serta penutupan sebelumnya dibawa maju. Disimpan apa adanya, setiap baris seperti itu adalah bar yang rentangnya seluruh harga — yang menghancurkan ATR dan setiap rata-rata yang menyentuhnya. Barisnya tetap disimpan; ia hanya tidak ditawarkan sebagai bar.
+
+**`OpenPrice` sering nol meski emitennya berdagang.** Beberapa ratus emiten melaporkannya begitu pada sesi biasa. Di mana ia hilang, penutupan sebelumnya menggantikannya — satu-satunya nilai yang membuat barnya tetap konsisten — dan artinya gap tidak bisa dideteksi untuk sesi itu, yang memang benar: datanya tidak mengatakan.
+
+### 30.2 Kualitas kriteria, diukur bukan diasumsikan
+
+Dijalankan atas 797 emiten sungguhan, dua kriteria langsung terlihat rusak — dan keduanya lolos setiap tes unit.
+
+**Rasio imbal-risiko cocok pada 44% pasar.** Versi pertama memakai titik terendah dan tertinggi 52 minggu sebagai pengganti level terdekat, dengan alasan menjalankan detektor pivot untuk seribu emiten terlalu mahal. Ternyata murah — seluruh pemindaian hitungan detik — dan alasan biaya itu menyembunyikan kekeliruannya: ekstrem tahunan adalah level *terjauh*, bukan terdekat, sehingga setiap saham yang berdagang di tengah rentangnya menunjukkan rasio di atas dua. Dengan detektor pivot yang sama seperti analisis per-emiten, angkanya menjadi 18%.
+
+**Squeeze cocok pada 36% pasar.** Desil terbawah dari riwayat sendiri secara konstruksi adalah kejadian satu-dari-sepuluh, jadi sepertiga pasar tidak mungkin berada di dalamnya. Sebabnya bukan degenerasi data melainkan pelanggaran aturan yang dipatuhi setiap kriteria lain: ia dinyatakan sebagai *keadaan*, bukan *peristiwa*. Squeeze yang bertahan dua puluh sesi tidak layak berbunyi dua puluh kali. Dinyatakan pada saat memasukinya, angkanya menjadi 2%.
+
+Keduanya adalah pelajaran yang sama: sebuah kriteria hanya bisa dinilai terhadap pasar sungguhan, dan yang cocok pada separuh bursa bukan filter.
+
+### 30.3 Membacanya
+
+**Dua tab, satu data.** "Watchlist saya" dan "seluruh bursa" berbeda satu filter. Membangunnya sebagai dua fitur adalah cara keduanya mulai berselisih tentang arti sebuah kriteria.
+
+**Watchlist kosong bukan berarti tanpa filter.** "Saya tidak mengikuti apa pun" adalah jawaban yang sah, dan mengembalikan seluruh bursa untuk itu adalah kebalikan dari yang diminta pembaca.
+
+**Beberapa kriteria digabung dengan OR.** Pembaca yang mencentang tiga kriteria meminta apa pun yang menunjukkan salah satunya, bukan nama langka yang menunjukkan ketiganya.
+
+**Yang ditampilkan adalah kriterianya, bukan skor.** Hitungan kondisi yang terpenuhi dirender sebagai satu angka mengundang pembacaan sebagai probabilitas sesuatu.
+
+**Seluruh hasil satu run berbagi satu tanggal.** Dikunci pada sesi terakhir tiap emiten, penyaring hanya akan mengembalikan nama yang berdagang pada tanggal paling akhir — yang diam-diam membuang setiap emiten tidak likuid, justru bagian pasar tempat penyaring paling berguna. Seberapa segar bar tiap baris disimpan di dalam sinyalnya.
+
+---
+
+## 31. Kendala Nyata Sumber Data Publik
 
 Bagian ini menetapkan apa yang benar-benar tersedia secara gratis dan publik untuk pasar Indonesia. Semuanya ditetapkan dengan pengujian terhadap endpoint sungguhan, bukan dari dokumentasi, dan sebagian besar bertentangan dengan asumsi yang wajar.
 

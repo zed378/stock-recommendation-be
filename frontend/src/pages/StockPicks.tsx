@@ -68,7 +68,7 @@ export function StockPicks() {
           price history, which is a few dozen, while the scan covers every
           issuer the exchange publishes a session record for. Same criteria in
           both places - the scan stores what the alert rules found. */}
-      <MarketScan defaultScope="global" />
+      <MarketScan scope="global" />
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-lg font-semibold text-ink">{t("picks.title")}</h1>

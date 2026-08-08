@@ -117,14 +117,41 @@ def test_the_export_writes_text_rather_than_an_image() -> None:
 def test_the_export_button_waits_for_something_to_export() -> None:
     source = read(ASSET_DETAIL)
 
-    # Located by the label and read backwards, rather than matched with one
-    # expression. JSX is full of braces, so any `[^}]*` between the guard and
-    # the label stops at the first attribute and matches nothing.
+    # Located by the label and read backwards to the nearest opening guard,
+    # rather than matched with one expression. JSX is full of braces, so any
+    # `[^}]*` between the two stops at the first attribute and matches nothing.
+    #
+    # No fixed window: the control grew from a button into a language menu and
+    # a 400-character window failed on the extra markup, which is the test
+    # breaking on formatting rather than on behaviour.
     at = source.index('t("export.pdf")')
-    preceding = source[max(0, at - 400) : at]
-    assert "result && !running" in preceding, (
-        "the export button must be gated on an analysis existing; a button that "
+    guard = source.rfind("result && !running", 0, at)
+    assert guard != -1, (
+        "the export control must be gated on an analysis existing; one that "
         "produces an empty document teaches the reader it does not work"
+    )
+    # Nothing may close the conditional between the guard and the control.
+    assert ")}" not in source[guard:at].split("&& (")[-1], (
+        "the guard closes before the export control, so the control is not "
+        "actually inside it"
+    )
+
+
+def test_the_export_offers_a_language_only_when_there_is_one_to_offer() -> None:
+    """Until the translation job finishes there is a single rendering, and a
+    menu whose other option silently produces the same document is worse than
+    a plain button - it claims something the file will not deliver."""
+    source = read(ASSET_DETAIL)
+
+    at = source.index('t("export.inIndonesian")')
+    assert "bothLanguagesReady" in source[max(0, at - 1500) : at], (
+        "the language menu must be gated on the second rendering existing"
+    )
+    export = read(EXPORT)
+    assert "input.language" in export, "the chosen language must reach the builder"
+    assert "inLanguage(" in export, (
+        "the builder must read the stored rendering for that language rather "
+        "than relabelling the same prose"
     )
 
 

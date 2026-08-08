@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
-import { MarketScan } from "@/components/MarketScan";
+import { MarketScan, type Scope as AlertScope } from "@/components/MarketScan";
 import {
   Button,
   Card,
@@ -35,6 +35,11 @@ export function Monitoring() {
   // Deleting is not undoable, so it asks. Acknowledging is, so it does not.
   const [confirming, setConfirming] = useState<"delete" | "delete-all" | null>(null);
   const toast = useToast();
+  // The whole index by default. A screen that only ever shows what you already
+  // follow cannot tell you about a stock you have not thought of, which is most
+  // of them - and the same criteria are evaluated either way, so the scope is
+  // a filter rather than a different feature.
+  const [scope, setScope] = useState<AlertScope>("global");
 
   const quotes = useQuery({
     queryKey: ["monitoring-quotes"],
@@ -232,12 +237,11 @@ export function Monitoring() {
         )}
       </Card>
 
-      <MarketScan />
-
       <Card
         title={t("alerts.title")}
         action={
           <div className="flex flex-wrap items-center gap-3">
+            {scope !== "watchlist" ? null : (
             <label className="flex items-center gap-1.5 text-xs text-muted">
               <input
                 type="checkbox"
@@ -247,10 +251,16 @@ export function Monitoring() {
               />
               {t("alerts.unacknowledgedOnly")}
             </label>
+            )}
             {/* The two whole-list actions live here rather than in the
                 selection bar, because they do not act on the selection and a
                 button that ignores what is ticked should not sit among the
-                ones that do not. */}
+                ones that do not.
+
+                Both are hidden on the index view: nothing there is stored
+                against this account, so there is nothing to mark or clear. */}
+            {scope === "watchlist" && (
+              <>
             <Button
               size="sm"
               variant="ghost"
@@ -267,9 +277,44 @@ export function Monitoring() {
             >
               {t("alerts.deleteAll")}
             </Button>
+              </>
+            )}
           </div>
         }
       >
+        <nav className="mb-3 flex gap-1 border-b border-line">
+          {(
+            [
+              { id: "global", label: "scan.tab.global" },
+              { id: "watchlist", label: "scan.tab.watchlist" },
+            ] as { id: AlertScope; label: MessageKey }[]
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setScope(tab.id);
+                // The selection belongs to the stored list; carrying it across
+                // would leave ids ticked that the other view cannot act on.
+                setSelected(new Set());
+              }}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+                scope === tab.id
+                  ? "border-rise text-ink"
+                  : "border-transparent text-muted hover:text-ink"
+              }`}
+            >
+              {t(tab.label)}
+            </button>
+          ))}
+        </nav>
+
+        {/* The whole index, as the scan computed it this session. Rendered
+            inside this card rather than beside it, because it is the same set
+            of criteria and a reader should have one place to look. */}
+        {scope === "global" && <MarketScan scope="global" bare />}
+
+        {scope === "watchlist" && (
+        <>
         {/* Only rendered when something is ticked. A bar of disabled buttons
             occupying the top of the list permanently is noise for the far more
             common case of reading alerts rather than managing them. */}
@@ -412,6 +457,9 @@ export function Monitoring() {
             ))}
           </ul>
         )}
+        </>
+        )}
+
         <Caveat>{t("alerts.note")}</Caveat>
       </Card>
 
