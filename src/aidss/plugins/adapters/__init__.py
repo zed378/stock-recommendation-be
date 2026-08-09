@@ -9,7 +9,9 @@ module here has been imported.
 """
 
 from aidss.plugins.adapters import (  # noqa: F401
+    ai_anthropic,
     ai_fixture,
+    ai_gemini,
     ai_openai_compatible,
     market_alphavantage,
     market_composite,
@@ -23,7 +25,9 @@ from aidss.plugins.adapters import (  # noqa: F401
 )
 
 __all__ = [
+    "ai_anthropic",
     "ai_fixture",
+    "ai_gemini",
     "ai_openai_compatible",
     "market_alphavantage",
     "market_composite",

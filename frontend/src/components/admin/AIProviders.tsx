@@ -268,8 +268,23 @@ function ProviderEditor({
   onSave: (body: Record<string, unknown>) => void;
 }) {
   const { t } = useI18n();
+
+  // Read from the registry rather than listed here: a hardcoded copy goes
+  // stale the day somebody adds a fourth adapter, and the failure is a
+  // provider you cannot select.
+  const inventory = useQuery({
+    queryKey: ["provider-inventory"],
+    queryFn: async () => {
+      const { data, error: failed } = await api.GET("/providers");
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data;
+    },
+  });
+  const adapters = inventory.data?.registered?.ai ?? ["openai_compatible"];
+
   const [form, setForm] = useState({
     name: provider?.name ?? "",
+    adapter_name: provider?.adapter_name ?? "openai_compatible",
     base_url: provider?.base_url ?? "",
     default_model: provider?.default_model ?? "",
     role: provider?.role ?? "general",
@@ -301,6 +316,7 @@ function ProviderEditor({
             onClick={() =>
               onSave({
                 name: form.name.trim(),
+                adapter_name: form.adapter_name,
                 base_url: form.base_url.trim() || null,
                 default_model: form.default_model.trim() || null,
                 role: form.role,
@@ -331,12 +347,42 @@ function ProviderEditor({
           />
         </Field>
 
-        <Field label={t("admin.providers.baseUrl")}>
+        <Field label={t("admin.providers.adapter")} hint={t("admin.providers.adapterHint")}>
+          <select
+            className={inputClass}
+            value={form.adapter_name}
+            onChange={(event) => set({ adapter_name: event.target.value })}
+          >
+            {adapters.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label={t("admin.providers.baseUrl")}
+          // Above the field rather than beside it: for a first-party adapter
+          // this box is an override nobody normally needs, and for the
+          // OpenAI-compatible one it is the whole point of the row.
+          hint={
+            form.adapter_name === "openai_compatible"
+              ? t("admin.providers.baseUrlRequired")
+              : t("admin.providers.baseUrlOptional")
+          }
+        >
           <input
             className={`${inputClass} font-mono text-xs`}
             value={form.base_url}
             onChange={(event) => set({ base_url: event.target.value })}
-            placeholder="https://api.example.com/v1"
+            placeholder={
+              form.adapter_name === "anthropic"
+                ? "https://api.anthropic.com/v1"
+                : form.adapter_name === "gemini"
+                  ? "https://generativelanguage.googleapis.com/v1beta"
+                  : "https://api.example.com/v1"
+            }
           />
         </Field>
 

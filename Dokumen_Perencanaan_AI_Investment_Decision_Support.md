@@ -531,6 +531,10 @@ Semua yang berikut ditetapkan dengan pengujian terhadap endpoint sungguhan, buka
 
 **Fundamental IDX diambil dari API statistik bursa sendiri**, melalui klien yang menyajikan sidik jari TLS peramban karena endpoint-nya di balik Cloudflare. Tidak ada akun, kredensial, atau paywall di sana — yang dilewati adalah manajemen bot, bukan kontrol akses. Yang **tidak** dilewati adalah syarat IDX yang melarang redistribusi komersial: ini aman untuk riset pribadi dan perlu ditinjau ulang sebelum dipakai lebih luas (§26). Konsekuensi praktis yang ditanggung kode: endpoint bisa berubah tanpa pemberitahuan sehingga bentuk responsnya diperiksa alih-alih dipercaya, dan batasnya tidak dipublikasikan sehingga permintaannya dijeda.
 
+**Penolakan 403 bursa bersifat sementara, dan itu diukur bukan diasumsikan.** Setelah sebuah impor terjadwal mati karenanya: dua puluh empat permintaan berturut-turut pada dua profil impersonasi seluruhnya mengembalikan 963 baris, sementara sampel terpisah menghasilkan satu 403 dari lima. Rutenya terbuka dan profilnya lolos; sebagian permintaan tetap ditantang.
+
+Diperlakukan permanen — dan memang begitu sebelumnya — satu tantangan membunuh seluruh impor harian pada percobaan pertamanya, dengan pesan yang menyalahkan profil impersonasi atas sesuatu yang tidak dilakukannya. Sebagai kegagalan yang bisa dicoba ulang, backoff antrean 30/60/120 detik melewatinya begitu saja; rute yang benar-benar tertutup tetap mati, hanya tiga percobaan kemudian. Halaman tantangan yang disajikan sebagai HTTP 200 berisi HTML diperlakukan sama, karena itu penolakan yang sama lewat pintu berbeda. Sesi yang ditolak dibuang, sehingga percobaan berikutnya tidak menyodorkan koneksi yang baru saja ditolak.
+
 **Satuan IDX tidak berdokumen, dan salah menanganinya adalah galat seratus atau semiliar kali lipat yang tidak tertangkap pemeriksaan tipe apa pun.** Uang dalam miliar rupiah — aset BBCA datang sebagai `1433701.78`, berarti Rp 1.434 triliun. `roa`, `roe`, dan `npm` dalam persen sementara penyedia lain memakai pecahan: IDX menulis `20.82` dan Alpha Vantage `0.345` untuk konsep yang sama. Keduanya ditetapkan dengan membandingkan emiten lintas tiga orde besaran.
 
 **Basis periode `ytd` ditambahkan** ke kosakata `period_type`. IDX melaporkan kumulatif berjalan: laporan bertanggal 30 September memuat sembilan bulan pendapatan. Menyebutnya tahunan melebihkan sepertiga, kuartalan mengurangi tiga kali lipat, dan `ttm` jendela yang sama sekali berbeda.
@@ -630,6 +634,18 @@ Dua aturan kalibrasi berlaku untuk kriteria baru mana pun.
 **Menekan tombol berarti mengantre, bukan menjalankan.** Antreanlah yang memegang `SKIP LOCKED` dan kunci dedup. Menjalankan impor langsung dari permintaan HTTP berlomba dengan worker yang sedang berjalan, dan hasilnya adalah pelanggaran unique constraint yang terbaca seperti bug skema padahal sebenarnya dua penulis atas baris yang sama.
 
 **Menunya ada di dasbor admin, bukan di monitoring.** Yang diatur adalah kapan platform menarik data, bukan apa yang dilihat seorang pembaca.
+### Emiten tercatat yang belum ditambahkan
+
+**Pemindaian membuat seluruh emiten tercatat bisa diklik, sementara baris `Asset` hanya ada untuk segelintir yang pernah didaftarkan.** Layar pemindaian dan penyaring keduanya menautkan ke halaman emiten, jadi delapan ratus tautan mendarat pada halaman yang menjawab “emiten ini tidak terdaftar” — pernyataan yang benar dan tidak berguna, karena platform sendiri yang menaruh baris itu di depan pembacanya.
+
+**Mendaftarkan dan mengumpulkan adalah dua hasil yang berbeda, dan menyatukannya membuat tombolnya mustahil berhasil.** Rute impor membuat baris `Asset` lalu meminta riwayat ke penyedia harga; ketika penyedia tidak memiliki simbol itu ia melempar galat, responsnya menjadi 502, dan transaksinya di-rollback — membawa serta baris yang baru dibuat. Menekan tombolnya lagi mengulang persis hal yang sama. Emiten yang tidak dimiliki penyedia tidak akan pernah bisa didaftarkan, berapa kali pun dicoba.
+
+**Harganya sudah ada di sini.** Satu permintaan per sesi memberi OHLCV untuk seluruh 963 emiten, dan pemindaian sudah menyimpannya. Meminta simbol ke penyedia luar yang mungkin tidak memilikinya, sementara rekaman sesi bursa untuk emiten itu ada di tabel sebelah, adalah sumber yang keliru untuk didahulukan. Menambahkan emiten kini mengisi riwayatnya dari rekaman itu — tanpa permintaan jaringan sama sekali — dan impor yang gagal jatuh ke sumber yang sama alih-alih membatalkan pendaftarannya.
+
+**Hanya emiten yang ada di direktori bursa.** Itulah yang menjaga salah ketik tidak mencetak instrumen yang tidak ada, dan biayanya nol karena direktori itu memang daftar lengkap perusahaan tercatat. Membaca halaman tidak boleh membuat baris; penambahan adalah POST.
+
+**Pesan 404-nya menyebutkan tindakannya.** Emiten yang tercatat tetapi belum ditambahkan mendapat kalimat yang berbeda dari kode yang memang tidak ada, karena yang pertama punya tombol yang menyelesaikannya dan yang kedua tidak.
+
 
 ---
 
@@ -939,6 +955,27 @@ Setiap rekomendasi yang dihasilkan AI **harus** memenuhi struktur berikut (dival
 
 **Yang belum dinyatakan tidak menghasilkan pembingkaian apa pun.** Bawaan Memory Manager ada supaya kode punya sesuatu untuk dibaca, bukan supaya model diberi tahu bahwa investornya meminta sesuatu. Antarmuka pun menandai mana yang bawaan dan mana yang benar-benar dipilih: preferensi hasil dugaan yang dipantulkan kembali sebagai "Anda mengatakan" adalah cara sebuah produk mulai keliru tentang orang dengan percaya diri.
 
+### Menentukan profil risiko, bukan menanyakannya
+
+**Menanyakan langsung “Anda konservatif atau agresif?” adalah instrumen termurah sekaligus paling tidak andal.** Pertanyaan itu mengundang jawaban tentang citra diri, bukan tentang perilaku: orang yang menyebut dirinya agresif menjual pada penurunan pertama, dan yang menyebut dirinya konservatif menahan tanpa merasa terganggu. Maka yang ditanyakan adalah situasi — “saham Anda turun 20% dalam sebulan tanpa kabar buruk, apa yang Anda lakukan?” — dan labelnya diturunkan.
+
+**Dua dimensi, dan yang lebih rendah yang menentukan.**
+
+| Dimensi | Yang diukur |
+|---|---|
+| Toleransi | Kesediaan — apa yang dilakukan sebuah penurunan terhadap tidur Anda |
+| Kapasitas | Kemampuan — apakah keadaan Anda sanggup menyerap kerugian itu bila terjadi |
+
+Pembaca yang bersedia tetapi tidak mampu bukan investor agresif, ia investor yang terekspos. Mengambil yang terendah adalah pembacaan baku sekaligus satu-satunya yang bisa dipertahankan: seberapa pun besar keberanian seseorang, uang sewa bukan modal risiko. Konsekuensi yang sama tegasnya: uang yang mungkin dibutuhkan dalam setahun menutup kapasitas ke nol, apa pun isi jawaban lainnya.
+
+**Jawabannya disimpan, bukan hanya hasilnya.** Turunan yang tidak bisa diperiksa adalah label yang harus dipercaya begitu saja, dan turunan yang tidak bisa dijalankan ulang membeku pada hari aturan skornya berubah. Skor kedua dimensi ikut ditampilkan, karena “Anda menjawab berani tetapi tidak punya dana darurat” adalah kalimat yang berguna dan sebuah label tunggal tidak bisa mengatakannya.
+
+**Jawaban yang dilewati bukan jawaban yang hati-hati.** Set yang tidak lengkap ditolak alih-alih dinilai sebagian; dihitung nol, ia diam-diam menandai seseorang konservatif karena ia menganggap satu pertanyaan tidak jelas.
+
+**Hasil turunan tidak menimpa yang dinyatakan sendiri.** Memory Manager menempatkan preferensi yang diucapkan investor di atas apa pun yang disimpulkan sistem, sehingga seseorang yang tidak setuju dengan hasil screening-nya bisa menyetel sendiri dan setelan itu bertahan.
+
+**Ini bukan asesmen kesesuaian (suitability), dan tidak boleh disajikan sebagai itu.** Ia mengubah cara analisis ditulis, tidak pernah apa yang disimpulkannya.
+
 
 ---
 
@@ -1071,9 +1108,40 @@ flowchart TB
 | Groq/DeepSeek (latency rendah/murah) | Task ringan (ekstraksi, klasifikasi sentimen) | Primary untuk task ringan |
 | Ollama/vLLM/LM Studio (self-hosted) | Data sensitif / fallback saat cloud down / mode privasi tinggi | Fallback / conditional |
 | OpenRouter | Akses cepat ke banyak model tanpa integrasi individual | Fallback umum |
+| Anthropic (Claude) | Penalaran kompleks; adapter sendiri karena skemanya berbeda | Primary/fallback |
+| Gemini | Penalaran kompleks sekaligus embedding; satu-satunya di sini yang menegakkan JSON di sisi API | Primary/fallback |
 | Generic OpenAI-Compatible Server | Server internal kustom masa depan | Extensible slot |
 
 > Semua ini murni **konfigurasi** (`ai_providers` table + `system_configuration`), bukan hard-coded — administrator dapat menambah/mengubah routing tanpa deploy ulang kode.
+### Penyedia yang tidak berbicara skema OpenAI
+
+**Anthropic dan Gemini punya skema permintaannya sendiri, dan perbedaannya bukan kosmetik.** Keduanya karena itu punya adapter sendiri, bukan cabang `if` di dalam adapter generik — aturan yang sudah berlaku sejak awal bab ini, kini dengan dua kasus nyata.
+
+| | OpenAI-compatible | Anthropic | Gemini |
+|---|---|---|---|
+| Rute | `/chat/completions` | `/messages` | `/models/{model}:generateContent` |
+| Autentikasi | `Authorization: Bearer` | `x-api-key` + header versi wajib | `x-goog-api-key` |
+| System prompt | Pesan `role: system` | Field terpisah di tingkat atas | `systemInstruction` |
+| Peran asisten | `assistant` | `assistant` | `model` |
+| `max_tokens` | Opsional | **Wajib** | Opsional (`maxOutputTokens`) |
+| Keluaran | String | Daftar blok bertipe | Daftar `parts` di dalam kandidat |
+| Hitungan token | `prompt_`/`completion_tokens` | `input_`/`output_tokens` | `promptTokenCount`/`candidatesTokenCount` |
+| Embedding | Ada | **Tidak ada** | Ada, pada rute lain lagi |
+
+Konsekuensi yang tidak terlihat dari tabel dan justru paling mudah salah:
+
+**Model ada di path, bukan di body, untuk Gemini.** Asumsi lazim bahwa “model hanyalah satu field lagi” tidak berlaku: permintaan tidak bisa disusun sebelum modelnya diketahui.
+
+**Nama field hitungan token diterjemahkan, dan itu bukan detail.** Dibaca dengan nama OpenAI, setiap panggilan berbiaya nol, dan layar biaya melaporkan sistem yang tidak pernah menghabiskan apa pun.
+
+**Respons yang diblokir bukan respons kosong.** Gemini menjawab HTTP 200 tanpa kandidat, atau dengan `finishReason` berupa `SAFETY`, ketika penyaringnya menyala. Dibaca apa adanya itu menjadi string kosong, yang mengalir ke hilir sebagai analis yang kebetulan tidak punya apa-apa untuk dikatakan. Keduanya diangkat sebagai kegagalan penyedia yang menyebutkan alasannya.
+
+**Anthropic tidak menerbitkan endpoint embedding.** Dikatakan di tempat pemakaian alih-alih mengembalikan daftar kosong — yang akan terbaca di hilir sebagai “tidak ada dokumen relevan”. Model embedding memang dikonfigurasi terpisah dari model chat, dan inilah kasus yang membuat pemisahan itu berguna.
+
+**Hanya Gemini yang menegakkan JSON di sisi API.** `responseMimeType` dihormati, sehingga di sana Output Validator adalah lapisan kedua; pada dua adapter lainnya ia satu-satunya lapisan.
+
+**Setiap baris memakai kredensialnya sendiri, termasuk adapter pihak pertama.** Adapter yang tahu endpoint resminya sendiri tidak mewarisi `AIDSS_AI_BASE_URL`: mengarahkan baris Anthropic ke gateway OpenAI-compatible yang kebetulan disebut environment akan menghasilkan kegagalan yang terlihat seperti Anthropic menolak kunci yang sah. Kolom URL tetap ada sebagai override untuk yang memakai proksi.
+
 
 ---
 

@@ -41,6 +41,12 @@ _ROLE_HANDLES: dict[str, frozenset[TaskComplexity]] = {
 #: sensitive data in high-privacy mode (Section 16.10, 13).
 SELF_HOSTED_ADAPTERS = frozenset({"fixture"})
 
+#: Adapters built from the row's own credentials rather than from the
+#: environment. Anything reached over the network with a key belongs here: a
+#: row that silently borrowed the environment's endpoint would not be a second
+#: provider at all, and the fallback chain would have nowhere to fall to.
+KEYED_ADAPTERS = frozenset({"openai_compatible", "anthropic", "gemini"})
+
 
 def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN201
     """Build the adapter this row describes, using *this row's* credentials.
@@ -60,7 +66,7 @@ def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN20
     # on unsaved rows by the provider test endpoint.
     adapter_name = row.adapter_name or "openai_compatible"
     cls = get_plugin_class("ai", adapter_name)
-    if adapter_name != "openai_compatible":
+    if adapter_name not in KEYED_ADAPTERS:
         # Adapters without a URL/key shape (the fixture) are built the plain
         # way; there is nothing per-row to give them.
         factory = getattr(cls, "from_settings", None)
@@ -70,13 +76,28 @@ def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN20
     if row.api_key_ciphertext:
         api_key = decrypt_secret(row.api_key_ciphertext, settings)
 
-    return cls(  # type: ignore[call-arg]
-        base_url=row.base_url or settings.ai_base_url,
-        api_key=api_key,
-        chat_model=row.default_model or settings.ai_chat_model,
-        embedding_model=settings.ai_embedding_model,
-        timeout=row.timeout_seconds or settings.ai_timeout_seconds,
-    )
+    kwargs: dict[str, object] = {
+        "api_key": api_key,
+        "chat_model": row.default_model or settings.ai_chat_model,
+        "timeout": row.timeout_seconds or settings.ai_timeout_seconds,
+    }
+
+    if adapter_name == "openai_compatible":
+        # The one adapter with no endpoint of its own: it exists to be pointed
+        # somewhere, so it inherits the environment's URL when the row is silent.
+        kwargs["base_url"] = row.base_url or settings.ai_base_url
+        kwargs["embedding_model"] = settings.ai_embedding_model
+    else:
+        # A first-party adapter knows its own endpoint. Falling back to
+        # `settings.ai_base_url` here would aim an Anthropic row at whatever
+        # OpenAI-compatible gateway the environment happens to name, and the
+        # failure would look like Anthropic rejecting a valid key.
+        if row.base_url:
+            kwargs["base_url"] = row.base_url
+        if adapter_name == "gemini":
+            kwargs["embedding_model"] = settings.ai_embedding_model
+
+    return cls(**kwargs)  # type: ignore[arg-type]
 
 
 def _binding_from_row(row: AIProviderConfig, settings: Settings) -> ProviderBinding | None:

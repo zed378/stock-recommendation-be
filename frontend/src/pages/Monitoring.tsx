@@ -196,9 +196,16 @@ export function Monitoring() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Capped and scrolled inside its own box. A watchlist grows
+                without limit, and at twenty tickers this table pushed the
+                alerts below it off the bottom of the screen - so the card that
+                reports what happened became something you had to scroll past
+                to reach the card that says what to do about it. */}
+            <div className="max-h-104 overflow-auto">
               <table className="w-full text-sm">
-                <thead>
+                {/* Sticky, and it needs the card's own background: without it
+                    the rows scroll through the header rather than under it. */}
+                <thead className="sticky top-0 z-10 bg-raised">
                   <tr className="border-b border-line text-left text-xs text-faint">
                     <th className="pb-2 pr-4 font-medium">
                       {t("portfolio.ticker")}
@@ -458,7 +465,12 @@ export function Monitoring() {
             ) : !alerts.data?.length ? (
               <Empty message={t("alerts.empty")} hint={t("alerts.emptyHint")} />
             ) : (
-              <ul className="divide-y divide-line">
+              /* Same cap as the observations above, and for a stronger
+                 reason: this list fetches up to a hundred rows with no pager
+                 under it, so a busy session renders a page several screens
+                 long and the batch controls at its head scroll out of reach of
+                 the rows they act on. */
+              <ul className="max-h-104 divide-y divide-line overflow-y-auto">
                 {alerts.data.map((alert) => (
                   <li key={alert.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
