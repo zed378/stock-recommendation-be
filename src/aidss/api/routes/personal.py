@@ -23,8 +23,10 @@ from aidss.agents.risk_profile import QUESTIONS, IncompleteAnswers, derive
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.collab import sharing
 from aidss.db.models import (
+    AlertKind,
     AnalysisResult,
     Asset,
+    SavedScreen,
     ShareKind,
     User,
     Watchlist,
@@ -33,6 +35,14 @@ from aidss.db.models import (
 from aidss.domain.types import Timeframe
 from aidss.monitoring.agenda import upcoming
 from aidss.recommendations.evidence import for_recommendation
+from aidss.screener.custom import (
+    SCREEN_CAVEAT,
+    InvalidRule,
+    Rule,
+    describe_fields,
+    parse,
+)
+from aidss.screener.custom import run as run_screen
 from aidss.security.rbac import Permission
 
 router = APIRouter(tags=["personal"], route_class=CommitBeforeResponse)
@@ -524,3 +534,171 @@ def read_shared_analysis(
         "caveat": sharing.RECIPIENT_CAVEAT,
         "read_only": True,
     }
+
+
+# --- custom screens ---------------------------------------------------------
+
+
+class RuleRequest(BaseModel):
+    field: str = Field(max_length=80)
+    operator: str = Field(max_length=20)
+    #: Deliberately untyped here. A number, a pair, a boolean, a date, or a
+    #: list of criteria depending on the field - and the builder validates it
+    #: against the field's declared type, which is the only place that knows.
+    value: Any = None
+
+
+class ScreenRequest(BaseModel):
+    rules: list[RuleRequest] = Field(default_factory=list, max_length=20)
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class SaveScreenRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    rules: list[RuleRequest] = Field(default_factory=list, max_length=20)
+
+
+class SavedScreenResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    rules: list[dict[str, Any]]
+
+
+@router.get("/screens/fields", response_model=dict)
+def screen_fields(
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> dict[str, Any]:
+    """The vocabulary a screen may use: fields, their types, their operators.
+
+    Served rather than hardcoded in the interface, for the same reason the
+    sub-sector filter reads its options from the data: a second copy goes stale
+    the first time a signal is added, and the failure is a field that exists
+    and cannot be filtered on.
+    """
+    return {
+        "fields": describe_fields(),
+        "criteria": [kind.value for kind in AlertKind],
+        "caveat": SCREEN_CAVEAT,
+    }
+
+
+def _parsed(rules: list[RuleRequest]) -> list[Rule]:
+    try:
+        return parse([rule.model_dump() for rule in rules])
+    except InvalidRule as exc:
+        # 422 with the builder's own sentence. A rule is written by a person,
+        # so the reason it was refused has to be readable by one.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+
+
+@router.post("/screens/preview", response_model=dict)
+def preview_screen(
+    payload: ScreenRequest,
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> dict[str, Any]:
+    """Run a screen without saving it.
+
+    The response reports `considered` beside `matched` on purpose: a filter
+    that keeps most of the exchange is not filtering, and the denominator is
+    the only thing that shows it.
+    """
+    return run_screen(session, _parsed(payload.rules), limit=payload.limit).as_payload()
+
+
+@router.get("/screens", response_model=list[SavedScreenResponse])
+def list_screens(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> list[SavedScreenResponse]:
+    rows = session.scalars(
+        select(SavedScreen)
+        .where(SavedScreen.user_id == user.id)
+        .order_by(SavedScreen.name)
+    ).all()
+    return [
+        SavedScreenResponse(id=row.id, name=row.name, rules=list(row.rules or []))
+        for row in rows
+    ]
+
+
+@router.post("/screens", response_model=SavedScreenResponse, status_code=status.HTTP_201_CREATED)
+def save_screen(
+    payload: SaveScreenRequest,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> SavedScreenResponse:
+    """Store a screen, validating it first.
+
+    Validated before it is written rather than when it is next run: a screen
+    that saves cleanly and fails every time afterwards is worse than one that
+    refuses to save.
+    """
+    rules = _parsed(payload.rules)
+    name = payload.name.strip()
+
+    existing = session.scalar(
+        select(SavedScreen).where(
+            SavedScreen.user_id == user.id, SavedScreen.name == name
+        )
+    )
+    if existing is None:
+        existing = SavedScreen(user_id=user.id, name=name)
+        session.add(existing)
+    existing.rules = [rule.as_payload() for rule in rules]
+    session.flush()
+    return SavedScreenResponse(id=existing.id, name=existing.name, rules=list(existing.rules))
+
+
+@router.post("/screens/{screen_id}/run", response_model=dict)
+def run_saved_screen(
+    screen_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> dict[str, Any]:
+    """Run a stored screen, re-validating its rules on the way.
+
+    Re-validated because the vocabulary can change under a saved screen. A rule
+    naming a signal that no longer exists then produces a sentence saying so,
+    rather than a database error about a column nobody wrote.
+    """
+    row = session.scalar(
+        select(SavedScreen).where(
+            SavedScreen.id == screen_id, SavedScreen.user_id == user.id
+        )
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No screen of yours with that id."
+        )
+
+    try:
+        rules = parse(list(row.rules or []))
+    except InvalidRule as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{row.name!r} can no longer run: {exc}",
+        ) from exc
+
+    return run_screen(session, rules, limit=limit).as_payload()
+
+
+@router.delete("/screens/{screen_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_screen(
+    screen_id: uuid.UUID,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> None:
+    row = session.scalar(
+        select(SavedScreen).where(
+            SavedScreen.id == screen_id, SavedScreen.user_id == user.id
+        )
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No screen of yours with that id."
+        )
+    session.delete(row)

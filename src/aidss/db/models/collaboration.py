@@ -161,3 +161,35 @@ class SharedItem(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
         }
+
+
+class SavedScreen(Base):
+    """A filter an investor wrote, kept so it can be run again.
+
+    The rules are stored as the validated structure rather than as a rendered
+    query. Two reasons, and the second is the one that matters: a stored query
+    could not be re-validated when the vocabulary changes, and a screen naming
+    a signal that no longer exists would fail at run time with a database error
+    instead of a sentence saying which field went away.
+    """
+
+    __tablename__ = "saved_screens"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+
+    #: [{"field": ..., "operator": ..., "value": ...}, ...], exactly as
+    #: the builder validated them.
+    rules: Mapped[list[Any]] = mapped_column(default=list)
+
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        # Named per user: a list where two rows read "Momentum" is a list
+        # nobody can use.
+        UniqueConstraint("user_id", "name", name="uq_screen_name"),
+    )

@@ -1245,6 +1245,22 @@ Konsekuensi yang tidak terlihat dari tabel dan justru paling mudah salah:
 
 **Tidak ada rekomendasi tersimpan berarti keadaan kosong, bukan grafik harga biasa.** Grafik tanpa tanda apa pun akan tampil sebagai grafik harga di bawah judul yang menjanjikan penjelasan.
 
+### Filter yang disusun sendiri pembaca
+
+Horizon bawaan menjawab pertanyaan yang dipilih orang lain. Pembangun filter membiarkan pembaca menyatakan syaratnya sendiri — “RSI di bawah 35, volume minimal dua kali rata-ratanya, harga antara 100 dan 2.000” — lalu menjalankannya atas setiap emiten yang tercakup pemindaian. Tiga keputusan menentukan seluruh desainnya.
+
+**Kosakatanya tertutup, dan justru itulah keamanannya.** Nama field dicari di registri yang diturunkan dari dataclass sinyal; operator dicari di tabel; nilai dipaksa ke tipe yang dideklarasikan field itu. Tidak ada satu pun masukan pemanggil yang sampai ke SQL sebagai teks. Alternatifnya — membiarkan sebuah aturan membawa potongan ekspresi — adalah permukaan injeksi pada layar yang membaca seluruh basis data. Field-nya diturunkan, bukan didaftar tangan: salinan manual akan basi pada saat seseorang menambah sinyal, dan kegagalannya berupa field yang ada di data tetapi tidak bisa difilter.
+
+**Setiap angka di dalam sinyal tersimpan adalah *string* JSON.** Serialisasi menulis Decimal sebagai `"9.5000"` supaya presisinya tidak hilang, sehingga perbandingan yang ditulis dengan cara paling wajar menjadi leksikal. Ini bukan kekhawatiran teoretis: dijalankan pertama kali, filter “RSI di bawah 10” mengembalikan kosong sementara “volume ratio di atas 10” mengembalikan emiten ber-rasio 2,0. PostgreSQL memang menambahkan cast sendiri lewat `->>`, tetapi SQLite tidak — `json_extract` di sana biasanya mempertahankan tipe, dan itu benar untuk angka JSON serta salah untuk milik kita. Maka setiap perbandingan numerik melakukan cast eksplisit. Yang membuat detail ini paling berbahaya di seluruh modul: salah menanganinya menghasilkan **daftar yang masuk akal**, bukan galat.
+
+**Aturan digabung dengan AND.** Berbeda dari kotak centang kriteria, yang OR karena mencentang tiga berarti “tunjukkan apa pun yang punya salah satunya”. Aturan yang ditulis tangan adalah persyaratan: menambah satu harus mempersempit, atau membangun filter melakukan kebalikan dari yang terasa saat membangunnya. OR *antar* aturan sengaja belum ditawarkan — ia butuh pengelompokan supaya bermakna (“A dan (B atau C)”), pengelompokan butuh editor bersarang, dan daftar datar yang diam-diam meng-OR adalah filter yang tidak bisa diprediksi siapa pun.
+
+**Nilai yang tidak bisa dihitung mengeluarkan emitennya, bukan meloloskannya** — aturan yang sama dengan penyaring horizon. Kunci yang hilang diekstrak sebagai NULL, di-cast menjadi NULL, dan perbandingannya NULL; barisnya jatuh. Konsisten di kedua dialek justru karena cast-nya eksplisit.
+
+**Setiap jalannya melaporkan penyebutnya.** Filter yang menyimpan sebagian besar bursa tidak sedang menyaring, dan satu-satunya yang menunjukkannya adalah pembanding — pelajaran yang sudah dibayar dua kriteria bawaan yang cocok pada 44% dan 36% sebelum ada yang mengukurnya. Di atas 50%, antarmuka mengatakannya dengan kalimat, bukan hanya angka.
+
+**Filter tersimpan divalidasi ulang saat dijalankan.** Kosakata bisa berubah di bawah filter yang sudah disimpan; aturan yang menyebut sinyal yang tidak ada lagi karena itu menghasilkan kalimat yang menyebutkan field-nya, bukan galat basis data tentang kolom yang tidak pernah ditulis siapa pun.
+
 
 ---
 

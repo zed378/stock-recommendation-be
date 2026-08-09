@@ -2299,6 +2299,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/screens/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Screen Fields
+         * @description The vocabulary a screen may use: fields, their types, their operators.
+         *
+         *     Served rather than hardcoded in the interface, for the same reason the
+         *     sub-sector filter reads its options from the data: a second copy goes stale
+         *     the first time a signal is added, and the failure is a field that exists
+         *     and cannot be filtered on.
+         */
+        get: operations["screen_fields_screens_fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Screen
+         * @description Run a screen without saving it.
+         *
+         *     The response reports `considered` beside `matched` on purpose: a filter
+         *     that keeps most of the exchange is not filtering, and the denominator is
+         *     the only thing that shows it.
+         */
+        post: operations["preview_screen_screens_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Screens */
+        get: operations["list_screens_screens_get"];
+        put?: never;
+        /**
+         * Save Screen
+         * @description Store a screen, validating it first.
+         *
+         *     Validated before it is written rather than when it is next run: a screen
+         *     that saves cleanly and fails every time afterwards is worse than one that
+         *     refuses to save.
+         */
+        post: operations["save_screen_screens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{screen_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Saved Screen
+         * @description Run a stored screen, re-validating its rules on the way.
+         *
+         *     Re-validated because the vocabulary can change under a saved screen. A rule
+         *     naming a signal that no longer exists then produces a sentence saying so,
+         *     rather than a database error about a column nobody wrote.
+         */
+        post: operations["run_saved_screen_screens__screen_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{screen_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Screen */
+        delete: operations["delete_screen_screens__screen_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3785,6 +3900,36 @@ export interface components {
         RoleChangeRequest: {
             role: components["schemas"]["UserRole"];
         };
+        /** RuleRequest */
+        RuleRequest: {
+            /** Field */
+            field: string;
+            /** Operator */
+            operator: string;
+            /** Value */
+            value?: unknown;
+        };
+        /** SaveScreenRequest */
+        SaveScreenRequest: {
+            /** Name */
+            name: string;
+            /** Rules */
+            rules?: components["schemas"]["RuleRequest"][];
+        };
+        /** SavedScreenResponse */
+        SavedScreenResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: {
+                [key: string]: unknown;
+            }[];
+        };
         /** ScheduleRunResponse */
         ScheduleRunResponse: {
             /** Ticker */
@@ -3812,6 +3957,16 @@ export interface components {
          * @enum {string}
          */
         ScheduleStatus: "active" | "needs_attention";
+        /** ScreenRequest */
+        ScreenRequest: {
+            /** Rules */
+            rules?: components["schemas"]["RuleRequest"][];
+            /**
+             * Limit
+             * @default 100
+             */
+            limit: number;
+        };
         /** ShareRequest */
         ShareRequest: {
             /** Recipient Email */
@@ -7538,6 +7693,180 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    screen_fields_screens_fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    preview_screen_screens_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_screens_screens_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedScreenResponse"][];
+                };
+            };
+        };
+    };
+    save_screen_screens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveScreenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedScreenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_saved_screen_screens__screen_id__run_post: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                screen_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_screen_screens__screen_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                screen_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

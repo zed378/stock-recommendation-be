@@ -36,6 +36,7 @@ from aidss.db.models.collaboration import (
     AgendaKind,
     AgendaSource,
     IssuerAgenda,
+    SavedScreen,
     SharedItem,
     ShareKind,
 )
@@ -136,6 +137,7 @@ __all__ = [
     "UserRole",
     "UserStatus",
     "IssuerAgenda",
+    "SavedScreen",
     "SharedItem",
     "ShareKind",
     "Watchlist",

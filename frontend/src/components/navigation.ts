@@ -26,6 +26,9 @@ const RESEARCH: Group = {
   items: [
     { to: "/watchlist", label: "nav.watchlist" },
     { to: "/picks", label: "nav.picks" },
+    // Beside the built-in screener rather than under the account: it
+    // answers the same question, with conditions the reader chose.
+    { to: "/screens", label: "nav.screens" },
     { to: "/chat", label: "nav.chat" },
   ],
 };

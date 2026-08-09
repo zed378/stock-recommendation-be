@@ -13,6 +13,7 @@ import { Portfolio } from "@/pages/Portfolio";
 import { Journal } from "@/pages/Journal";
 import { Chat } from "@/pages/Chat";
 import { Agenda } from "@/pages/Agenda";
+import { ScreenBuilder } from "@/pages/ScreenBuilder";
 import { Shared } from "@/pages/Shared";
 import { Profile } from "@/pages/Profile";
 import { Admin } from "@/pages/Admin";
@@ -64,6 +65,7 @@ export default function App() {
                 <Route path="/monitoring" element={<Monitoring />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/agenda" element={<Agenda />} />
+                <Route path="/screens" element={<ScreenBuilder />} />
                 <Route path="/shared" element={<Shared />} />
                 <Route path="/profile" element={<Profile />} />
                 {/* Registered for everyone; the page itself explains the role
