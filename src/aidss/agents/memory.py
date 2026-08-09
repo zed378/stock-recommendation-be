@@ -111,9 +111,15 @@ class MemoryManager:
             )
             self._session.add(row)
         else:
-            # A stated preference is never overwritten by an inferred one: the
-            # investor's own words outrank the system's guess.
-            if row.source == "stated" and source == "inferred":
+            # A stated preference is never overwritten by one the system worked
+            # out: the investor's own words outrank anything derived from them.
+            #
+            # Written against `"inferred"` specifically at first, which made the
+            # rule depend on a spelling: the risk questionnaire records its
+            # result as `"derived"` - the accurate word for a scored answer -
+            # and sailed straight past a guard that was meant to stop exactly
+            # that. Anything that is not the investor speaking is now covered.
+            if row.source == "stated" and source != "stated":
                 return row
             row.value = {"value": value}
             row.source = source

@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-import pytest
 from sqlalchemy import select
 
-from aidss.collectors.registration import SOURCE, register, seed_prices
+from aidss.collectors.registration import SOURCE, register
 from aidss.collectors.trading_summary import sync_summaries
 from aidss.db.models import Asset, HistoricalPrice, Issuer
 from aidss.domain.types import Timeframe
