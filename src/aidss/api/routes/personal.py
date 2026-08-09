@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.agents.memory import DEFAULT_PREFERENCES, MemoryManager, PreferenceKey
+from aidss.agents.risk_profile import QUESTIONS, IncompleteAnswers, derive
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.collab import sharing
 from aidss.db.models import (
@@ -178,6 +179,118 @@ def preference_options() -> dict[str, Any]:
         "privacy_mode": ["standard", "high"],
         "defaults": dict(DEFAULT_PREFERENCES),
     }
+
+
+# --- risk screening ---------------------------------------------------------
+
+
+class RiskAnswers(BaseModel):
+    #: Question key to chosen option key. Validated against the instrument
+    #: rather than typed here: the questions are data, and duplicating their
+    #: shape in a schema means adding a question in two places.
+    answers: dict[str, str]
+
+
+class RiskProfileResponse(BaseModel):
+    risk_appetite: RiskAppetite
+    investment_horizon: Horizon
+    tolerance_score: int
+    capacity_score: int
+    limited_by: str
+    answers: dict[str, str]
+    caveat: str
+
+
+RISK_CAVEAT = (
+    "This shapes how analysis is written for you - what gets emphasised and how "
+    "fully the downside is spelled out. It never changes what an analysis "
+    "concludes: the stance, the levels and the confidence are properties of the "
+    "evidence, not of who is reading. It is not a suitability assessment and not "
+    "advice about what you should hold."
+)
+
+
+@router.get("/me/risk-profile/questions", response_model=dict)
+def risk_questions() -> dict[str, Any]:
+    """The instrument, as data.
+
+    Option *keys* only - the wording lives in the interface's message table, so
+    a question can be reworded in either language without touching the scoring
+    that produced somebody's stored profile.
+    """
+    return {
+        "questions": [
+            {
+                "key": question.key,
+                "dimension": question.dimension.value,
+                "options": [option.key for option in question.options],
+            }
+            for question in QUESTIONS
+        ],
+        "caveat": RISK_CAVEAT,
+    }
+
+
+@router.post("/me/risk-profile", response_model=RiskProfileResponse)
+def submit_risk_profile(
+    payload: RiskAnswers,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> RiskProfileResponse:
+    """Score the answers, store them, and set the profile they imply.
+
+    The answers are stored as well as the result. A derivation nobody can
+    inspect is a label the reader has to take on faith, and one that cannot be
+    re-run is frozen the day the scoring changes.
+
+    The derived appetite and horizon are written with ``source="derived"``. The
+    Memory Manager keeps a stated preference above an inferred one, so somebody
+    who has already set their appetite by hand is not overruled by a
+    questionnaire - and somebody who takes the questionnaire and then disagrees
+    can still override it on the profile screen.
+    """
+    try:
+        profile = derive(payload.answers)
+    except IncompleteAnswers as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+
+    manager = MemoryManager(session)
+    manager.remember(user.id, PreferenceKey.RISK_ANSWERS, profile.answers, source="stated")
+    manager.remember(
+        user.id, PreferenceKey.RISK_APPETITE, profile.risk_appetite, source="derived"
+    )
+    manager.remember(
+        user.id, PreferenceKey.HORIZON, profile.investment_horizon, source="derived"
+    )
+
+    return RiskProfileResponse(**profile.as_payload(), caveat=RISK_CAVEAT)
+
+
+@router.get("/me/risk-profile", response_model=RiskProfileResponse | None)
+def read_risk_profile(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> RiskProfileResponse | None:
+    """The stored screening, re-scored on read.
+
+    Re-derived rather than returning a stored label: the scoring is the part
+    most likely to change, and a profile that keeps reporting last month's
+    thresholds is worse than one that says it needs retaking.
+    """
+    memory = MemoryManager(session).load(user.id)
+    answers = memory.preferences.get(PreferenceKey.RISK_ANSWERS)
+    if not isinstance(answers, dict) or not answers:
+        return None
+    try:
+        profile = derive({str(k): str(v) for k, v in answers.items()})
+    except IncompleteAnswers:
+        # Stored against an older version of the instrument. Reported as "not
+        # taken" rather than as an error: the reader's next action is the same
+        # either way, and it is retaking it.
+        return None
+    return RiskProfileResponse(**profile.as_payload(), caveat=RISK_CAVEAT)
 
 
 # --- issuer calendar --------------------------------------------------------

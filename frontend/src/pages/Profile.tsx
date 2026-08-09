@@ -4,6 +4,7 @@ import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { Card, Caveat, ErrorNote, Field, Loading } from "@/components/primitives";
+import { RiskScreening } from "@/components/RiskScreening";
 import type { components } from "@/api/schema";
 
 const FIELDS = [
@@ -88,6 +89,8 @@ export function Profile() {
       </div>
 
       {error && <ErrorNote message={error} onRetry={() => setError(null)} />}
+
+      <RiskScreening />
 
       <Card title={t("profile.howYouInvest")}>
         <div className="space-y-5">

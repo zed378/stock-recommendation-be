@@ -227,6 +227,22 @@ class IDXMarketDataProvider(MarketDataProvider):
         )
         return self._session
 
+    def _drop_session(self) -> None:
+        """Throw away the cached connection after a refusal.
+
+        The session is reused across requests, which is what makes the pacing
+        worth having - but it also means one TLS handshake serves every call.
+        If that handshake is what got challenged, retrying on it presents the
+        protection with exactly the connection it just refused. Dropping it
+        costs one handshake and gives the retry a genuinely fresh identity.
+        """
+        session, self._session = self._session, None
+        if session is not None:
+            try:
+                session.close()
+            except Exception:  # noqa: BLE001 - closing must never mask the refusal
+                pass
+
     def _wait_for_slot(self) -> None:
         if self._interval <= 0:
             return
@@ -258,16 +274,35 @@ class IDXMarketDataProvider(MarketDataProvider):
             raise ProviderUnavailableError(
                 self.name, "rate limited (no published limit; back off)", retryable=True
             )
-        if status in (401, 403):
-            # The most likely single cause of this adapter breaking: the
-            # protection was tightened past what impersonation clears. Say so,
-            # rather than reporting it as an ordinary client error.
+        if status == 401:
+            # A genuine authentication answer. Nothing about waiting changes it.
             raise ProviderUnavailableError(
                 self.name,
-                f"refused ({status}) - the endpoint's bot protection no longer accepts "
-                "this client; the impersonation profile may need updating, or the route "
-                "may have closed",
+                "refused (401) - this route now requires credentials",
                 retryable=False,
+            )
+        if status == 403:
+            # Bot management, and it is **intermittent**. This was measured
+            # against the live stock-summary endpoint after a scheduled import
+            # died on it: twenty-four consecutive requests across two
+            # impersonation profiles all returned 963 rows, and a separate
+            # sample produced one 403 among five. The route is open and the
+            # profile clears it; some fraction of requests is challenged
+            # anyway.
+            #
+            # Treated as permanent - which it was - a single challenge killed
+            # the whole daily import on its first attempt, and the message
+            # blamed the impersonation profile for something it had not done.
+            # Retryable, the queue's 30/60/120-second backoff walks straight
+            # past it. A route that genuinely closes still dies, just three
+            # attempts later, which costs nothing anybody notices.
+            self._drop_session()
+            raise ProviderUnavailableError(
+                self.name,
+                "refused (403) by bot protection - usually intermittent and cleared by "
+                "a retry. Persisting across every attempt means the impersonation "
+                "profile needs updating or the route has closed",
+                retryable=True,
             )
         if status == 404:
             raise ProviderUnavailableError(
@@ -288,8 +323,16 @@ class IDXMarketDataProvider(MarketDataProvider):
             body = response.text[:160] if hasattr(response, "text") else ""
             # A Cloudflare challenge page is HTML with a 200, so this branch is
             # the one that catches "we were quietly served the interstitial".
+            #
+            # Retryable for the same reason the 403 is, and observed the same
+            # way: probing another IDX route returned clean JSON on one request
+            # and a challenge page on the next. This is the 403 arriving
+            # through a different door, so it gets the same answer.
+            self._drop_session()
             raise ProviderUnavailableError(
-                self.name, f"response was not JSON: {body!r}", retryable=False
+                self.name,
+                f"response was not JSON, most likely a bot-protection page: {body!r}",
+                retryable=True,
             ) from exc
 
     # --- the listed-company directory ------------------------------------

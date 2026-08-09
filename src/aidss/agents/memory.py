@@ -29,6 +29,10 @@ class PreferenceKey:
     EXPERIENCE = "experience_level"
     EXPLANATION_DEPTH = "explanation_depth"
     PRIVACY_MODE = "privacy_mode"
+    #: The raw answers to the risk-screening questionnaire. Kept beside the
+    #: derived appetite rather than instead of it, so the derivation can be
+    #: re-run when the scoring changes and shown when the reader disagrees.
+    RISK_ANSWERS = "risk_answers"
 
 
 #: Used when nothing is known. Chosen to be unremarkable: the alternative is a

@@ -48,6 +48,33 @@ export function AssetDetail() {
     },
   });
 
+  // Whether this ticker is listed but simply not added yet, which is the
+  // ordinary case now that the scan links to all ~800 issuers. Distinguished
+  // from a genuine miss by the server, which checks the exchange's own
+  // directory before answering.
+  const unregistered =
+    candles.isError && /not yet\s+added to your platform/.test(
+      (candles.error as Error).message,
+    );
+
+  const registerIssuer = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/assets/{ticker}/register", {
+        params: { path: { ticker } },
+      });
+      if (error) throw new Error(errorMessage(error, t("common.error")));
+      return data;
+    },
+    onSuccess: () => {
+      // Everything on this page was answering 404 a moment ago, so the whole
+      // ticker's worth of queries has to reload rather than just the chart.
+      queryClient.invalidateQueries({ queryKey: ["candles", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["indicators", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["fundamentals", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["evidence", ticker] });
+    },
+  });
+
   const ingest = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/assets/{ticker}/ingest", {
@@ -123,6 +150,38 @@ export function AssetDetail() {
         </div>
       </header>
 
+      {/* Above the tabs rather than inside one: every tab answers 404 for an
+          issuer that has not been added, so a prompt living in the chart tab
+          would leave the other five looking broken. */}
+      {unregistered && (
+        <div className="rounded-lg border border-watch/25 bg-watch/5 px-4 py-3">
+          <p className="text-sm font-medium text-watch">
+            {t("asset.notAdded", { ticker: ticker.toUpperCase() })}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            {t("asset.notAddedHint")}
+          </p>
+          <div className="mt-3">
+            <Button busy={registerIssuer.isPending} onClick={() => registerIssuer.mutate()}>
+              {t("asset.add")}
+            </Button>
+          </div>
+          {registerIssuer.isError && (
+            <p className="mt-2 text-xs text-fall">
+              {(registerIssuer.error as Error).message}
+            </p>
+          )}
+        </div>
+      )}
+
+      {registerIssuer.isSuccess && registerIssuer.data && (
+        <p className="rounded-md border border-rise/25 bg-rise/5 px-3 py-2 text-xs text-rise">
+          {t("asset.added", {
+            count: (registerIssuer.data as { seeded_bars?: number }).seeded_bars ?? 0,
+          })}
+        </p>
+      )}
+
       {ingest.isSuccess && ingest.data && (
         <p className="rounded-md border border-rise/25 bg-rise/5 px-3 py-2 text-xs text-rise">
           {t("asset.ingestDone", { count: ingest.data.inserted + ingest.data.updated })}
@@ -150,6 +209,11 @@ export function AssetDetail() {
         <Card>
           {candles.isLoading ? (
             <Loading />
+          ) : unregistered ? (
+            // The banner above already says what to do. Repeating it here as a
+            // red error with a Try again button that can only produce the same
+            // sentence is what made this a dead end.
+            <Empty message={t("asset.notAdded", { ticker: ticker.toUpperCase() })} />
           ) : candles.isError ? (
             <ErrorNote
               message={(candles.error as Error).message}

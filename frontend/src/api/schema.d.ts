@@ -173,6 +173,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{ticker}/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register Issuer
+         * @description Add a listed issuer, seeding its history from stored exchange sessions.
+         *
+         *     A POST rather than something a GET does on the way past: reading a page
+         *     must not create rows, or walking the URL space would mint an asset for
+         *     every four-letter string somebody tried.
+         *
+         *     Restricted to issuers in the exchange's own directory. That is what keeps a
+         *     typo from advertising an instrument that does not exist, and it costs
+         *     nothing - the directory is the complete list of listed companies.
+         */
+        post: operations["register_issuer_assets__ticker__register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets": {
         parameters: {
             query?: never;
@@ -2060,6 +2088,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/risk-profile/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Risk Questions
+         * @description The instrument, as data.
+         *
+         *     Option *keys* only - the wording lives in the interface's message table, so
+         *     a question can be reworded in either language without touching the scoring
+         *     that produced somebody's stored profile.
+         */
+        get: operations["risk_questions_me_risk_profile_questions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/risk-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Risk Profile
+         * @description The stored screening, re-scored on read.
+         *
+         *     Re-derived rather than returning a stored label: the scoring is the part
+         *     most likely to change, and a profile that keeps reporting last month's
+         *     thresholds is worse than one that says it needs retaking.
+         */
+        get: operations["read_risk_profile_me_risk_profile_get"];
+        put?: never;
+        /**
+         * Submit Risk Profile
+         * @description Score the answers, store them, and set the profile they imply.
+         *
+         *     The answers are stored as well as the result. A derivation nobody can
+         *     inspect is a label the reader has to take on faith, and one that cannot be
+         *     re-run is frozen the day the scoring changes.
+         *
+         *     The derived appetite and horizon are written with ``source="derived"``. The
+         *     Memory Manager keeps a stated preference above an inferred one, so somebody
+         *     who has already set their appetite by hand is not overruled by a
+         *     questionnaire - and somebody who takes the questionnaire and then disagrees
+         *     can still override it on the profile screen.
+         */
+        post: operations["submit_risk_profile_me_risk_profile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agenda": {
         parameters: {
             query?: never;
@@ -2119,7 +2209,7 @@ export interface paths {
          *     Named accounts only - there is no link form of this, deliberately. A URL
          *     carrying investment analysis about a named company forwards itself and
          *     cannot be withdrawn once it is in a group chat, and the audience has to
-         *     stay knowable for the redistribution question in Section 22 to have an answer.
+         *     stay knowable for the redistribution question in Section 26 to have an answer.
          */
         post: operations["create_share_shares_post"];
         delete?: never;
@@ -3659,6 +3749,38 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** RiskAnswers */
+        RiskAnswers: {
+            /** Answers */
+            answers: {
+                [key: string]: string;
+            };
+        };
+        /** RiskProfileResponse */
+        RiskProfileResponse: {
+            /**
+             * Risk Appetite
+             * @enum {string}
+             */
+            risk_appetite: "conservative" | "moderate" | "aggressive";
+            /**
+             * Investment Horizon
+             * @enum {string}
+             */
+            investment_horizon: "short" | "medium" | "long";
+            /** Tolerance Score */
+            tolerance_score: number;
+            /** Capacity Score */
+            capacity_score: number;
+            /** Limited By */
+            limited_by: string;
+            /** Answers */
+            answers: {
+                [key: string]: string;
+            };
+            /** Caveat */
+            caveat: string;
+        };
         /** RoleChangeRequest */
         RoleChangeRequest: {
             role: components["schemas"]["UserRole"];
@@ -4162,6 +4284,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+        };
+    };
+    register_issuer_assets__ticker__register_post: {
+        parameters: {
+            query?: {
+                exchange?: string;
+            };
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7109,6 +7266,81 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    risk_questions_me_risk_profile_questions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    read_risk_profile_me_risk_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskProfileResponse"] | null;
+                };
+            };
+        };
+    };
+    submit_risk_profile_me_risk_profile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiskAnswers"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -13,7 +13,7 @@ the fields the adapter reads.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -299,7 +299,20 @@ def test_the_referer_the_endpoint_expects_is_sent() -> None:
 
 @pytest.mark.parametrize(
     ("status", "retryable"),
-    [(429, True), (500, True), (503, True), (403, False), (401, False), (404, False)],
+    [
+        (429, True),
+        (500, True),
+        (503, True),
+        # 403 was listed here as permanent, on the reasonable-sounding theory
+        # that a refusal is a refusal. Measured against the live endpoint it is
+        # not: twenty-four consecutive requests across two impersonation
+        # profiles all succeeded, while a separate sample produced one 403 in
+        # five. Held as permanent, that one challenge killed a whole daily
+        # import on its first attempt.
+        (403, True),
+        (401, False),
+        (404, False),
+    ],
 )
 def test_status_codes_map_to_the_right_retryability(status: int, retryable: bool) -> None:
     adapter, _ = provider(FakeResponse({}, status=status))
@@ -401,3 +414,80 @@ def test_realtime_is_not_claimed() -> None:
 def test_fundamentals_are_attributed_to_this_adapter() -> None:
     adapter, _ = provider()
     assert adapter.fundamentals_source_name() == "idx"
+
+
+# --- bot protection is intermittent, and that decides the retry policy -------
+
+
+def test_a_403_is_retryable() -> None:
+    """Measured against the live endpoint after a scheduled import died on one:
+    twenty-four consecutive requests across two impersonation profiles all
+    returned 963 rows, while a separate sample produced one 403 among five. The
+    route is open and the profile clears it; some fraction is challenged anyway.
+
+    Classified permanent - which it was - a single challenge killed the whole
+    daily import on its first attempt. That is the failure this pins.
+    """
+    adapter, _ = provider(FakeResponse(None, status=403, text="<html>denied</html>"))
+
+    with pytest.raises(ProviderUnavailableError) as caught:
+        adapter.daily_trading_summary(date(2026, 8, 7))
+
+    assert caught.value.retryable is True
+
+
+def test_a_401_is_not_retryable() -> None:
+    """Waiting does not turn a credential requirement into a granted one."""
+    adapter, _ = provider(FakeResponse(None, status=401, text=""))
+
+    with pytest.raises(ProviderUnavailableError) as caught:
+        adapter.daily_trading_summary(date(2026, 8, 7))
+
+    assert caught.value.retryable is False
+
+
+def test_a_challenge_page_served_as_200_is_retryable() -> None:
+    """The same refusal through a different door: a Cloudflare interstitial is
+    HTML with a 200. Observed on another IDX route returning clean JSON on one
+    request and a challenge page on the next."""
+    adapter, _ = provider(FakeResponse(None, status=200, text="<html>checking</html>"))
+
+    with pytest.raises(ProviderUnavailableError) as caught:
+        adapter.daily_trading_summary(date(2026, 8, 7))
+
+    assert caught.value.retryable is True
+
+
+def test_the_403_message_does_not_blame_the_profile_outright() -> None:
+    """The old wording asserted the impersonation profile needed updating,
+    which sent a reader to change a setting that was working. It may still be
+    the cause - but only if every attempt fails, and the message has to say
+    which of those it is looking at."""
+    adapter, _ = provider(FakeResponse(None, status=403, text=""))
+
+    with pytest.raises(ProviderUnavailableError) as caught:
+        adapter.daily_trading_summary(date(2026, 8, 7))
+
+    message = str(caught.value)
+    assert "intermittent" in message
+    assert "Persisting across every attempt" in message
+
+
+def test_a_refusal_throws_away_the_cached_connection() -> None:
+    """One TLS handshake serves every call, so retrying on the cached session
+    presents the protection with exactly the connection it just refused."""
+    adapter, _ = provider(FakeResponse(None, status=403, text=""))
+    adapter._session = adapter._session or object()
+
+    with pytest.raises(ProviderUnavailableError):
+        adapter.daily_trading_summary(date(2026, 8, 7))
+
+    assert adapter._session is None
+
+
+def test_a_retryable_refusal_survives_the_queues_backoff() -> None:
+    """The policy only works if the queue actually waits long enough for a
+    challenge to lapse. Thirty seconds, then a minute, then two."""
+    from aidss.jobs.queue import retry_delay
+
+    assert [retry_delay(n) for n in (1, 2, 3)] == [30, 60, 120]

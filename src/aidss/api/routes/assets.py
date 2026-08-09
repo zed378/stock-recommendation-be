@@ -31,6 +31,7 @@ from aidss.collectors.market_data import (
     load_candles,
 )
 from aidss.collectors.normalization import normalize_ticker
+from aidss.collectors.registration import SOURCE, directory_entry, register, seed_prices
 from aidss.db.models import Asset, FundamentalMetric, User
 from aidss.domain.types import Timeframe
 from aidss.indicators.engine import IndicatorEngine
@@ -53,11 +54,50 @@ def _resolve_asset(session: Session, ticker: str, exchange: str) -> Asset:
         select(Asset).where(Asset.ticker == normalize_ticker(ticker), Asset.exchange == exchange)
     )
     if asset is None:
+        # Says what to do, not only what is wrong. The scan and the screener
+        # link to every listed issuer, so arriving here is the ordinary case
+        # rather than a mistake - and "not registered" told the reader nothing
+        # about the button that fixes it.
+        listed = directory_entry(session, ticker) is not None
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset {ticker!r} on exchange {exchange!r} is not registered",
+            detail=(
+                f"{normalize_ticker(ticker)} is listed on {exchange} but not yet "
+                "added to your platform. Add it to load its stored history."
+                if listed
+                else f"Asset {ticker!r} on exchange {exchange!r} is not registered"
+            ),
         )
     return asset
+
+
+@router.post("/{ticker}/register", response_model=dict, status_code=status.HTTP_201_CREATED)
+def register_issuer(
+    ticker: str,
+    exchange: str = Query(default="IDX"),
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> dict:
+    """Add a listed issuer, seeding its history from stored exchange sessions.
+
+    A POST rather than something a GET does on the way past: reading a page
+    must not create rows, or walking the URL space would mint an asset for
+    every four-letter string somebody tried.
+
+    Restricted to issuers in the exchange's own directory. That is what keeps a
+    typo from advertising an instrument that does not exist, and it costs
+    nothing - the directory is the complete list of listed companies.
+    """
+    result = register(session, ticker, exchange=exchange)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"{normalize_ticker(ticker)} is not in the exchange's listed-company "
+                "directory. Check the code, or sync the directory from the admin screen."
+            ),
+        )
+    return result.as_payload()
 
 
 @router.get("", response_model=list[AssetResponse])
@@ -110,12 +150,49 @@ def ingest_market_data(
     try:
         report = collector.collect(session, asset, payload.timeframe, start, end)
     except ProviderUnavailableError as exc:
-        # 502 rather than 500: the failure is upstream, and `retryable` tells
-        # the caller whether trying again is worthwhile.
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"message": str(exc), "retryable": exc.retryable},
-        ) from exc
+        # The provider has nothing for this symbol, or is refusing. Before
+        # giving up, try the exchange's own session records - which the
+        # whole-market scan has been storing for every listed issuer, and which
+        # are already in the next table.
+        #
+        # This branch is the difference between a button that works and one
+        # that cannot: raising here rolls the transaction back, and the roll
+        # back takes with it the `Asset` row created three lines above. An
+        # issuer the provider does not carry could never be registered however
+        # many times somebody pressed it.
+        seeded = seed_prices(session, asset)
+        if seeded == 0:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "message": (
+                        f"{str(exc)}. No stored exchange sessions for "
+                        f"{asset.ticker} either, so there is nothing to fall back on."
+                    ),
+                    "retryable": exc.retryable,
+                },
+            ) from exc
+
+        candles = load_candles(session, asset.id, payload.timeframe)
+        indicators = IndicatorEngine().persist(
+            session, asset.id, payload.timeframe, candles
+        )
+        persist_features(session, asset.id, payload.timeframe, candles)
+        return IngestResponse(
+            ticker=asset.ticker,
+            timeframe=payload.timeframe,
+            provider=SOURCE,
+            fetched=seeded,
+            inserted=seeded,
+            updated=0,
+            rejected=0,
+            rejection_reasons=[
+                f"price provider unavailable ({exc}); used the exchange's own "
+                "stored session records instead"
+            ],
+            indicators_inserted=indicators.inserted,
+            indicators_updated=indicators.updated,
+        )
 
     candles = load_candles(session, asset.id, payload.timeframe)
     indicator_report = IndicatorEngine().persist(session, asset.id, payload.timeframe, candles)
