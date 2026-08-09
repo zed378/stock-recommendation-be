@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/auth/context";
 import { useI18n } from "@/i18n/context";
@@ -25,6 +25,11 @@ export function Layout() {
   useEvents(Boolean(user));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Stable identity. Not what fixed the drawer - it compares the path itself
+  // now - but an inline arrow here was what made an effect depending on it run
+  // on every render, and leaving that trap set for the next caller is worse
+  // than the one line it costs to remove.
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   return (
     <div className="min-h-full lg:flex">
@@ -44,7 +49,7 @@ export function Layout() {
         </div>
       </aside>
 
-      <SidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <SidebarDrawer open={drawerOpen} onClose={closeDrawer} />
 
       <div className="flex min-h-screen w-full min-w-0 flex-col">
         <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">

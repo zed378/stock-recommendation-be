@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useI18n } from "@/i18n/context";
 import { useNavigationGroups } from "@/components/navigation";
@@ -60,10 +60,24 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 export function SidebarDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const location = useLocation();
 
+  // The path this drawer was last closed for. Compared rather than relying on
+  // the effect's dependency list, and that is the whole fix: `onClose` is an
+  // inline arrow in the shell, so it has a new identity on every render, so an
+  // effect depending on it runs on every render. Opening the drawer set state,
+  // the shell re-rendered, the effect fired, and the drawer closed itself
+  // before it could paint - the menu simply never appeared on a narrow screen.
+  //
+  // Dropping `onClose` from the dependency list would silence the lint rule and
+  // leave a stale closure; comparing the path is correct however the callback
+  // is declared.
+  const closedFor = useRef(location.pathname);
+
   useEffect(() => {
+    if (closedFor.current === location.pathname) return;
+    closedFor.current = location.pathname;
+    // Any navigation closes it, including one from a link inside the page
+    // rather than from the drawer.
     onClose();
-    // Keyed to the path: any navigation closes it, including one from a link
-    // inside the page rather than the drawer.
   }, [location.pathname, onClose]);
 
   useEffect(() => {
