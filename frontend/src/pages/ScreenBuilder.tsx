@@ -425,6 +425,19 @@ function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
   const queryClient = useQueryClient();
   const [ran, setRan] = useState<Record<string, RunResult>>({});
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  //: Which rows are open. A set rather than a single id: comparing two filters
+  //: means having both on screen, and an accordion that closes one to open the
+  //: next makes that impossible.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const saved = useQuery({
     queryKey: ["screens"],
@@ -446,6 +459,9 @@ function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
     onSuccess: ({ id, result }) => {
       setError(null);
       setRan((current) => ({ ...current, [id]: result }));
+      // Running a collapsed row would otherwise produce no visible change at
+      // all - the results land inside a section nobody can see.
+      setOpen((current) => new Set(current).add(id));
     },
     onError: (caught: Error) => setError(caught.message),
   });
@@ -478,8 +494,23 @@ function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
   });
 
   if (saved.isLoading) return <Loading />;
-  const screens = saved.data ?? [];
-  if (screens.length === 0) return null;
+  const all = saved.data ?? [];
+  if (all.length === 0) return null;
+
+  const needle = search.trim().toLowerCase();
+  // Matched on the name and on the fields the rules read. Somebody hunting for
+  // "the one with the RSI condition" rarely remembers what they called it.
+  const screens = needle
+    ? all.filter(
+        (screen) =>
+          screen.name.toLowerCase().includes(needle) ||
+          screen.rules.some((rule) =>
+            String((rule as { field?: unknown }).field ?? "")
+              .toLowerCase()
+              .includes(needle),
+          ),
+      )
+    : all;
 
   return (
     <Card title={t("screen.saved.title")}>
@@ -489,103 +520,164 @@ function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
         </div>
       )}
 
-      <ul className="divide-y divide-line">
-        {screens.map((screen) => {
-          const result = ran[screen.id];
-          return (
-            <li key={screen.id} className="py-3 first:pt-0">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium text-ink">{screen.name}</span>
-                <span className="text-xs text-faint">
-                  {t("screen.ruleCount", { count: screen.rules.length })}
-                </span>
+      {/* Offered once the list is long enough to need it. A search box above
+          three rows is furniture. */}
+      {all.length > 3 && (
+        <input
+          className={`${inputClass} mb-3`}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t("screen.searchPlaceholder")}
+          aria-label={t("screen.searchPlaceholder")}
+        />
+      )}
 
-                {/* What the last scheduled run found, including when it found
-                    nothing. A screen that only speaks up on a match is
-                    indistinguishable from one that stopped running, and this
-                    line is where that question gets answered without
-                    interrupting anybody to say nothing happened. */}
-                {screen.last_run_at && (
+      {screens.length === 0 ? (
+        <Empty message={t("screen.noMatch")} hint={t("screen.noMatchHint")} />
+      ) : (
+        <ul className="divide-y divide-line">
+          {screens.map((screen) => {
+            const result = ran[screen.id];
+            const expanded = open.has(screen.id);
+            return (
+              <li key={screen.id} className="py-3 first:pt-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggle(screen.id)}
+                    aria-expanded={expanded}
+                    className="flex items-center gap-2 text-sm font-medium text-ink transition-colors hover:text-rise"
+                  >
+                    {/* Rotated rather than swapped for a second glyph: one shape
+                        turning says the same row is opening, where two shapes
+                        read as two different controls. */}
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 10 10"
+                      aria-hidden
+                      className={`shrink-0 text-faint transition-transform ${
+                        expanded ? "rotate-90" : ""
+                      }`}
+                    >
+                      <path
+                        d="M3 1.5 L7 5 L3 8.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    {screen.name}
+                  </button>
                   <span className="text-xs text-faint">
-                    {t("screen.lastRun", {
-                      when: dateTime(screen.last_run_at),
-                      count: screen.last_match_count ?? 0,
-                    })}
+                    {t("screen.ruleCount", { count: screen.rules.length })}
                   </span>
+
+                  {/* What the last scheduled run found, including when it found
+                      nothing. A screen that only speaks up on a match is
+                      indistinguishable from one that stopped running, and this
+                      line is where that question gets answered without
+                      interrupting anybody to say nothing happened. */}
+                  {screen.last_run_at && (
+                    <span className="text-xs text-faint">
+                      {t("screen.lastRun", {
+                        when: dateTime(screen.last_run_at),
+                        count: screen.last_match_count ?? 0,
+                      })}
+                    </span>
+                  )}
+
+                  {/* Whether it is scheduled has to survive the collapse: it is
+                      the difference between a filter that watches the market for
+                      you and one that waits to be asked. */}
+                  {screen.cron_expr && (
+                    <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[0.65rem] text-faint">
+                      {screen.cron_expr}
+                    </span>
+                  )}
+
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      size="sm"
+                      busy={runOne.isPending && runOne.variables === screen.id}
+                      onClick={() => runOne.mutate(screen.id)}
+                    >
+                      {t("screen.run")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onLoad(screen.rules as unknown as Rule[])}
+                    >
+                      {t("screen.edit")}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => remove.mutate(screen.id)}>
+                      {t("common.delete")}
+                    </Button>
+                  </div>
+                </div>
+
+                {screen.last_error && (
+                  <p className="mt-2 rounded-md border border-fall/25 bg-fall/5 px-3 py-2 text-xs text-fall">
+                    {screen.last_error}
+                  </p>
                 )}
 
-                <div className="ml-auto flex gap-2">
-                  <Button
-                    size="sm"
-                    busy={runOne.isPending && runOne.variables === screen.id}
-                    onClick={() => runOne.mutate(screen.id)}
-                  >
-                    {t("screen.run")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onLoad(screen.rules as unknown as Rule[])}
-                  >
-                    {t("screen.edit")}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => remove.mutate(screen.id)}>
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              </div>
+                {expanded && (
+                  <ScheduleRow
+                    screen={screen}
+                    busy={schedule.isPending}
+                    onSave={(cron) => schedule.mutate({ id: screen.id, cron })}
+                  />
+                )}
 
-              {screen.last_error && (
-                <p className="mt-2 rounded-md border border-fall/25 bg-fall/5 px-3 py-2 text-xs text-fall">
-                  {screen.last_error}
-                </p>
-              )}
-
-              <ScheduleRow
-                screen={screen}
-                busy={schedule.isPending}
-                onSave={(cron) => schedule.mutate({ id: screen.id, cron })}
-              />
-
-              {result && (
-                <div className="mt-3 rounded-md border border-line bg-surface/60 p-3">
-                  <p className="mb-2 text-xs text-muted">
-                    {t("screen.matchedOf", {
-                      matched: result.matched,
-                      considered: result.considered,
-                    })}{" "}
-                    <span className={result.share > 0.5 ? "text-watch" : "text-faint"}>
-                      ({n(result.share * 100, 1)}%)
-                    </span>
-                  </p>
-                  {result.results.length === 0 ? (
-                    <p className="text-xs text-faint">{t("screen.empty")}</p>
-                  ) : (
-                    <ul className="max-h-64 divide-y divide-line overflow-y-auto">
-                      {result.results.map((row) => (
-                        <li key={row.ticker} className="flex items-baseline gap-3 py-1.5">
-                          <Link
-                            to={`/assets/${row.ticker}`}
-                            className="font-mono text-sm text-ink hover:text-rise"
-                          >
-                            {row.ticker}
-                          </Link>
-                          <span className="font-mono text-xs tnum text-muted">
-                            {money(row.close)}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-xs text-faint">
-                            {row.matched.join(", ").replace(/_/g, " ")}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                {expanded && result && (
+                  <div className="mt-3 rounded-md border border-line bg-surface/60 p-3">
+                    <p className="mb-2 text-xs text-muted">
+                      {t("screen.matchedOf", {
+                        matched: result.matched,
+                        considered: result.considered,
+                      })}{" "}
+                      <span className={result.share > 0.5 ? "text-watch" : "text-faint"}>
+                        ({n(result.share * 100, 1)}%)
+                      </span>
+                    </p>
+                    {result.share > 0.5 && (
+                      <p className="mb-2 rounded-md border border-watch/25 bg-watch/5 px-3 py-2 text-xs text-watch">
+                        {t("screen.notSelective")}
+                      </p>
+                    )}
+                    {result.results.length === 0 ? (
+                      <p className="text-xs text-faint">{t("screen.empty")}</p>
+                    ) : (
+                      <ul className="max-h-64 divide-y divide-line overflow-y-auto">
+                        {result.results.map((row) => (
+                          <li key={row.ticker} className="flex items-baseline gap-3 py-1.5">
+                            <Link
+                              to={`/assets/${row.ticker}`}
+                              className="font-mono text-sm text-ink hover:text-rise"
+                            >
+                              {row.ticker}
+                            </Link>
+                            <span className="font-mono text-xs tnum text-muted">
+                              {money(row.close)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-xs text-faint">
+                              {row.matched.join(", ").replace(/_/g, " ")}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <Caveat>{t("screen.scheduleCaveat")}</Caveat>
     </Card>

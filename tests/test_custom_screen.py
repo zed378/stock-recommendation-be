@@ -14,7 +14,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-
 from sqlalchemy import select
 
 from aidss.db.models import MarketScanResult
