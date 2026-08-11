@@ -10,7 +10,7 @@ person - carry their guards in the service layer rather than here.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -34,6 +34,7 @@ from aidss.db.models import (
 )
 from aidss.domain.types import Timeframe
 from aidss.monitoring.agenda import upcoming
+from aidss.news.schedules import next_run_at
 from aidss.recommendations.evidence import for_recommendation
 from aidss.screener.custom import (
     SCREEN_CAVEAT,
@@ -562,6 +563,19 @@ class SavedScreenResponse(BaseModel):
     id: uuid.UUID
     name: str
     rules: list[dict[str, Any]]
+    cron_expr: str
+    next_run_at: datetime | None
+    last_run_at: datetime | None
+    #: Reported even when it is zero. A scheduled screen that never notifies is
+    #: otherwise indistinguishable from one that stopped running.
+    last_match_count: int | None
+    last_error: str | None
+
+
+class ScheduleRequest(BaseModel):
+    #: Empty turns the schedule off. Off is the default: a filter that runs on
+    #: a timer nobody set is a timer nobody asked for.
+    cron_expr: str = Field(default="", max_length=120)
 
 
 @router.get("/screens/fields", response_model=dict)
@@ -608,6 +622,19 @@ def preview_screen(
     return run_screen(session, _parsed(payload.rules), limit=payload.limit).as_payload()
 
 
+def _screen_payload(row: SavedScreen) -> SavedScreenResponse:
+    return SavedScreenResponse(
+        id=row.id,
+        name=row.name,
+        rules=list(row.rules or []),
+        cron_expr=row.cron_expr or "",
+        next_run_at=row.next_run_at,
+        last_run_at=row.last_run_at,
+        last_match_count=row.last_match_count,
+        last_error=row.last_error,
+    )
+
+
 @router.get("/screens", response_model=list[SavedScreenResponse])
 def list_screens(
     session: Session = Depends(get_db),
@@ -618,10 +645,7 @@ def list_screens(
         .where(SavedScreen.user_id == user.id)
         .order_by(SavedScreen.name)
     ).all()
-    return [
-        SavedScreenResponse(id=row.id, name=row.name, rules=list(row.rules or []))
-        for row in rows
-    ]
+    return [_screen_payload(row) for row in rows]
 
 
 @router.post("/screens", response_model=SavedScreenResponse, status_code=status.HTTP_201_CREATED)
@@ -649,7 +673,7 @@ def save_screen(
         session.add(existing)
     existing.rules = [rule.as_payload() for rule in rules]
     session.flush()
-    return SavedScreenResponse(id=existing.id, name=existing.name, rules=list(existing.rules))
+    return _screen_payload(existing)
 
 
 @router.post("/screens/{screen_id}/run", response_model=dict)
@@ -702,3 +726,48 @@ def delete_screen(
             status_code=status.HTTP_404_NOT_FOUND, detail="No screen of yours with that id."
         )
     session.delete(row)
+
+
+@router.patch("/screens/{screen_id}/schedule", response_model=SavedScreenResponse)
+def schedule_screen(
+    screen_id: uuid.UUID,
+    payload: ScheduleRequest,
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> SavedScreenResponse:
+    """Set or clear a screen's cron.
+
+    Validated here rather than discovered by the scheduler at three in the
+    morning, where the failure is a screen that silently never runs. Read in
+    exchange time (WIB), like every other cron on this platform - so `0 18 * *
+    1-5` means six in the evening in Jakarta, which is an odd hour in UTC.
+
+    Changing the expression re-anchors the due time: a new cron must not
+    inherit a moment computed from the old one.
+    """
+    row = session.scalar(
+        select(SavedScreen).where(
+            SavedScreen.id == screen_id, SavedScreen.user_id == user.id
+        )
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No screen of yours with that id."
+        )
+
+    expression = payload.cron_expr.strip()
+    if expression:
+        try:
+            row.next_run_at = next_run_at(expression)
+        except Exception as exc:  # noqa: BLE001 - the parser raises its own types
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{expression!r} is not a usable cron expression: {exc}",
+            ) from exc
+    else:
+        row.next_run_at = None
+
+    row.cron_expr = expression
+    row.last_error = None
+    session.flush()
+    return _screen_payload(row)

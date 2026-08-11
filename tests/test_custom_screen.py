@@ -10,10 +10,12 @@ review.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
+
+from sqlalchemy import select
 
 from aidss.db.models import MarketScanResult
 from aidss.screener.custom import (
@@ -387,3 +389,256 @@ def test_a_screen_belongs_to_its_author(client, auth_headers) -> None:
         client.post(f"/screens/{uuid.uuid4()}/run", headers=auth_headers).status_code == 404
     )
     assert client.delete(f"/screens/{uuid.uuid4()}", headers=auth_headers).status_code == 404
+
+
+# --- running a saved screen on its own schedule -------------------------------
+
+
+def a_screen(session, user_id, *, name="Mine", cron="", rules=None, **kwargs):
+    from aidss.db.models import SavedScreen
+
+    row = SavedScreen(
+        user_id=user_id,
+        name=name,
+        cron_expr=cron,
+        rules=rules if rules is not None else [{"field": "rsi", "operator": "lt", "value": 30}],
+        **kwargs,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def an_account(session, email="owner@example.com"):
+    from aidss.db.models import User
+
+    user = User(email=email, password_hash="x")
+    session.add(user)
+    session.flush()
+    return user
+
+
+def test_only_scheduled_screens_are_due(session) -> None:
+    """A screen with no cron runs when somebody presses run, and never on its
+    own. A filter running on a timer nobody set is a timer nobody asked for."""
+    from aidss.screener.scheduled import due_screens
+
+    user = an_account(session)
+    a_screen(session, user.id, name="Manual", cron="")
+    a_screen(session, user.id, name="Nightly", cron="0 18 * * 1-5")
+
+    due = due_screens(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    assert [row.name for row in due] == ["Nightly"]
+
+
+def test_a_schedule_just_set_runs_on_the_next_tick(session) -> None:
+    """`next_run_at` is null until the first run. Waiting a full cycle to find
+    out whether it works is how a feature feels broken on the day it is turned
+    on."""
+    from aidss.screener.scheduled import due_screens
+
+    user = an_account(session)
+    a_screen(session, user.id, cron="0 18 * * 1-5")
+
+    assert len(due_screens(session, now=datetime(2026, 8, 10, 0, 1, tzinfo=UTC))) == 1
+
+
+def test_a_run_records_itself_even_with_no_match(session) -> None:
+    """Recorded, deliberately not announced. A screen that only speaks up on a
+    match is indistinguishable from one that stopped running."""
+    from aidss.db.models import Notification
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    scanned(session, "QUIET", rsi="80.0000")
+    screen = a_screen(session, user.id, cron="* * * * *")
+
+    result = run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    assert result["ran"] == 1
+    assert screen.last_run_at is not None
+    assert screen.last_match_count == 0
+    assert session.scalars(select(Notification)).all() == []
+
+
+def test_a_match_notifies_its_owner(session) -> None:
+    from aidss.db.models import Notification
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    scanned(session, "OVERSOLD", rsi="20.0000")
+    a_screen(session, user.id, name="Oversold", cron="* * * * *")
+
+    run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    notification = session.scalars(select(Notification)).first()
+    assert notification is not None
+    assert notification.user_id == user.id
+
+
+def test_the_notification_carries_facts_not_prose(session) -> None:
+    """The sentence is composed by the client in whichever language is
+    selected. The denominator travels with it, because "1 matched" says nothing
+    without "of 2"."""
+    from aidss.db.models import Notification
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    scanned(session, "OVERSOLD", rsi="20.0000")
+    scanned(session, "CALM", rsi="55.0000")
+    a_screen(session, user.id, name="Oversold", cron="* * * * *")
+
+    run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    context = session.scalars(select(Notification)).first().context
+    assert context["screen_name"] == "Oversold"
+    assert context["matched"] == 1
+    assert context["considered"] == 2
+    assert context["tickers"] == ["OVERSOLD"]
+
+
+def test_the_notification_never_says_what_to_do(session) -> None:
+    from aidss.db.models import Notification
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    scanned(session, "OVERSOLD", rsi="20.0000")
+    a_screen(session, user.id, name="Oversold", cron="* * * * *")
+    run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    message = session.scalars(select(Notification)).first().message.lower()
+
+    for word in ("buy", "sell", "beli", "jual", "should", "opportunity"):
+        assert word not in message
+
+
+def test_the_schedule_advances_so_it_does_not_refire(session) -> None:
+    """Without advancing, a scheduler ticking every minute would notify every
+    minute for as long as the match persisted."""
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    scanned(session, "OVERSOLD", rsi="20.0000")
+    screen = a_screen(session, user.id, cron="0 18 * * 1-5")
+
+    now = datetime(2026, 8, 10, 12, tzinfo=UTC)
+    run_due(session, now=now)
+
+    assert screen.next_run_at is not None
+    assert screen.next_run_at > now
+
+
+def test_a_screen_whose_vocabulary_went_away_says_so(session) -> None:
+    """Left silent it looks exactly like a screen that matches nothing - the
+    failure the news-sources chapter is built around."""
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    screen = a_screen(
+        session,
+        user.id,
+        cron="* * * * *",
+        rules=[{"field": "gone", "operator": "lt", "value": 1}],
+    )
+
+    result = run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    assert result["failed"] == 1
+    assert "not a field" in (screen.last_error or "")
+
+
+def test_an_unusable_cron_disables_the_schedule(session) -> None:
+    """Rather than raising every minute for the rest of the deployment."""
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    screen = a_screen(session, user.id, cron="every other tuesday")
+
+    run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    assert screen.cron_expr == ""
+    assert "not usable" in (screen.last_error or "")
+
+
+def test_one_broken_screen_does_not_stop_the_others(session) -> None:
+    """A saved screen is one person's filter. Letting a broken one silence
+    everybody else's is the same mistake as a dead feed emptying the sweep."""
+    from aidss.db.models import Notification
+    from aidss.screener.scheduled import run_due
+
+    user = an_account(session)
+    scanned(session, "OVERSOLD", rsi="20.0000")
+    a_screen(session, user.id, name="Broken", cron="* * * * *", rules=[{"field": "gone"}])
+    a_screen(session, user.id, name="Working", cron="* * * * *")
+
+    result = run_due(session, now=datetime(2026, 8, 10, 12, tzinfo=UTC))
+
+    assert result["failed"] == 1
+    assert result["ran"] == 1
+    assert len(session.scalars(select(Notification)).all()) == 1
+
+
+# --- the schedule endpoint ----------------------------------------------------
+
+
+def _make_screen(client, auth_headers) -> str:
+    return client.post(
+        "/screens",
+        headers=auth_headers,
+        json={"name": "S", "rules": [{"field": "rsi", "operator": "lt", "value": 30}]},
+    ).json()["id"]
+
+
+def test_a_cron_is_validated_when_it_is_set(client, auth_headers) -> None:
+    """Rather than discovered by the scheduler at three in the morning, where
+    the failure is a screen that silently never runs."""
+    screen_id = _make_screen(client, auth_headers)
+
+    response = client.patch(
+        f"/screens/{screen_id}/schedule",
+        headers=auth_headers,
+        json={"cron_expr": "every friday"},
+    )
+
+    assert response.status_code == 422
+    assert "not a usable cron" in response.json()["detail"]
+
+
+def test_setting_a_cron_computes_the_next_run(client, auth_headers) -> None:
+    screen_id = _make_screen(client, auth_headers)
+
+    body = client.patch(
+        f"/screens/{screen_id}/schedule",
+        headers=auth_headers,
+        json={"cron_expr": "0 18 * * 1-5"},
+    ).json()
+
+    assert body["cron_expr"] == "0 18 * * 1-5"
+    assert body["next_run_at"] is not None
+
+
+def test_clearing_the_cron_turns_it_off(client, auth_headers) -> None:
+    screen_id = _make_screen(client, auth_headers)
+    client.patch(
+        f"/screens/{screen_id}/schedule",
+        headers=auth_headers,
+        json={"cron_expr": "0 18 * * 1-5"},
+    )
+
+    body = client.patch(
+        f"/screens/{screen_id}/schedule", headers=auth_headers, json={"cron_expr": ""}
+    ).json()
+
+    assert body["cron_expr"] == ""
+    assert body["next_run_at"] is None
+
+
+def test_scheduling_someone_elses_screen_is_a_404(client, auth_headers) -> None:
+    import uuid
+
+    response = client.patch(
+        f"/screens/{uuid.uuid4()}/schedule", headers=auth_headers, json={"cron_expr": ""}
+    )
+
+    assert response.status_code == 404

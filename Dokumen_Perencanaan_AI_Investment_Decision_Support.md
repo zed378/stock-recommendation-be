@@ -1259,6 +1259,16 @@ Horizon bawaan menjawab pertanyaan yang dipilih orang lain. Pembangun filter mem
 
 **Setiap jalannya melaporkan penyebutnya.** Filter yang menyimpan sebagian besar bursa tidak sedang menyaring, dan satu-satunya yang menunjukkannya adalah pembanding — pelajaran yang sudah dibayar dua kriteria bawaan yang cocok pada 44% dan 36% sebelum ada yang mengukurnya. Di atas 50%, antarmuka mengatakannya dengan kalimat, bukan hanya angka.
 
+**Filter tersimpan punya pelarinya sendiri.** Memuatnya ke editor lebih dulu menjadikan editor satu-satunya cara memakainya: filter yang sudah diputuskan tetap berbiaya perjalanan bolak-balik lewat penyusun, dan menjalankannya menimpa apa pun yang sedang disusun di sana.
+
+**Setiap filter bisa dijadwalkan, dan cron-nya dibaca dalam waktu bursa (WIB).** Preset ditawarkan lebih dulu — sejam setelah penutupan, sebelum pembukaan, Senin pagi — karena kolom cron sendirian meminta pembaca menguasai sintaksnya sebelum bisa memakai fiturnya sama sekali. Ekspresinya divalidasi saat disetel, bukan ditemukan penjadwal pukul tiga pagi tempat kegagalannya berupa filter yang diam-diam tidak pernah berjalan.
+
+**Yang cocok memberi notifikasi; yang tidak cocok tetap dicatat.** Barisnya menyimpan waktu jalan terakhir dan jumlah kecocokan apa pun hasilnya, sehingga filter bisa mengatakan “berjalan sejam lalu, tidak ada yang memenuhi” pada barisnya sendiri. Notifikasi yang mengabarkan tidak terjadi apa-apa adalah cara sebuah fitur dibisukan — dan begitu dibisukan, ia berhenti menyampaikan yang justru penting.
+
+**Notifikasinya membawa fakta, bukan prosa.** Nama filter, berapa yang cocok, dari berapa, dan beberapa kode teratas. Kalimatnya disusun klien dalam bahasa yang sedang dipilih, aturan yang sama dengan setiap event lain di platform ini. Penyebutnya ikut masuk ke dalam kalimat, karena “312 cocok” tidak mengatakan apa pun tanpa “dari 799”.
+
+**Satu filter rusak tidak menghentikan yang lain.** Filter tersimpan adalah milik satu orang; membiarkan satu yang rusak membungkam milik semua orang adalah kekeliruan yang sama dengan satu feed mati mengosongkan seluruh sapuan berita. Filter yang kosakatanya hilang menuliskan sebabnya pada barisnya sendiri, dan cron yang berhenti terbaca menonaktifkan jadwalnya alih-alih melempar galat tiap menit selama sisa umur deployment.
+
 **Filter tersimpan divalidasi ulang saat dijalankan.** Kosakata bisa berubah di bawah filter yang sudah disimpan; aturan yang menyebut sinyal yang tidak ada lagi karena itu menghasilkan kalimat yang menyebutkan field-nya, bukan galat basis data tentang kolom yang tidak pernah ditulis siapa pun.
 
 

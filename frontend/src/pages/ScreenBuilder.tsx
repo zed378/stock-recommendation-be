@@ -74,15 +74,6 @@ export function ScreenBuilder() {
     },
   });
 
-  const saved = useQuery({
-    queryKey: ["screens"],
-    queryFn: async () => {
-      const { data, error: failed } = await api.GET("/screens");
-      if (failed) throw new Error(errorMessage(failed, t("common.error")));
-      return data;
-    },
-  });
-
   const preview = useMutation({
     mutationFn: async () => {
       const { data, error: failed } = await api.POST("/screens/preview", {
@@ -112,16 +103,6 @@ export function ScreenBuilder() {
       queryClient.invalidateQueries({ queryKey: ["screens"] });
     },
     onError: (caught: Error) => setError(caught.message),
-  });
-
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error: failed } = await api.DELETE("/screens/{screen_id}", {
-        params: { path: { screen_id: id } },
-      });
-      if (failed) throw new Error(errorMessage(failed, t("common.error")));
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["screens"] }),
   });
 
   if (vocabulary.isLoading) return <Loading />;
@@ -326,31 +307,9 @@ export function ScreenBuilder() {
           </Button>
         </div>
 
-        {(saved.data ?? []).length > 0 && (
-          <ul className="mt-4 divide-y divide-line">
-            {(saved.data ?? []).map((screen) => (
-              <li key={screen.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                <span className="text-sm font-medium text-ink">{screen.name}</span>
-                <span className="text-xs text-faint">
-                  {t("screen.ruleCount", { count: screen.rules.length })}
-                </span>
-                <div className="ml-auto flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setRules(screen.rules as unknown as Rule[])}
-                  >
-                    {t("screen.load")}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => remove.mutate(screen.id)}>
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
       </Card>
+
+      <SavedScreens onLoad={(loaded) => setRules(loaded)} />
     </div>
   );
 }
@@ -448,5 +407,249 @@ function ValueInput({
       value={Number(rule.value ?? 0)}
       onChange={(event) => onChange(Number(event.target.value))}
     />
+  );
+}
+
+
+/**
+ * Saved filters, each with a runner and a schedule of its own.
+ *
+ * Loading a filter into the builder to run it made the builder the only way to
+ * use one - so a screen you had already decided on still cost a round trip
+ * through the editor, and running it meant overwriting whatever you were
+ * midway through composing.
+ */
+function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
+  const { t, money, n, dateTime } = useI18n();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [ran, setRan] = useState<Record<string, RunResult>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const saved = useQuery({
+    queryKey: ["screens"],
+    queryFn: async () => {
+      const { data, error: failed } = await api.GET("/screens");
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data;
+    },
+  });
+
+  const runOne = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error: failed } = await api.POST("/screens/{screen_id}/run", {
+        params: { path: { screen_id: id } },
+      });
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return { id, result: data as unknown as RunResult };
+    },
+    onSuccess: ({ id, result }) => {
+      setError(null);
+      setRan((current) => ({ ...current, [id]: result }));
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
+  const schedule = useMutation({
+    mutationFn: async ({ id, cron }: { id: string; cron: string }) => {
+      const { data, error: failed } = await api.PATCH("/screens/{screen_id}/schedule", {
+        params: { path: { screen_id: id } },
+        body: { cron_expr: cron },
+      });
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+      return data;
+    },
+    onSuccess: () => {
+      setError(null);
+      toast.show({ title: t("screen.scheduleSaved"), tone: "success" });
+      queryClient.invalidateQueries({ queryKey: ["screens"] });
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error: failed } = await api.DELETE("/screens/{screen_id}", {
+        params: { path: { screen_id: id } },
+      });
+      if (failed) throw new Error(errorMessage(failed, t("common.error")));
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["screens"] }),
+  });
+
+  if (saved.isLoading) return <Loading />;
+  const screens = saved.data ?? [];
+  if (screens.length === 0) return null;
+
+  return (
+    <Card title={t("screen.saved.title")}>
+      {error && (
+        <div className="mb-3">
+          <ErrorNote message={error} onRetry={() => setError(null)} />
+        </div>
+      )}
+
+      <ul className="divide-y divide-line">
+        {screens.map((screen) => {
+          const result = ran[screen.id];
+          return (
+            <li key={screen.id} className="py-3 first:pt-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-medium text-ink">{screen.name}</span>
+                <span className="text-xs text-faint">
+                  {t("screen.ruleCount", { count: screen.rules.length })}
+                </span>
+
+                {/* What the last scheduled run found, including when it found
+                    nothing. A screen that only speaks up on a match is
+                    indistinguishable from one that stopped running, and this
+                    line is where that question gets answered without
+                    interrupting anybody to say nothing happened. */}
+                {screen.last_run_at && (
+                  <span className="text-xs text-faint">
+                    {t("screen.lastRun", {
+                      when: dateTime(screen.last_run_at),
+                      count: screen.last_match_count ?? 0,
+                    })}
+                  </span>
+                )}
+
+                <div className="ml-auto flex gap-2">
+                  <Button
+                    size="sm"
+                    busy={runOne.isPending && runOne.variables === screen.id}
+                    onClick={() => runOne.mutate(screen.id)}
+                  >
+                    {t("screen.run")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onLoad(screen.rules as unknown as Rule[])}
+                  >
+                    {t("screen.edit")}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => remove.mutate(screen.id)}>
+                    {t("common.delete")}
+                  </Button>
+                </div>
+              </div>
+
+              {screen.last_error && (
+                <p className="mt-2 rounded-md border border-fall/25 bg-fall/5 px-3 py-2 text-xs text-fall">
+                  {screen.last_error}
+                </p>
+              )}
+
+              <ScheduleRow
+                screen={screen}
+                busy={schedule.isPending}
+                onSave={(cron) => schedule.mutate({ id: screen.id, cron })}
+              />
+
+              {result && (
+                <div className="mt-3 rounded-md border border-line bg-surface/60 p-3">
+                  <p className="mb-2 text-xs text-muted">
+                    {t("screen.matchedOf", {
+                      matched: result.matched,
+                      considered: result.considered,
+                    })}{" "}
+                    <span className={result.share > 0.5 ? "text-watch" : "text-faint"}>
+                      ({n(result.share * 100, 1)}%)
+                    </span>
+                  </p>
+                  {result.results.length === 0 ? (
+                    <p className="text-xs text-faint">{t("screen.empty")}</p>
+                  ) : (
+                    <ul className="max-h-64 divide-y divide-line overflow-y-auto">
+                      {result.results.map((row) => (
+                        <li key={row.ticker} className="flex items-baseline gap-3 py-1.5">
+                          <Link
+                            to={`/assets/${row.ticker}`}
+                            className="font-mono text-sm text-ink hover:text-rise"
+                          >
+                            {row.ticker}
+                          </Link>
+                          <span className="font-mono text-xs tnum text-muted">
+                            {money(row.close)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-faint">
+                            {row.matched.join(", ").replace(/_/g, " ")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <Caveat>{t("screen.scheduleCaveat")}</Caveat>
+    </Card>
+  );
+}
+
+const CRON_PRESETS = [
+  { key: "off", cron: "" },
+  { key: "afterClose", cron: "0 18 * * 1-5" },
+  { key: "beforeOpen", cron: "0 8 * * 1-5" },
+  { key: "weekly", cron: "0 8 * * 1" },
+] as const;
+
+function ScheduleRow({
+  screen,
+  busy,
+  onSave,
+}: {
+  screen: { id: string; cron_expr: string; next_run_at: string | null };
+  busy: boolean;
+  onSave: (cron: string) => void;
+}) {
+  const { t, dateTime } = useI18n();
+  const [cron, setCron] = useState(screen.cron_expr ?? "");
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="text-xs text-faint">{t("screen.schedule")}</span>
+
+      {/* Presets first, expression second. A cron field alone asks a reader to
+          know the syntax before they can have the feature at all, and the three
+          they will actually want are the ones the exchange's day suggests. */}
+      <select
+        className={`${inputClass} w-auto text-xs`}
+        value={CRON_PRESETS.some((p) => p.cron === cron) ? cron : "custom"}
+        onChange={(event) => {
+          if (event.target.value === "custom") return;
+          setCron(event.target.value);
+          onSave(event.target.value);
+        }}
+      >
+        {CRON_PRESETS.map((preset) => (
+          <option key={preset.key} value={preset.cron}>
+            {t(`screen.cron.${preset.key}` as MessageKey)}
+          </option>
+        ))}
+        <option value="custom">{t("screen.cron.custom")}</option>
+      </select>
+
+      <input
+        className={`${inputClass} w-40 font-mono text-xs`}
+        value={cron}
+        onChange={(event) => setCron(event.target.value)}
+        placeholder="0 18 * * 1-5"
+      />
+      <Button variant="ghost" size="sm" busy={busy} onClick={() => onSave(cron)}>
+        {t("common.save")}
+      </Button>
+
+      {screen.next_run_at && (
+        <span className="text-xs text-faint">
+          {t("screen.nextRun", { when: dateTime(screen.next_run_at) })}
+        </span>
+      )}
+    </div>
   );
 }

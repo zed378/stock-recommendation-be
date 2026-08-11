@@ -53,6 +53,7 @@ const EVENT_LABELS: Record<string, MessageKey> = {
   schedule_needs_attention: "notif.event.schedule_needs_attention",
   ingestion_failed: "notif.event.ingestion_failed",
   budget_threshold_reached: "notif.event.budget_threshold_reached",
+  screen_matched: "notif.event.screen_matched",
   report_ready: "notif.event.report_ready",
 };
 
@@ -425,6 +426,24 @@ function body(
     return t("notif.body.monitoring_alert", {
       count: context.count,
       tickers: listed,
+    });
+  }
+
+  if (
+    notification.event === "screen_matched" &&
+    typeof context.screen_name === "string" &&
+    typeof context.matched === "number"
+  ) {
+    const tickers = Array.isArray(context.tickers)
+      ? context.tickers.filter((value): value is string => typeof value === "string")
+      : [];
+    // The denominator travels into the sentence, for the same reason the
+    // results screen shows it: "312 matched" says nothing without "of 799".
+    return t("notif.body.screen_matched", {
+      screen: context.screen_name,
+      matched: context.matched,
+      considered: typeof context.considered === "number" ? context.considered : 0,
+      tickers: tickers.join(", ") || "—",
     });
   }
 

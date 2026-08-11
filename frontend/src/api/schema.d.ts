@@ -2414,6 +2414,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/screens/{screen_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Schedule Screen
+         * @description Set or clear a screen's cron.
+         *
+         *     Validated here rather than discovered by the scheduler at three in the
+         *     morning, where the failure is a screen that silently never runs. Read in
+         *     exchange time (WIB), like every other cron on this platform - so `0 18 * *
+         *     1-5` means six in the evening in Jakarta, which is an odd hour in UTC.
+         *
+         *     Changing the expression re-anchors the due time: a new cron must not
+         *     inherit a moment computed from the old one.
+         */
+        patch: operations["schedule_screen_screens__screen_id__schedule_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3929,6 +3957,24 @@ export interface components {
             rules: {
                 [key: string]: unknown;
             }[];
+            /** Cron Expr */
+            cron_expr: string;
+            /** Next Run At */
+            next_run_at: string | null;
+            /** Last Run At */
+            last_run_at: string | null;
+            /** Last Match Count */
+            last_match_count: number | null;
+            /** Last Error */
+            last_error: string | null;
+        };
+        /** ScheduleRequest */
+        ScheduleRequest: {
+            /**
+             * Cron Expr
+             * @default
+             */
+            cron_expr: string;
         };
         /** ScheduleRunResponse */
         ScheduleRunResponse: {
@@ -7867,6 +7913,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schedule_screen_screens__screen_id__schedule_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                screen_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedScreenResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -44,6 +44,7 @@ from aidss.news.schedules import next_run_at
 from aidss.observability.logging import bind_request, clear_request, new_request_id
 from aidss.observability.metrics import MetricsRegistry, registry
 from aidss.plugins.errors import ProviderUnavailableError
+from aidss.screener.scheduled import run_due as run_due_screens
 
 logger = logging.getLogger("aidss.worker")
 
@@ -317,6 +318,12 @@ class Scheduler:
             # participation no price feed does. Once a day, all issuers.
             trading_summary = enqueue_daily_trading_summary(session, now=now)
 
+            # Screens a reader wrote for themselves, on whatever cron each one
+            # carries. Run here rather than queued: a screen is a single query
+            # over the stored scan, so a job per screen would cost more in
+            # bookkeeping than the work it wraps.
+            screens = run_due_screens(session, now=now)
+
             session.commit()
             return {
                 "leader": True,
@@ -330,6 +337,7 @@ class Scheduler:
                 "fundamentals": fundamentals,
                 "news_sweep": news_sweep,
                 "trading_summary": trading_summary,
+                "screens": screens,
                 "monitoring": monitoring,
                 "total_enqueued": (
                     enqueued + fundamentals["enqueued"] + monitoring["enqueued"]

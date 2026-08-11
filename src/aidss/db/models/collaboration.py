@@ -185,6 +185,27 @@ class SavedScreen(Base):
     #: the builder validated them.
     rules: Mapped[list[Any]] = mapped_column(default=list)
 
+    #: Empty means the screen only runs when somebody presses run. Kept on this
+    #: row rather than in `scheduler_jobs`, for the same reason
+    #: `ticker_news_schedules` is: the schedule belongs to one user's one
+    #: screen, and a generic job table has nowhere to put that.
+    #:
+    #: Read in exchange time (WIB), like every other cron on this platform.
+    cron_expr: Mapped[str] = mapped_column(String(120), default="")
+    next_run_at: Mapped[datetime | None] = mapped_column(default=None, index=True)
+
+    #: What the last run found. Recorded even when it found nothing, because a
+    #: scheduled screen that never notifies is indistinguishable from one that
+    #: stopped running - and the reader deserves to tell those apart without
+    #: being interrupted to learn that nothing happened.
+    last_run_at: Mapped[datetime | None] = mapped_column(default=None)
+    last_match_count: Mapped[int | None] = mapped_column(default=None)
+
+    #: Why the last scheduled run could not happen. A screen whose vocabulary
+    #: went away must say so on its own row; silence would look like a screen
+    #: that simply matches nothing.
+    last_error: Mapped[str | None] = mapped_column(String(400), default=None)
+
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 

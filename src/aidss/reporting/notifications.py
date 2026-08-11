@@ -54,6 +54,11 @@ class NotificationEvent(StrEnum):
     SCHEDULE_NEEDS_ATTENTION = "schedule_needs_attention"
     INGESTION_FAILED = "ingestion_failed"
     BUDGET_THRESHOLD_REACHED = "budget_threshold_reached"
+    #: A screen the reader wrote ran on its schedule and matched something.
+    #: Named for what the screen found, not for what to do about it: the
+    #: results are a list of issuers meeting stated conditions, which is the
+    #: same claim the screen itself makes and no larger.
+    SCREEN_MATCHED = "screen_matched"
     REPORT_READY = "report_ready"
 
 
@@ -69,6 +74,7 @@ SUBJECTS: dict[NotificationEvent, str] = {
     NotificationEvent.SCHEDULE_NEEDS_ATTENTION: "A news schedule needs attention",
     NotificationEvent.INGESTION_FAILED: "Data ingestion failed",
     NotificationEvent.BUDGET_THRESHOLD_REACHED: "AI spend threshold reached",
+    NotificationEvent.SCREEN_MATCHED: "A saved filter matched",
     NotificationEvent.REPORT_READY: "Report ready",
 }
 
