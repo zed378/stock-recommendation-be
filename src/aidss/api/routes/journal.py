@@ -21,6 +21,7 @@ from aidss.agents.conversation import (
     ConversationContextBuilder,
     KnowledgeAgent,
     LearningAssistant,
+    MarketAssistant,
     ReflectionAgent,
     ReflectionContextBuilder,
     ResearchAgent,
@@ -54,6 +55,17 @@ from aidss.llm.provisioning import build_gateway
 from aidss.prompts.validator import ValidationFailure
 from aidss.rag.provisioning import build_rag
 from aidss.security.rbac import Permission
+
+#: Which agent answers each mode. Module level rather than inline so a test can
+#: assert every mode has one: a mode added without an entry here raises KeyError
+#: on the request, which surfaces as a 500 rather than as anything a reader
+#: could act on.
+AGENT_FOR_MODE: dict[ChatMode, type] = {
+    ChatMode.LEARN: LearningAssistant,
+    ChatMode.RESEARCH: ResearchAgent,
+    ChatMode.KNOWLEDGE: KnowledgeAgent,
+    ChatMode.MARKET: MarketAssistant,
+}
 
 router = APIRouter(tags=["journal"], route_class=CommitBeforeResponse)
 
@@ -235,11 +247,7 @@ def chat(
         payload.question, mode=payload.mode, user_id=user.id, ticker=payload.ticker
     )
 
-    agent = {
-        ChatMode.LEARN: LearningAssistant,
-        ChatMode.RESEARCH: ResearchAgent,
-        ChatMode.KNOWLEDGE: KnowledgeAgent,
-    }[payload.mode]()
+    agent = AGENT_FOR_MODE[payload.mode]()
 
     if not agent.is_applicable(context):
         raise HTTPException(

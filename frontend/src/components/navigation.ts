@@ -29,6 +29,10 @@ const RESEARCH: Group = {
     // Beside the built-in screener rather than under the account: it
     // answers the same question, with conditions the reader chose.
     { to: "/screens", label: "nav.screens" },
+    // Two entries because they answer differently shaped questions. Ask AI
+    // is anchored on an issuer you have already chosen; this one is for
+    // the questions you ask before you have one.
+    { to: "/market-chat", label: "nav.marketChat" },
     { to: "/chat", label: "nav.chat" },
   ],
 };

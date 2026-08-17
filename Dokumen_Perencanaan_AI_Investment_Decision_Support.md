@@ -1245,6 +1245,22 @@ Konsekuensi yang tidak terlihat dari tabel dan justru paling mudah salah:
 
 **Tidak ada rekomendasi tersimpan berarti keadaan kosong, bukan grafik harga biasa.** Grafik tanpa tanda apa pun akan tampil sebagai grafik harga di bawah judul yang menjanjikan penjelasan.
 
+### Pertanyaan bebas seputar pasar
+
+**Tiga mode chat sebelumnya berlabuh pada satu emiten:** pilih kode, tanyakan tentangnya. Itu bentuk yang keliru untuk sebagian besar hal yang sebenarnya ingin ditanyakan orang — apa yang bergerak hari ini, apa yang terlihat oversold, apa yang bisa dilihat dengan modal dua ratus ribu — tidak satu pun menyebut nama perusahaan, dan semuanya bisa dijawab platform ini dari data yang sudah dimilikinya. Dua di antara tiga mode itu bahkan menolak mentah-mentah tanpa kode emiten.
+
+**Layarnya terpisah, bukan tab keempat.** Pada layar Ask AI kolom ticker berdiri kosong di atas setiap mode, sehingga pertanyaan tentang pasar terbaca seperti pertanyaan yang kehilangan subjeknya. Di sini tidak ada kolom yang bisa dibiarkan kosong.
+
+**Jawabannya berpijak pada ringkasan pemindaian terakhir.** Tanggal sesi, berapa emiten dipindai, sebaran frekuensi tiap kriteria, jumlah emiten per pita harga, dan cuplikan emiten dengan kriteria terbanyak beserta harga penutupannya. Tanpa itu, mode ini akan menjadi chatbot umum yang memakai nama platform: fasih tentang pasar secara abstrak dan tidak mampu mengatakan satu pun hal yang benar tentang bursa ini hari ini.
+
+**Cuplikannya diurutkan menurut jumlah kriteria — hitungan observasi, bukan penilaian — dan blok itu menyatakan hal tersebut tentang dirinya sendiri.** Daftar yang diurutkan menurut apa pun akan dibaca sebagai peringkat menurut kualitas.
+
+**Anggaran dihitung dalam lot.** IDX diperdagangkan per seratus lembar, sehingga saham berharga Rp 3.000 berbiaya Rp 300.000 untuk dimasuki sama sekali. Pertanyaan anggaran yang dijawab terhadap harga per lembar meleset dua orde besaran — ke arah yang membuat sesuatu tampak terjangkau padahal tidak.
+
+**Cakupannya dibatasi lewat prompt, bukan lewat klasifier.** Klasifier adalah komponen yang bisa keliru dan butuh evaluasinya sendiri; instruksi untuk menolak pertanyaan di luar topik adalah sesuatu yang model patuhi atau kentara tidak dipatuhinya.
+
+**Dan inilah permukaan paling berisiko di seluruh produk.** Mode lain berlabuh pada emiten yang sudah dipilih seseorang; yang ini mengundang persis pertanyaan yang tidak boleh dijawab platform — “saya harus beli apa” — dengan kata-kata pembacanya sendiri. Maka instruksinya menyebut kasus itu secara eksplisit alih-alih menyinggungnya: pertanyaan seperti itu punya jawaban yang sah dan jawaban itu bukan rekomendasi. Yang dijelaskan adalah emiten mana yang saat ini memenuhi kondisi tertentu, apa arti tiap kondisi, apa yang harus benar agar itu bermakna, dan apa yang bisa keliru — lalu pembacanya yang memutuskan. Penjaga bahasa-eksekusi berlaku pada keluarannya karena diwarisi dari perenderan sistem, bukan diulang per template.
+
 ### Filter yang disusun sendiri pembaca
 
 Horizon bawaan menjawab pertanyaan yang dipilih orang lain. Pembangun filter membiarkan pembaca menyatakan syaratnya sendiri — “RSI di bawah 35, volume minimal dua kali rata-ratanya, harga antara 100 dan 2.000” — lalu menjalankannya atas setiap emiten yang tercakup pemindaian. Tiga keputusan menentukan seluruh desainnya.

@@ -54,6 +54,11 @@ class ChatMode(StrEnum):
     LEARN = "learn"
     RESEARCH = "research"
     KNOWLEDGE = "knowledge"
+    #: Open questions about trading and this exchange, with no ticker.
+    #: The other three are anchored on an issuer, which is the wrong shape
+    #: for most of what people actually ask - what is moving, what looks
+    #: oversold, what could be looked at with a given amount of money.
+    MARKET = "market"
 
 
 @dataclass(slots=True)
@@ -72,6 +77,10 @@ class ConversationContext:
     ticker: str | None = None
     retrieved: list[RetrievedChunk] = field(default_factory=list)
     asset_context: dict[str, Any] = field(default_factory=dict)
+    #: The whole-market picture, attached in MARKET mode. Empty in the
+    #: other modes, which are about one issuer and would only be diluted
+    #: by eight hundred more.
+    market_digest: dict[str, Any] = field(default_factory=dict)
 
     def sources_payload(self) -> list[dict[str, Any]]:
         return [
@@ -149,6 +158,38 @@ class KnowledgeAgent(Agent):
             "question": context.question,
             "passages": passages + _asset_block(context),
         }
+
+
+class MarketAssistant(Agent):
+    """Open trading questions, grounded in the last whole-market scan.
+
+    The only chat agent with no `is_applicable` guard, and that is the point:
+    requiring a ticker is exactly what this mode exists to remove. A reader
+    asking what they might look at with two hundred thousand rupiah does not
+    have a ticker yet - finding one is the question.
+
+    The scope is narrow by prompt rather than by classifier. A classifier is a
+    component that can be wrong and needs its own evaluation; an instruction to
+    decline off-topic questions is one the model follows or visibly does not.
+    """
+
+    name = "market_assistant"
+    template_name = "market_question"
+    output_model = ConversationOutput
+    # The hardest reasoning of the chat modes: an open question, a digest of
+    # several hundred figures, and a rule about what may not be said.
+    complexity = TaskComplexity.COMPLEX
+
+    def prompt_context(self, context: ConversationContext) -> dict[str, Any]:
+        digest = (
+            json.dumps(context.market_digest, ensure_ascii=False, default=str, indent=1)
+            if context.market_digest
+            else (
+                "(no market scan has been stored yet - say so rather than "
+                "answering from general impressions)"
+            )
+        )
+        return {"question": context.question, "digest": digest}
 
 
 class ResearchAgent(Agent):
@@ -281,6 +322,13 @@ class ConversationContextBuilder:
         # held a full scan result for it and the chat was told nothing.
         if code:
             context.asset_context = self._asset_context(code, asset)
+
+        # The whole-market picture, for the mode that has no issuer to
+        # anchor on. Read from the stored scan, so it costs a few queries.
+        if mode is ChatMode.MARKET:
+            from aidss.agents.market_digest import build as build_digest
+
+            context.market_digest = build_digest(self._session)
 
         if self._rag is None:
             return context

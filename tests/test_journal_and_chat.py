@@ -227,8 +227,29 @@ def test_research_mode_is_grounded_in_ingested_data(client, auth_headers) -> Non
 
 
 def test_the_mode_is_supplied_not_inferred() -> None:
-    """Guessing intent would add a classifier that can be wrong."""
-    assert set(ChatMode) == {ChatMode.LEARN, ChatMode.RESEARCH, ChatMode.KNOWLEDGE}
+    """Guessing intent would add a classifier that can be wrong, that needs its
+    own evaluation, and that would quietly route a research question to an
+    explainer. The mode is a field on the request.
+
+    Asserted against the request schema rather than against a frozen list of
+    members: pinning the membership made adding a mode fail a test about
+    something else entirely, which says nothing about whether intent is being
+    inferred.
+    """
+    from aidss.api.schemas import ChatRequest
+
+    assert "mode" in ChatRequest.model_fields
+
+
+def test_every_mode_has_an_agent() -> None:
+    """The dispatch is a dict lookup, so a mode added without an entry raises
+    KeyError on the request - a 500 rather than anything a reader could act
+    on."""
+    from aidss.api.routes.journal import AGENT_FOR_MODE
+
+    missing = [mode.value for mode in ChatMode if mode not in AGENT_FOR_MODE]
+
+    assert missing == [], f"these modes would raise when asked: {missing}"
 
 
 def test_an_empty_sources_list_is_visible_to_the_caller(client, auth_headers) -> None:

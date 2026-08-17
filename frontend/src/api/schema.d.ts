@@ -2934,7 +2934,7 @@ export interface components {
          *     debug.
          * @enum {string}
          */
-        ChatMode: "learn" | "research" | "knowledge";
+        ChatMode: "learn" | "research" | "knowledge" | "market";
         /** ChatRequest */
         ChatRequest: {
             /** Question */
