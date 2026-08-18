@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
+import { CronPicker } from "@/components/CronPicker";
 import {
   Button,
   Card,
@@ -626,11 +627,15 @@ function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
                 )}
 
                 {expanded && (
-                  <ScheduleRow
-                    screen={screen}
-                    busy={schedule.isPending}
-                    onSave={(cron) => schedule.mutate({ id: screen.id, cron })}
-                  />
+                  <div className="mt-2">
+                    <p className="mb-1.5 text-xs text-faint">{t("screen.schedule")}</p>
+                    <CronPicker
+                      value={screen.cron_expr ?? ""}
+                      busy={schedule.isPending}
+                      nextRunAt={screen.next_run_at}
+                      onSave={(cron) => schedule.mutate({ id: screen.id, cron })}
+                    />
+                  </div>
                 )}
 
                 {expanded && result && (
@@ -681,67 +686,5 @@ function SavedScreens({ onLoad }: { onLoad: (rules: Rule[]) => void }) {
 
       <Caveat>{t("screen.scheduleCaveat")}</Caveat>
     </Card>
-  );
-}
-
-const CRON_PRESETS = [
-  { key: "off", cron: "" },
-  { key: "afterClose", cron: "0 18 * * 1-5" },
-  { key: "beforeOpen", cron: "0 8 * * 1-5" },
-  { key: "weekly", cron: "0 8 * * 1" },
-] as const;
-
-function ScheduleRow({
-  screen,
-  busy,
-  onSave,
-}: {
-  screen: { id: string; cron_expr: string; next_run_at: string | null };
-  busy: boolean;
-  onSave: (cron: string) => void;
-}) {
-  const { t, dateTime } = useI18n();
-  const [cron, setCron] = useState(screen.cron_expr ?? "");
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <span className="text-xs text-faint">{t("screen.schedule")}</span>
-
-      {/* Presets first, expression second. A cron field alone asks a reader to
-          know the syntax before they can have the feature at all, and the three
-          they will actually want are the ones the exchange's day suggests. */}
-      <select
-        className={`${inputClass} w-auto text-xs`}
-        value={CRON_PRESETS.some((p) => p.cron === cron) ? cron : "custom"}
-        onChange={(event) => {
-          if (event.target.value === "custom") return;
-          setCron(event.target.value);
-          onSave(event.target.value);
-        }}
-      >
-        {CRON_PRESETS.map((preset) => (
-          <option key={preset.key} value={preset.cron}>
-            {t(`screen.cron.${preset.key}` as MessageKey)}
-          </option>
-        ))}
-        <option value="custom">{t("screen.cron.custom")}</option>
-      </select>
-
-      <input
-        className={`${inputClass} w-40 font-mono text-xs`}
-        value={cron}
-        onChange={(event) => setCron(event.target.value)}
-        placeholder="0 18 * * 1-5"
-      />
-      <Button variant="ghost" size="sm" busy={busy} onClick={() => onSave(cron)}>
-        {t("common.save")}
-      </Button>
-
-      {screen.next_run_at && (
-        <span className="text-xs text-faint">
-          {t("screen.nextRun", { when: dateTime(screen.next_run_at) })}
-        </span>
-      )}
-    </div>
   );
 }

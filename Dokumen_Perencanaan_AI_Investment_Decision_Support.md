@@ -1261,6 +1261,18 @@ Konsekuensi yang tidak terlihat dari tabel dan justru paling mudah salah:
 
 **Dan inilah permukaan paling berisiko di seluruh produk.** Mode lain berlabuh pada emiten yang sudah dipilih seseorang; yang ini mengundang persis pertanyaan yang tidak boleh dijawab platform — “saya harus beli apa” — dengan kata-kata pembacanya sendiri. Maka instruksinya menyebut kasus itu secara eksplisit alih-alih menyinggungnya: pertanyaan seperti itu punya jawaban yang sah dan jawaban itu bukan rekomendasi. Yang dijelaskan adalah emiten mana yang saat ini memenuhi kondisi tertentu, apa arti tiap kondisi, apa yang harus benar agar itu bermakna, dan apa yang bisa keliru — lalu pembacanya yang memutuskan. Penjaga bahasa-eksekusi berlaku pada keluarannya karena diwarisi dari perenderan sistem, bukan diulang per template.
 
+**Jadwal dipilih dari dropdown, bukan diketik.** Cron adalah format penyimpanan yang baik dan masukan yang buruk: `0 18 * * 1-5` adalah lima kolom sintaks posisional yang harus dihafal sebelum fiturnya bisa dipakai sama sekali, dan kegagalannya sunyi — ekspresi yang keliru tersimpan bersih lalu jadwalnya tidak pernah menyala pada waktu yang diharapkan.
+
+**Ekspresinya dibacakan kembali dalam bahasa pembaca** lewat `cronstrue`: “Pada 18:00, Senin sampai Jumat”. Pembacaan ulang itulah intinya — hanya itu yang menangkap jadwal yang terparsir dengan benar namun berarti sesuatu yang berbeda dari yang dimaksud penulisnya. Zona waktunya ikut dinyatakan, karena pustaka itu tidak punya cara mengetahui bahwa setiap cron di platform ini dibaca dalam waktu bursa, dan “pada 18:00” tanpa keterangan akan dibaca sebagai jam di komputer pembacanya.
+
+**Pustaka pembaca, bukan pustaka editor.** Setiap editor cron berbasis dropdown di npm membawa kerangka UI-nya sendiri — `react-js-cron` menuntut antd 6 — dan memasukkan sistem desain kedua ke dalam basis kode Tailwind berbiaya jauh lebih besar daripada empat elemen select. `cronstrue` mengerjakan satu hal yang memang sulit, tanpa dependensi sama sekali, dan menyediakan locale Indonesia yang dibutuhkan produk ini.
+
+**Ekspresi yang tidak bisa diwakili dropdown dikatakan, bukan ditimpa.** Bentuk seperti `0 8,15 * * 1-5` terbaca sempurna tetapi tidak bisa disusun dari pilihan yang ada; membuka layarnya karena itu tidak boleh diam-diam menggantinya dengan apa pun yang kebetulan sedang ditampilkan kontrolnya.
+
+**Satu komponen untuk ketiga tempat** — jadwal filter tersimpan, sapuan berita, dan impor pasar. Tiga kolom cron yang ditulis terpisah adalah tiga tempat aturan waktu bursa harus diulang, dan yang ketiga akan melupakannya.
+
+**Bentuk yang bisa dihasilkan dropdown diuji terhadap penjadwal yang memarsirnya.** Tidak ada yang bisa memeriksa itu dari sisi TypeScript, dan kegagalannya berupa jadwal yang dipilih pembaca dari menu lalu ditolak backend — yang terbaca sebagai menunya yang rusak, bukan sebagai ketidakcocokan.
+
 ### Filter yang disusun sendiri pembaca
 
 Horizon bawaan menjawab pertanyaan yang dipilih orang lain. Pembangun filter membiarkan pembaca menyatakan syaratnya sendiri — “RSI di bawah 35, volume minimal dua kali rata-ratanya, harga antara 100 dan 2.000” — lalu menjalankannya atas setiap emiten yang tercakup pemindaian. Tiga keputusan menentukan seluruh desainnya.

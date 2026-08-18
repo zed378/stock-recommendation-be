@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
+import { CronPicker } from "@/components/CronPicker";
 import {
   Button,
   Card,
@@ -152,31 +153,30 @@ export function PlatformSettingsPanel() {
           label={t("admin.settings.marketCron")}
           hint={t("admin.settings.marketCronHint")}
         >
-          <div className="flex flex-wrap gap-2">
-            <input
-              className={`${inputClass} min-w-48 flex-1 font-mono text-xs`}
+          <div className="space-y-2">
+            <CronPicker
               value={marketCron}
-              onChange={(event) => setMarketCron(event.target.value)}
-              placeholder="0 18 * * 1-5"
-            />
-            <input
-              type="number"
-              className={`${inputClass} w-28 text-xs`}
-              value={jitter}
-              onChange={(event) => setJitter(event.target.value)}
-              aria-label={t("admin.settings.jitter")}
-            />
-            <Button
               busy={save.isPending}
-              onClick={() =>
+              onSave={(cron) => {
+                setMarketCron(cron);
                 save.mutate({
-                  market_scan_cron: marketCron,
+                  market_scan_cron: cron,
                   market_scan_jitter_seconds: Number(jitter) || 0,
-                })
-              }
-            >
-              {t("common.save")}
-            </Button>
+                });
+              }}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-xs text-faint" htmlFor="scan-jitter">
+                {t("admin.settings.jitter")}
+              </label>
+              <input
+                id="scan-jitter"
+                type="number"
+                className={`${inputClass} w-28 text-xs`}
+                value={jitter}
+                onChange={(event) => setJitter(event.target.value)}
+              />
+            </div>
           </div>
         </Field>
         <p className="-mt-3 text-xs text-faint">{t("admin.settings.jitterHint")}</p>
@@ -185,20 +185,14 @@ export function PlatformSettingsPanel() {
           label={t("admin.settings.newsCron")}
           hint={t("admin.settings.newsCronHint")}
         >
-          <div className="flex flex-wrap gap-2">
-            <input
-              className={`${inputClass} min-w-48 flex-1 font-mono text-xs`}
-              value={cron}
-              onChange={(event) => setCron(event.target.value)}
-              placeholder="0 */2 * * *"
-            />
-            <Button
-              busy={save.isPending}
-              onClick={() => save.mutate({ news_sweep_cron: cron })}
-            >
-              {t("common.save")}
-            </Button>
-          </div>
+          <CronPicker
+            value={cron}
+            busy={save.isPending}
+            onSave={(next) => {
+              setCron(next);
+              save.mutate({ news_sweep_cron: next });
+            }}
+          />
         </Field>
       </div>
 
