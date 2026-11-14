@@ -300,7 +300,9 @@ class MockExchange:
         return _json(
             200,
             {
-                "canTrade": True,
+                "canTrade": self.keys.get(request.headers.get("X-APIKEY", ""), {}).get(
+                    "can_trade", True
+                ),
                 "canWithdraw": self.can_withdraw,
                 "canWithdrawFiat": self.can_withdraw_fiat,
                 "accountType": "individual",

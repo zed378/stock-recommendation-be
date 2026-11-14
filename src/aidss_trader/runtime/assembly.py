@@ -57,6 +57,14 @@ def build_client(
             raise CredentialUnreadable("no Indodax credential is stored")
         return found
 
+    return _client(settings, credentials)
+
+
+def _client(
+    settings: TraderSettings, credentials: Callable[[], tuple[str, str]]
+) -> IndodaxClient | None:
+    if not (settings.exchange_base_url and settings.public_base_url):
+        return None
     return IndodaxClient(
         exchange_base_url=settings.exchange_base_url,
         public_base_url=settings.public_base_url,
@@ -66,6 +74,12 @@ def build_client(
         clock_check_interval_s=CLOCK_CHECK_INTERVAL_S,
         max_skew_ms=MAX_SKEW_MS,
     )
+
+
+def build_candidate_client(settings: TraderSettings, key: str, secret: str) -> IndodaxClient | None:
+    """A throwaway client for testing a key before it is stored. Its own throttle, because it
+    is used for one read-only call; the key lives only in this closure."""
+    return _client(settings, lambda: (key, secret))
 
 
 def build_channel(factory: sessionmaker[Session], fernet: Fernet | None) -> Channel | None:
@@ -92,7 +106,10 @@ def build_runtime(
 
 
 def build_api(
-    settings: TraderSettings, factory: sessionmaker[Session], runtime: Runtime
+    settings: TraderSettings,
+    factory: sessionmaker[Session],
+    runtime: Runtime,
+    fernet: Fernet | None = None,
 ) -> FastAPI | None:
     if not settings.analysis_api_url:
         logger.warning("no analysis API URL: the operator API is not served")
@@ -112,6 +129,11 @@ def build_api(
             # every one is unset and promotion stays blocked.
             thresholds=lambda: Thresholds(),
             freshness=runtime.freshness,
+            # Without the master key no credential can be read or changed; the routes say so.
+            credentials=lambda s: CredentialStore(s, fernet) if fernet is not None else None,
+            exchange_client_for=lambda k, sec: build_candidate_client(settings, k, sec),
+            stored_exchange_client=lambda: client,
+            telegram_send=lambda token, chat, text: TelegramChannel(token, chat).send(text),
         )
     )
 

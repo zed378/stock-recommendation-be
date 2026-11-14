@@ -54,7 +54,7 @@ line (the `trader` role, which the analysis API already had).
 
 ## Not Done, Not Verified
 
-- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), ~~no strategy parameter editor~~ (added, see below), ~~no paper-config editor~~ (added, see below), credential screen, PnL or position
+- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), ~~no strategy parameter editor~~ (added, see below), ~~no paper-config editor~~ (added, see below), ~~credential screen~~ (added, see below), PnL or position
   panels, export button, or realtime feed; the approval card lacks signal reasons, limit headroom, and costs
   because the API does not provide them. The nginx and Vite proxy to `trader:8001` are a plan, not a deployment.
 - **Not wired:** nothing creates an `OrderIntentRow` or calls `ApprovalWorkflow.request` from a running
@@ -102,3 +102,25 @@ starting capital alone, does not. Fills already recorded are not recalculated, a
 verified:** never rendered in a browser; no front-end tests; the screen's flattery rule is a hand-kept mirror of
 `paper_flatters`. A flattering change before any paper fill exists is free, which is deliberate: nothing has been
 simulated under the old numbers yet.
+
+## Credential screen (added later)
+
+`/trader/credentials` stores, tests, replaces, and removes the Indodax key and the Telegram bot token. The fields
+are write-only: what comes back is the last four characters, the last test time and result, and whether the master
+key can still decrypt it. Storing and removing ask for the password again. A candidate key is tested read-only
+(`GET /api/v2/account`) **before** it replaces the old one, so a rotation never leaves no key and a failed one
+keeps the old; a key that can withdraw, or cannot trade, is refused and never stored (ADR-013). Removing the
+Indodax key wipes the ciphertext (the database role has no DELETE, so the emptied row stays as the record) and
+halts trading. Telegram is tested by sending one harmless message. Every store, test, refusal, and removal is
+audited with the hint and never the value.
+
+Guards: the API's validation errors now report field names only, because FastAPI's default repeats the rejected
+input and on this route that is a secret; a test submits sentinel keys and checks no response, audit row, event,
+message, or log line contains them; the screen clears the fields the moment they are sent, and does not use a
+React Query mutation for the secret because that cache keeps its variables after it settles.
+
+**Needs the owner to know:** a key can only be stored when the exchange URLs are configured, because it must be
+tested first. The Compose file leaves them unset, so until the owner sets `AIDSS_TRADER_EXCHANGE_BASE_URL` and
+`AIDSS_TRADER_PUBLIC_BASE_URL` (the hosts Indodax's own documents disagree about, D1) the screen will refuse to
+store a key and say why. **Not verified:** never rendered in a browser; no front-end tests; the Telegram test and
+the key test were run against fakes only, never against Indodax or Telegram.

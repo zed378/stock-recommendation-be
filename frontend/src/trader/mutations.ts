@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { idempotencyKey, traderApi, unwrap, TraderError } from "@/trader/client";
-import type { KillResult } from "@/trader/types";
+import type { CredentialKind, KillResult } from "@/trader/types";
 
 /**
  * What the API requires the confirmation field to say, word for word.
@@ -272,6 +273,84 @@ export function useSavePaper() {
             },
           },
           body: values,
+        }),
+      ),
+    onSettled: () => void refresh(),
+  });
+}
+
+/**
+ * Storing a credential. Deliberately not a React Query mutation: those keep their variables
+ * in the mutation cache after they settle, which would leave the key and secret in memory for
+ * minutes. Here the values exist only as arguments to `run`, are sent, and are gone. A refusal
+ * carries only the server's reason, which never contains them.
+ */
+export function useStoreCredential() {
+  const refresh = useAfterMutation();
+  const [state, setState] = useState<{
+    pending: boolean;
+    error: TraderError | null;
+    success: boolean;
+  }>({ pending: false, error: null, success: false });
+
+  const run = async (args: {
+    kind: CredentialKind;
+    key: string;
+    secret: string;
+    stepUp: string;
+  }): Promise<boolean> => {
+    setState({ pending: true, error: null, success: false });
+    try {
+      await unwrap(
+        traderApi.PUT("/trader/v1/credentials/{kind}", {
+          params: {
+            path: { kind: args.kind },
+            header: { "Idempotency-Key": idempotencyKey(), "x-step-up": args.stepUp },
+          },
+          body: { key: args.key, secret: args.secret },
+        }),
+      );
+      setState({ pending: false, error: null, success: true });
+      return true;
+    } catch (err) {
+      const error =
+        err instanceof TraderError
+          ? err
+          : new TraderError("The request failed.", "UNKNOWN", null, null, null);
+      setState({ pending: false, error, success: false });
+      return false;
+    } finally {
+      void refresh();
+    }
+  };
+  return { run, isPending: state.pending, error: state.error, isSuccess: state.success };
+}
+
+export function useTestCredential() {
+  const refresh = useAfterMutation();
+  return useMutation<{ last_test_ok: boolean; reason: string | null }, TraderError, { kind: CredentialKind }>({
+    mutationFn: async ({ kind }) => {
+      const out = await unwrap<{ last_test_ok: boolean; reason: string | null }>(
+        traderApi.POST("/trader/v1/credentials/{kind}/test", {
+          params: { path: { kind }, header: { "Idempotency-Key": idempotencyKey() } },
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useRemoveCredential() {
+  const refresh = useAfterMutation();
+  return useMutation<unknown, TraderError, { kind: CredentialKind; stepUp: string }>({
+    mutationFn: ({ kind, stepUp }) =>
+      unwrap(
+        traderApi.DELETE("/trader/v1/credentials/{kind}", {
+          params: {
+            path: { kind },
+            header: { "Idempotency-Key": idempotencyKey(), "x-step-up": stepUp },
+          },
         }),
       ),
     onSettled: () => void refresh(),

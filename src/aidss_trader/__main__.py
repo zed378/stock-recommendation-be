@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger("aidss_trader").error("master key unavailable: %s", exc)
         fernet = None
     runtime = build_runtime(settings, factory, fernet)
-    app = build_api(settings, factory, runtime)
+    app = build_api(settings, factory, runtime, fernet)
     if app is not None:
         serve_in_thread(app, settings.api_host, settings.api_port)
     run(settings, factory, runtime=runtime)

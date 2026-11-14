@@ -138,3 +138,23 @@ export interface PaperConfig {
   /** Simulated fills already recorded; they keep the numbers they were made with. */
   paper_fills: number;
 }
+
+export type CredentialKind = "indodax" | "telegram";
+
+export interface CredentialItem {
+  kind: CredentialKind;
+  configured: boolean;
+  /** The last four characters: enough to recognise a key, never to use it. */
+  hint?: string;
+  created_at?: string;
+  last_test_at?: string | null;
+  last_test_ok?: boolean | null;
+  /** False when the master key can no longer decrypt what is stored. */
+  readable?: boolean;
+  reason?: string | null;
+}
+
+export interface Credentials {
+  available: boolean;
+  items: CredentialItem[];
+}

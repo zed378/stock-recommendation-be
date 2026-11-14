@@ -6,6 +6,7 @@ no test sends a message or touches a real exchange.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -772,10 +773,20 @@ def test_there_is_no_order_entry_route(api) -> None:
 
 
 def test_no_response_schema_names_a_secret(api) -> None:
-    schema = api.http.get("/openapi.json").text.lower()
+    doc = api.http.get("/openapi.json").json()
+    # Responses: nothing a caller receives may carry a secret-like field.
+    responses = json.dumps(
+        [op.get("responses") for p in doc["paths"].values() for op in p.values()]
+    )
     for word in ("api_key", "secret", "signature", "password_hash", "uid"):
-        assert f'"{word}"' not in schema
-    assert "/trader/v1/kill" in schema
+        assert f'"{word}"' not in responses.lower()
+    # Requests: only the one write-only credential body may name a key or secret.
+    for name, schema in doc["components"]["schemas"].items():
+        if name == "CredentialBody":
+            continue
+        props = json.dumps(schema.get("properties", {})).lower()
+        assert '"secret"' not in props and '"api_key"' not in props, name
+    assert "/trader/v1/kill" in json.dumps(doc["paths"])
 
 
 def test_authentication_and_permissions_are_enforced_server_side(api) -> None:

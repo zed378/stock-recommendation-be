@@ -124,3 +124,30 @@ class CredentialStore:
             "last_test_at": row.last_test_at,
             "last_test_ok": row.last_test_ok,
         }
+
+    def readable(self, kind: str) -> bool | None:
+        """None when none is stored; otherwise whether the master key can still decrypt it.
+        Nothing decrypted leaves this method."""
+        try:
+            return None if self.get(kind) is None else True
+        except CredentialUnreadable:
+            return False
+
+    def mark_test(self, kind: str, ok: bool, now: datetime | None = None) -> None:
+        self._session.execute(
+            update(Credential)
+            .where(Credential.kind == kind, Credential.active.is_(True))
+            .values(last_test_at=now or datetime.now(UTC), last_test_ok=ok)
+        )
+        self._session.flush()
+
+    def remove(self, kind: str, now: datetime | None = None) -> bool:
+        """Retire the active credential and wipe its ciphertext. The Trader's database role has
+        no DELETE, so the row stays, emptied, as the record that a credential existed."""
+        result = self._session.execute(
+            update(Credential)
+            .where(Credential.kind == kind, Credential.active.is_(True))
+            .values(active=False, retired_at=now or datetime.now(UTC), ciphertext="")
+        )
+        self._session.flush()
+        return bool(result.rowcount)

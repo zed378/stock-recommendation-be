@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -27,9 +28,13 @@ from sqlalchemy.orm import Session
 
 from aidss_trader.api import permissions as perm
 from aidss_trader.approvals import ApprovalRefused, ApprovalWorkflow, intent_hash
+from aidss_trader.audit import AuditLogger
 from aidss_trader.auth.stepup import StepUp, StepUpRefused
 from aidss_trader.auth.verify import AuthFailed, Principal, TokenVerifier
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
+from aidss_trader.connector.client import IndodaxClient
+from aidss_trader.credentials import CredentialStore, CredentialUnreadable
+from aidss_trader.credentials.admin import check_account
 from aidss_trader.db.models import (
     ApprovalRow,
     AuditLog,
@@ -81,6 +86,12 @@ class ApiContext:
     submit_approved: Callable[[Session, Intent], Any]  # re-checks risk, then sends
     thresholds: Callable[[], Thresholds]
     freshness: Callable[[], tuple[datetime, bool]]  # (as_of, stale): required, never assumed fresh
+    # Credential administration. Each default means "not available", so an app built without
+    # them can still serve everything else and refuses credential changes instead of guessing.
+    credentials: Callable[[Session], CredentialStore | None] = lambda s: None
+    exchange_client_for: Callable[[str, str], IndodaxClient | None] = lambda k, s: None
+    stored_exchange_client: Callable[[], IndodaxClient | None] = lambda: None
+    telegram_send: Callable[[str, str, str], None] | None = None
 
 
 class ApiError(Exception):
@@ -161,6 +172,13 @@ class ParametersBody(BaseModel):
     cooldown_s: int
 
 
+class CredentialBody(BaseModel):
+    """Write-only. These fields are never returned, logged, or echoed in an error."""
+
+    key: str
+    secret: str = ""
+
+
 class PaperBody(BaseModel):
     slippage_pct: str
     partial_fill_fraction: str
@@ -177,6 +195,25 @@ class LimitsBody(BaseModel):
 
 def create_app(ctx: ApiContext) -> FastAPI:
     app = FastAPI(title="AIDSS Trader API", docs_url=None, redoc_url=None)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # FastAPI's default body repeats the rejected input. On a credential route that would hand
+        # a key or secret straight back, so only the field names are reported, never the values.
+        fields = sorted({".".join(str(p) for p in e["loc"] if p != "body") for e in exc.errors()})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "class": "VALIDATION",
+                    "code": "invalid_request",
+                    "message": "invalid or missing: "
+                    + (", ".join(f for f in fields if f) or "request"),
+                    "correlation_id": uuid.uuid4().hex,
+                    "retryable": False,
+                }
+            },
+        )
 
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
@@ -764,6 +801,178 @@ def create_app(ctx: ApiContext) -> FastAPI:
         s.commit()
         # A new version always starts again in PAPER (ADR-020); the response says so.
         return envelope({"version": version, "mode": "PAPER"})
+
+    # ------------------------------------------------------------ credentials
+
+    kinds = ("indodax", "telegram")
+
+    def cred_store(s: Session) -> CredentialStore:
+        store = ctx.credentials(s)
+        if store is None:
+            raise ApiError(
+                503,
+                "UNAVAILABLE",
+                "master_key_unavailable",
+                "the master key is not available, so credentials cannot be read or changed",
+            )
+        return store
+
+    def cred_view(store: CredentialStore, kind: str) -> dict[str, Any]:
+        info = store.describe(kind)
+        if info is None:
+            return {"kind": kind, "configured": False}
+        return {
+            "kind": kind,
+            "configured": True,
+            "hint": info["hint"],
+            "created_at": _cell(info["created_at"]),
+            "last_test_at": _cell(info["last_test_at"]) if info["last_test_at"] else None,
+            "last_test_ok": info["last_test_ok"],
+            "readable": store.readable(kind) is True,
+        }
+
+    def cred_check(kind: str, key: str, secret: str) -> tuple[bool, str | None]:
+        """Test a candidate read-only. Never places or cancels an order."""
+        if kind == "indodax":
+            client = ctx.exchange_client_for(key, secret)
+            if client is None:
+                return False, "no exchange is configured, so the key cannot be tested"
+            res = check_account(client)
+            return res.ok, res.reason
+        if ctx.telegram_send is None:
+            return False, "no Telegram channel is available to test"
+        try:
+            ctx.telegram_send(key, secret, "AIDSS Trader: test message. Nothing needs doing.")
+        except Exception:
+            # The transport error can carry the URL, which contains the token: say nothing more.
+            return False, "Telegram refused the message"
+        return True, None
+
+    def cred_valid(kind: str, body: CredentialBody) -> str | None:
+        import re
+
+        k, sec = body.key.strip(), body.secret.strip()
+        if kind not in kinds:
+            return "unknown credential kind"
+        if kind == "indodax":
+            ok = 8 <= len(k) <= 512 and 8 <= len(sec) <= 1024 and not re.search(r"\s", k + sec)
+            return None if ok else "enter the API key and the secret exactly as Indodax shows them"
+        ok = re.fullmatch(r"\d{5,}:[A-Za-z0-9_-]{20,}", k) and re.fullmatch(r"-?\d+|@\w{5,}", sec)
+        return None if ok else "enter the bot token and the chat id"
+
+    @app.get(f"{r}/credentials")
+    def list_credentials(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        store = ctx.credentials(s)
+        if store is None:
+            return envelope({"available": False, "items": []})
+        return envelope({"available": True, "items": [cred_view(store, k) for k in kinds]})
+
+    @app.put(f"{r}/credentials/{{kind}}")
+    def put_credential(
+        kind: str,
+        body: CredentialBody,
+        who: Principal = Depends(need(perm.MANAGE_CREDENTIALS)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+        x_step_up: str | None = Header(default=None),
+    ):
+        if (why := cred_valid(kind, body)) is not None:
+            raise ApiError(400, "VALIDATION", "bad_credential", why)
+        step_up(s, who, "CREDENTIALS", x_step_up)
+        key, secret = body.key.strip(), body.secret.strip()
+        # Test first, store only on success: a rotation never leaves the Trader with no valid
+        # key, and a key that can withdraw is never stored at all (ADR-013).
+        ok, reason = cred_check(kind, key, secret)
+        if not ok:
+            AuditLogger(s).record(
+                actor=who.user_id,
+                action="credential.refused",
+                subject_type="credential",
+                subject_id=kind,
+                after={"reason": reason},
+            )
+            s.commit()
+            raise ApiError(422, "REJECTED", "credential_refused", reason or "the test failed")
+        store = cred_store(s)
+        store.put(kind, key=key, secret=secret)
+        store.mark_test(kind, True)
+        AuditLogger(s).record(
+            actor=who.user_id,
+            action="credential.store",
+            subject_type="credential",
+            subject_id=kind,
+            after={"hint": cred_view(store, kind)["hint"]},
+        )
+        s.commit()
+        ctx.notifier(s).emit("credential_changed", f"the {kind} credential changed", {"kind": kind})
+        return envelope(cred_view(store, kind))
+
+    @app.post(f"{r}/credentials/{{kind}}/test")
+    def test_credential(
+        kind: str,
+        who: Principal = Depends(need(perm.MANAGE_CREDENTIALS)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        if kind not in kinds:
+            raise ApiError(404, "NOT_FOUND", "unknown_kind", "no such credential kind")
+        store = cred_store(s)
+        try:
+            found = store.get(kind)
+        except CredentialUnreadable:
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "credential_unreadable",
+                "the stored credential cannot be decrypted; the master key changed. Enter it again",
+            ) from None
+        if found is None:
+            raise ApiError(404, "NOT_FOUND", "no_credential", "no credential is stored")
+        if kind == "indodax":
+            client = ctx.stored_exchange_client()
+            res = check_account(client) if client else None
+            ok, reason = (res.ok, res.reason) if res else (False, "no exchange is configured")
+        else:
+            ok, reason = cred_check(kind, found[0], found[1])
+        store.mark_test(kind, ok)
+        AuditLogger(s).record(
+            actor=who.user_id,
+            action="credential.test",
+            subject_type="credential",
+            subject_id=kind,
+            after={"ok": ok, "reason": reason},
+        )
+        s.commit()
+        return envelope({**cred_view(store, kind), "reason": reason})
+
+    @app.delete(f"{r}/credentials/{{kind}}")
+    def delete_credential(
+        kind: str,
+        who: Principal = Depends(need(perm.MANAGE_CREDENTIALS)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+        x_step_up: str | None = Header(default=None),
+    ):
+        if kind not in kinds:
+            raise ApiError(404, "NOT_FOUND", "unknown_kind", "no such credential kind")
+        step_up(s, who, "CREDENTIALS", x_step_up)
+        store = cred_store(s)
+        if not store.remove(kind):
+            raise ApiError(404, "NOT_FOUND", "no_credential", "no credential is stored")
+        AuditLogger(s).record(
+            actor=who.user_id,
+            action="credential.remove",
+            subject_type="credential",
+            subject_id=kind,
+        )
+        s.commit()
+        if kind == "indodax":
+            # Without a key the Trader cannot trade, and it must say so (docs/05/13, "Remove").
+            ctx.killswitch(s).activate("HALT", "owner", who.user_id)
+        ctx.notifier(s).emit(
+            "credential_changed", f"the {kind} credential was removed", {"kind": kind}
+        )
+        return envelope({"kind": kind, "configured": False})
 
     @app.get(f"{r}/paper-config")
     def get_paper(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
