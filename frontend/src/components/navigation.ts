@@ -57,6 +57,19 @@ const WATCHING: Group = {
 };
 
 /**
+ * The Trader's operator surface. Offered only to the roles that operate or
+ * oversee trading; the Trader API is what actually enforces it.
+ */
+const TRADING: Group = {
+  label: "nav.group.trading",
+  items: [
+    { to: "/trader", label: "nav.trader", end: true },
+    { to: "/trader/approvals", label: "nav.traderApprovals" },
+    { to: "/trader/strategies", label: "nav.traderStrategies" },
+  ],
+};
+
+/**
  * Settings that belong to the reader rather than to the platform.
  *
  * Kept out of Administration, which is a different job: an investor sets their
@@ -97,7 +110,9 @@ export function useNavigationGroups(): Group[] {
   const { user } = useAuth();
   // Hidden rather than guarded. The route and the API each stand on their own;
   // this only avoids offering a link to somewhere the reader cannot use.
-  return user?.role === "admin"
-    ? [RESEARCH, WATCHING, POSITIONS, YOU, ADMINISTRATION]
-    : [RESEARCH, WATCHING, POSITIONS, YOU];
+  const base = [RESEARCH, WATCHING, POSITIONS];
+  if (user?.role === "trader" || user?.role === "admin") base.push(TRADING);
+  base.push(YOU);
+  if (user?.role === "admin") base.push(ADMINISTRATION);
+  return base;
 }

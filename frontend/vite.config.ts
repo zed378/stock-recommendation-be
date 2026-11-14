@@ -15,6 +15,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // The Trader is a separate service with its own API (ADR-001, ADR-028). Its
+      // paths already start with /trader/v1, so nothing is rewritten.
+      "/trader": {
+        target: process.env.VITE_TRADER_TARGET ?? "http://127.0.0.1:8001",
+        changeOrigin: true,
+      },
       "/api": {
         target: process.env.VITE_API_TARGET ?? "http://127.0.0.1:8000",
         changeOrigin: true,

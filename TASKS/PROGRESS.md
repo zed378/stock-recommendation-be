@@ -13,7 +13,7 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 | T2 | Exchange connector | 🚧 built, in review (2026-11-14) | Mock-verified only. **T2-07 (live Read-only check) is owner-led and not done**; every Indodax shape is documented, not observed |
 | T3 | Strategy, backtest, paper | 🚧 built, in review (2026-11-14) | Mechanism only; OQ-5 and OQ-11 values unset, tests use their own numbers. AI context deferred (ADR-032) |
 | T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; **not wired into the run loop**, so the Trader still cannot trade. OQ-9 values unset |
-| T5 | Operator surface and `APPROVAL` | 🚧 backend built, UI not built (2026-11-14) | T5-01, 02, 03, 05 and the T5-04 API exist and are mock-tested. **No front end, nothing wired into the run loop.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
+| T5 | Operator surface and `APPROVAL` | 🚧 built, unwired, UI never seen in a browser (2026-11-14) | T5-01, 02, 03, 05, the T5-04 API and a first front end exist (typecheck, lint, build pass). **Nothing wired into the run loop, the Trader does not serve its API, and the screens were never rendered.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
 | T6 | Hardening and release | ⏳ TODO | No open question blocks T6 (ADR-037, ADR-039, ADR-040) |
 
 ## What Exists Today
@@ -77,7 +77,7 @@ Built and in review; see `MEMORY/records/2026-11-14-t2-t4-connector-strategy-exe
 
 ### T5
 
-Backend built, UI not built; see `MEMORY/records/2026-11-14-t5-operator-surface-backend.md`. T5-06 (real money) is owner-led and untouched.
+Backend and a first front end built, unwired and unrendered; see `MEMORY/records/2026-11-14-t5-operator-surface-backend.md`. T5-06 (real money) is owner-led and untouched.
 
 ### T6
 

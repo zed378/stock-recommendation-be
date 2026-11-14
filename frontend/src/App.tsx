@@ -20,6 +20,9 @@ import { Profile } from "@/pages/Profile";
 import { Admin } from "@/pages/Admin";
 import { StockPicks } from "@/pages/StockPicks";
 import { Monitoring } from "@/pages/Monitoring";
+import { Trader } from "@/pages/Trader";
+import { TraderApprovals } from "@/pages/TraderApprovals";
+import { TraderStrategies } from "@/pages/TraderStrategies";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +67,11 @@ export default function App() {
                 <Route path="/journal" element={<Journal />} />
                 <Route path="/picks" element={<StockPicks />} />
                 <Route path="/monitoring" element={<Monitoring />} />
+                {/* The Trader API enforces who may do what; the link is only hidden
+                    for roles that cannot use it. */}
+                <Route path="/trader" element={<Trader />} />
+                <Route path="/trader/approvals" element={<TraderApprovals />} />
+                <Route path="/trader/strategies" element={<TraderStrategies />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/agenda" element={<Agenda />} />
                 <Route path="/screens" element={<ScreenBuilder />} />

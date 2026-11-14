@@ -4463,7 +4463,7 @@ export interface components {
          * @description The minimal RBAC set from Section 13.
          * @enum {string}
          */
-        UserRole: "viewer" | "investor" | "admin";
+        UserRole: "viewer" | "investor" | "admin" | "trader";
         /** ValidationError */
         ValidationError: {
             /** Location */

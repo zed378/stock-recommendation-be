@@ -2,7 +2,7 @@
 
 One line per record, newest first. Add new entries at the top.
 
-- [2026-11-14 — T5: operator surface backend (built, UI not built)](records/2026-11-14-t5-operator-surface-backend.md) — approvals, step-up (ADR-046 proposed), notifier, promotion, export, API; no front end, nothing wired; T5-06 untouched
+- [2026-11-14 — T5: operator surface (backend and front end built, unwired)](records/2026-11-14-t5-operator-surface-backend.md) — approvals, step-up (ADR-046 proposed), notifier, promotion, export, API, first front end never rendered in a browser; nothing wired; T5-06 untouched
 - [2026-11-14 — T2-T4: Connector, strategy/paper, execution core (built, in review)](records/2026-11-14-t2-t4-connector-strategy-execution.md) — mock-verified only; nothing live, nothing wired into the run loop, no owner numbers set
 - [2026-11-14 — T1: Foundation (built, in review)](records/2026-11-14-t1-foundation.md) — credential store, audit chain, lease, limits mechanism, migrations; PostgreSQL privileges and the Docker image NOT verified; analysis DB role is a superuser
 - [2026-11-14 — T0: Owner answers, batch 7](records/2026-11-14-owner-answers-batch-7.md) — ADR-043 to 045 (order poll 10 s, lease 15 s/5 s, BTCIDR+ETHIDR, veto decided later); 8 open questions left, all owner numbers or the live check

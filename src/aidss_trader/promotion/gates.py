@@ -127,7 +127,8 @@ class Promotion:
             raise PromotionRefused(["unknown strategy"])
         since, now = _aware(row.since), self._now()
         running = now - since
-        out = [Gate("duration", str(running), str(MIN_DURATION), running >= MIN_DURATION)]
+        days = f"{running.total_seconds() / 86400:.1f} days"
+        out = [Gate("duration", days, f"{MIN_DURATION.days} days", running >= MIN_DURATION)]
         diffs = (
             self._s.scalar(
                 select(func.count())

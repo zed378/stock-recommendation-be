@@ -157,6 +157,7 @@ Windows paths shown (`.venv/Scripts/python`); on Linux and macOS use `.venv/bin/
 | `npm run lint` | oxlint |
 | `npm run typecheck` | `tsc -b --noEmit` |
 | `npm run api:types` | Regenerate `src/api/schema.d.ts` from the running API on port 7153 |
+| `python -m aidss_trader.api.openapi frontend/.trader-openapi.json`, then `npx openapi-typescript .trader-openapi.json -o src/api/trader-schema.d.ts` (in `frontend/`) | Regenerate the Trader API types; delete the JSON afterwards |
 
 ### Trader
 
@@ -170,7 +171,7 @@ Verified on 2026-11-14 (hermetic, SQLite; no exchange and no PostgreSQL needed):
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
 | `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); **not yet run against PostgreSQL** |
 
-The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) with no front end, but are **not wired into the run loop**; `aidss_trader run` still never trades. No real Indodax call has been made (T2-07 is owner-led).
+The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and a first front end under `frontend/src/trader` (never rendered in a browser), but are **not wired into the run loop**; `aidss_trader run` still never trades. No real Indodax call has been made (T2-07 is owner-led).
 
 ## Code Style
 

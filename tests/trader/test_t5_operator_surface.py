@@ -949,3 +949,17 @@ def test_export_row_count_matches_over_the_api_and_the_audit_is_guarded(api) -> 
     assert r.status_code == 200 and r.headers["x-row-count"] == "1"
     assert api.call("GET", "/export", token="tok-viewer", kind="audit", **RANGE).status_code == 403
     assert api.call("GET", "/export", kind="secrets", **RANGE).status_code == 400
+
+
+def test_the_intent_list_carries_the_hash_and_approval_state_the_card_needs(api) -> None:
+    h = api.seed_intent()
+    row = api.call("GET", "/intents").json()["data"][0]
+    assert row["intent_hash"] == h and row["approval"]["state"] == "AWAITING"
+    assert row["entry_price"] == "1236777000" and row["quantity"] == "0.01"  # not padded
+    assert row["approval"]["expires_at"]
+
+
+def test_timestamps_are_always_utc_with_an_offset_so_a_browser_cannot_misread_them(api) -> None:
+    api.seed_intent()
+    row = api.call("GET", "/intents").json()["data"][0]
+    assert row["created_at"].endswith("+00:00") and row["approval"]["expires_at"].endswith("+00:00")

@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/context";
 import { NotificationBell } from "@/components/Notifications";
 import { SidebarDrawer, SidebarNav } from "@/components/Sidebar";
 import { useEvents } from "@/realtime/useEvents";
+import { StateBar } from "@/trader/StateBar";
 
 /**
  * The application shell.
@@ -102,6 +103,9 @@ export function Layout() {
               )}
             </div>
           </div>
+          {/* Inside the sticky header, so the Trader's state and the HALT control
+              stay on screen on every page and while scrolling. */}
+          <StateBar />
         </header>
 
         <main className="w-full flex-1 px-4 py-6">

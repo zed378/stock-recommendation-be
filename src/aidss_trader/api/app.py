@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, Request
@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss_trader.api import permissions as perm
-from aidss_trader.approvals import ApprovalRefused, ApprovalWorkflow
+from aidss_trader.approvals import ApprovalRefused, ApprovalWorkflow, intent_hash
 from aidss_trader.auth.stepup import StepUp, StepUpRefused
 from aidss_trader.auth.verify import AuthFailed, Principal, TokenVerifier
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
@@ -76,15 +76,22 @@ def _meta(ctx: ApiContext, origin: str = "LIVE", source: str = "local") -> dict[
     return {"source": source, "origin": origin, "as_of": as_of.isoformat(), "stale": stale}
 
 
+def _cell(v: Any) -> Any:
+    if isinstance(v, datetime):
+        # SQLite hands back naive values; PostgreSQL aware ones. Stored values are UTC, and a
+        # browser reads an offset-less timestamp as local time, so say UTC explicitly.
+        return (v.replace(tzinfo=UTC) if v.tzinfo is None else v).isoformat()
+    if hasattr(v, "as_tuple"):
+        # Numeric columns come back padded to their scale; show 1236777000, not 1236777000.000...
+        return format(v.normalize(), "f")
+    return str(v) if isinstance(v, uuid.UUID) else v
+
+
 def _row(obj: Any, columns: tuple[str, ...]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for c in columns:
         v = getattr(obj, c)
-        out[c] = (
-            v.isoformat()
-            if isinstance(v, datetime)
-            else (str(v) if hasattr(v, "as_tuple") or isinstance(v, uuid.UUID) else v)
-        )
+        out[c] = _cell(v)
     return out
 
 
@@ -254,17 +261,32 @@ def create_app(ctx: ApiContext) -> FastAPI:
             "entry_price",
             "quantity",
             "stop_price",
+            "risk_amount_idr",
             "state",
             "created_at",
         )
-        return envelope(
-            [
-                _row(i, cols)
-                for i in s.scalars(
-                    select(OrderIntentRow).order_by(OrderIntentRow.created_at.desc()).limit(200)
-                )
-            ]
-        )
+        approvals = {a.intent_identity: a for a in s.scalars(select(ApprovalRow))}
+        out = []
+        for row in s.scalars(
+            select(OrderIntentRow).order_by(OrderIntentRow.created_at.desc()).limit(200)
+        ):
+            item = _row(row, cols)
+            card = approvals.get(row.identity)
+            # The hash is what an approval is bound to: the card shows this exact order and the
+            # approve call must echo it back, so a card for an older price cannot approve a new one.
+            item["intent_hash"] = intent_hash(_intent_from_row(row))
+            item["approval"] = (
+                None
+                if card is None
+                else {
+                    "state": card.state,
+                    "expires_at": _cell(card.expires_at),
+                    "decided_by": card.decided_by,
+                    "reason": card.reason,
+                }
+            )
+            out.append(item)
+        return envelope(out)
 
     @app.get(f"{r}/orders")
     def orders(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
