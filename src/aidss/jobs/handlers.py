@@ -494,6 +494,10 @@ def run_analysis(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         user_id=uuid.UUID(str(user_id)) if user_id else None,
         include_recommendation=bool(payload.get("include_recommendation", True)),
         translate_output=False,
+        mode=str(payload.get("mode", "standard")),
+        max_debate_rounds=int(payload.get("max_debate_rounds", 2)),
+        max_risk_rounds=int(payload.get("max_risk_rounds", 1)),
+        include_social_vendors=bool(payload.get("include_social_vendors", False)),
     )
 
     if not run.runs:

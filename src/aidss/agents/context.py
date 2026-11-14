@@ -58,6 +58,9 @@ class AnalysisContext:
     features: dict[str, Any] = field(default_factory=dict)
     fundamentals: list[dict[str, Any]] = field(default_factory=list)
     news: list[dict[str, Any]] = field(default_factory=list)
+    social_posts: list[dict[str, Any]] = field(default_factory=list)
+    macro_snapshot: dict[str, Any] = field(default_factory=dict)
+    portfolio_context: dict[str, Any] = field(default_factory=dict)
 
     @property
     def has_price_data(self) -> bool:
@@ -70,6 +73,10 @@ class AnalysisContext:
     @property
     def has_news(self) -> bool:
         return bool(self.news)
+
+    @property
+    def has_social_posts(self) -> bool:
+        return bool(self.social_posts)
 
     def snapshot(self) -> dict[str, Any]:
         """The serialisable record stored on ``analysis_results``.
@@ -121,6 +128,7 @@ class ContextBuilder:
         *,
         user_id: uuid.UUID | None = None,
         lookback_bars: int = DEFAULT_LOOKBACK_BARS,
+        include_social_vendors: bool = False,
     ) -> AnalysisContext:
         candles = load_candles(self._session, asset.id, timeframe, limit=lookback_bars)
 
@@ -136,7 +144,56 @@ class ContextBuilder:
 
         context.fundamentals = self._load_fundamentals(asset.id)
         context.news = self._load_news(asset.id, asset.ticker)
+        if user_id is not None:
+            context.portfolio_context = self._load_portfolio_context(user_id, asset.id)
+        if include_social_vendors:
+            self._enrich_from_vendors(context, asset)
         return context
+
+    def _load_portfolio_context(
+        self, user_id: uuid.UUID, asset_id: uuid.UUID
+    ) -> dict[str, Any]:
+        from aidss.db.models import Portfolio, PortfolioHolding
+
+        portfolios = self._session.scalars(
+            select(Portfolio).where(Portfolio.user_id == user_id)
+        ).all()
+        if not portfolios:
+            return {}
+        portfolio_ids = [p.id for p in portfolios]
+        holdings = self._session.scalars(
+            select(PortfolioHolding).where(
+                PortfolioHolding.portfolio_id.in_(portfolio_ids),
+                PortfolioHolding.asset_id == asset_id,
+            )
+        ).all()
+        return {
+            "portfolio_count": len(portfolios),
+            "holding_this_asset": [
+                {
+                    "quantity": str(h.quantity),
+                    "average_cost": str(h.average_cost),
+                }
+                for h in holdings
+            ],
+        }
+
+    def _enrich_from_vendors(self, context: AnalysisContext, asset: Asset) -> None:
+        from aidss.collectors.vendors import (
+            fetch_fred_macro_snapshot,
+            fetch_reddit_posts,
+            fetch_sec_company_facts,
+            fetch_stocktwits_messages,
+        )
+
+        st_posts = fetch_stocktwits_messages(asset.ticker, limit=20)
+        rd_posts = fetch_reddit_posts(f"{asset.ticker} stock", limit=10)
+        context.social_posts = st_posts + rd_posts
+        context.macro_snapshot = fetch_fred_macro_snapshot()
+        if not context.fundamentals:
+            sec_facts = fetch_sec_company_facts(asset.ticker)
+            if sec_facts:
+                context.fundamentals = [{"source": "sec_edgar", **sec_facts}]
 
     def _load_fundamentals(self, asset_id: uuid.UUID) -> list[dict[str, Any]]:
         rows = self._session.scalars(

@@ -69,6 +69,7 @@ from aidss.db.models.system import (
     SchedulerJob,
     SystemConfiguration,
 )
+from aidss.db.models.trading_decision import TradingDecisionLog
 from aidss.db.models.user import (
     HoldingInputMethod,
     InvestmentJournalEntry,
@@ -132,6 +133,7 @@ __all__ = [
     "SystemConfiguration",
     "TechnicalIndicator",
     "TickerNewsSchedule",
+    "TradingDecisionLog",
     "User",
     "UserPreference",
     "UserRole",

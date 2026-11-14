@@ -16,6 +16,7 @@ from aidss.prompts.schemas import (
     FundamentalOutput,
     MarketContextOutput,
     NewsSentimentOutput,
+    SocialSentimentOutput,
     SynthesisOutput,
     TechnicalOutput,
 )
@@ -176,4 +177,26 @@ class SummaryAgent(Agent):
                 }
                 for run in self._runs
             ],
+        }
+
+
+class SocialSentimentAnalyzer(Agent):
+    """Evaluates retail and community sentiment from StockTwits and Reddit."""
+
+    name = "social_sentiment_analyzer"
+    template_name = "social_sentiment"
+    output_model = SocialSentimentOutput
+    complexity = TaskComplexity.LIGHT
+
+    def is_applicable(self, context: AnalysisContext) -> bool:
+        return context.has_social_posts
+
+    def skip_reason(self, context: AnalysisContext) -> str:
+        return "no social sentiment posts collected for this asset"
+
+    def prompt_context(self, context: AnalysisContext) -> dict[str, Any]:
+        return {
+            "ticker": context.asset.ticker,
+            "exchange": context.asset.exchange,
+            "social_posts": context.social_posts,
         }

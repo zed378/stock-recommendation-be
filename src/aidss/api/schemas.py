@@ -140,6 +140,13 @@ class AnalysisRequest(BaseModel):
     #: Off skips the Recommendation Agent, which is the most expensive call in
     #: the run. Useful when only the analyzer readings are wanted.
     include_recommendation: bool = True
+    #: "standard" runs AIDSS's fast 4-analyzer + summary pipeline;
+    #: "trading_agents" adds Bull/Bear debate, Research Manager, Trader,
+    #: 3-way Risk Committee debate, Portfolio Manager, and Decision Memory.
+    mode: str = Field(default="standard", pattern="^(standard|trading_agents)$")
+    max_debate_rounds: int = Field(default=2, ge=1, le=5)
+    max_risk_rounds: int = Field(default=1, ge=1, le=3)
+    include_social_vendors: bool = False
 
 
 class RecommendationResponse(BaseModel):
@@ -217,6 +224,33 @@ class AnalysisResponse(BaseModel):
     failed: list[AgentSkipResponse]
     usage: AnalysisUsageResponse
     disclaimer: str
+    mode: str = "standard"
+    trading_agents: dict[str, Any] | None = None
+
+
+class TradingDecisionResponse(BaseModel):
+    id: uuid.UUID
+    ticker: str
+    exchange: str
+    trade_date: datetime
+    final_rating: RecommendationLabel
+    confidence: float
+    entry_price: str | None = None
+    investment_plan: str
+    trader_proposal: str
+    portfolio_decision: str
+    settled_at: datetime | None = None
+    settled_price: str | None = None
+    realized_return_pct: float | None = None
+    outcome_label: str | None = None
+    reflection_lesson: str | None = None
+
+
+class SocialSentimentSnapshotResponse(BaseModel):
+    ticker: str
+    stocktwits_count: int
+    reddit_count: int
+    posts: list[dict[str, Any]]
 
 
 # --- Watchlist -------------------------------------------------------------

@@ -235,18 +235,95 @@ class RecommendationOutput(AgentOutput):
     horizon: InvestmentHorizon
 
 
+class SocialSentimentOutput(AgentOutput):
+    """Social Sentiment Analyst - StockTwits, Reddit, and retail chatter mood."""
+
+    sentiment_score: float = Field(ge=-1, le=1)
+    mood_label: str = Field(min_length=1, max_length=100)
+    key_themes: list[str] = Field(default_factory=list, max_length=10)
+    notable_posts: list[str] = Field(default_factory=list, max_length=10)
+
+
+class DebateTurnOutput(AgentOutput):
+    """One turn in the Bull vs Bear researcher debate."""
+
+    stance: Bias
+    thesis: str = Field(min_length=1, max_length=2000)
+    key_arguments: list[str] = Field(default_factory=list, max_length=10)
+    counter_points: list[str] = Field(default_factory=list, max_length=10)
+
+
+class ResearchManagerOutput(AgentOutput):
+    """Research Manager - synthesizes Bull/Bear debate into an investment plan."""
+
+    consensus_bias: Bias
+    investment_plan: str = Field(min_length=1, max_length=4000)
+    bull_case_summary: str = Field(min_length=1, max_length=2000)
+    bear_case_summary: str = Field(min_length=1, max_length=2000)
+    key_catalysts: list[str] = Field(default_factory=list, max_length=10)
+    key_risks: list[str] = Field(default_factory=list, max_length=10)
+
+
+class TraderProposalOutput(AgentOutput):
+    """Trader Agent - translates the investment plan into a structured stance proposal."""
+
+    proposed_stance: RecommendationLabel
+    thesis: str = Field(min_length=1, max_length=3000)
+    horizon: InvestmentHorizon
+    position_sizing_note: str = Field(default="", max_length=1500)
+    invalidation_conditions: list[str] = Field(default_factory=list, max_length=10)
+
+
+class RiskDebateTurnOutput(AgentOutput):
+    """One turn in the 3-way Risk Management debate (Aggressive/Conservative/Neutral)."""
+
+    risk_posture: str = Field(min_length=1, max_length=100)
+    evaluation: str = Field(min_length=1, max_length=2000)
+    risk_arguments: list[str] = Field(default_factory=list, max_length=10)
+    recommended_adjustments: list[str] = Field(default_factory=list, max_length=10)
+
+
+class PortfolioManagerOutput(AgentOutput):
+    """Portfolio Manager - final risk-adjusted stance after debate and past lessons."""
+
+    final_rating: RecommendationLabel
+    decision_summary: str = Field(min_length=1, max_length=4000)
+    risk_adjusted_rationale: str = Field(min_length=1, max_length=2000)
+    lessons_applied: list[str] = Field(default_factory=list, max_length=10)
+    key_conditions: list[str] = Field(default_factory=list, max_length=10)
+
+
+class DecisionReflectionOutput(AgentOutput):
+    """Decision Reflector - extracts lessons from a settled past decision."""
+
+    outcome_assessment: str = Field(min_length=1, max_length=2000)
+    what_worked: list[str] = Field(default_factory=list, max_length=10)
+    what_missed: list[str] = Field(default_factory=list, max_length=10)
+    actionable_lesson: str = Field(min_length=1, max_length=1500)
+
+
 #: Maps an agent name to the model its output must satisfy.
 OUTPUT_MODELS: dict[str, type[AgentOutput]] = {
     "market_analyzer": MarketContextOutput,
     "technical_analyzer": TechnicalOutput,
     "fundamental_analyzer": FundamentalOutput,
     "news_analyzer": NewsSentimentOutput,
+    "social_sentiment_analyzer": SocialSentimentOutput,
     "summary_agent": SynthesisOutput,
     "recommendation_agent": RecommendationOutput,
     "portfolio_analyzer": PortfolioOutput,
     "risk_analyzer": RiskOutput,
     "sentiment_scorer": BatchSentimentOutput,
     "reflection_agent": ReflectionOutput,
+    "bull_researcher": DebateTurnOutput,
+    "bear_researcher": DebateTurnOutput,
+    "research_manager": ResearchManagerOutput,
+    "trader_agent": TraderProposalOutput,
+    "aggressive_risk_analyst": RiskDebateTurnOutput,
+    "conservative_risk_analyst": RiskDebateTurnOutput,
+    "neutral_risk_analyst": RiskDebateTurnOutput,
+    "portfolio_manager": PortfolioManagerOutput,
+    "decision_reflector": DecisionReflectionOutput,
     "knowledge_agent": ConversationOutput,
     "research_agent": ConversationOutput,
     "learning_assistant": ConversationOutput,

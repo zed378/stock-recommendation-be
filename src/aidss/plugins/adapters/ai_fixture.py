@@ -44,6 +44,16 @@ _AGENT_MARKERS: tuple[tuple[str, str], ...] = (
     ("Learning Assistant", "learning_assistant"),
     ("Research Agent", "research_agent"),
     ("Reflection Agent", "reflection_agent"),
+    ("You are a social sentiment analyst", "social_sentiment_analyzer"),
+    ("You are the Bull Researcher", "bull_researcher"),
+    ("You are the Bear Researcher", "bear_researcher"),
+    ("You are the Research Manager", "research_manager"),
+    ("You are the Trader Analyst", "trader_agent"),
+    ("You are the Aggressive Risk Analyst", "aggressive_risk_analyst"),
+    ("You are the Conservative Risk Analyst", "conservative_risk_analyst"),
+    ("You are the Neutral Risk Analyst", "neutral_risk_analyst"),
+    ("You are the Portfolio Manager", "portfolio_manager"),
+    ("You are a post-decision Reflection Analyst", "decision_reflector"),
 )
 
 _CANNED: dict[str, dict] = {
@@ -267,6 +277,120 @@ _CANNED: dict[str, dict] = {
             "reading into a failed continuation."
         ),
         "horizon": "medium",
+    },
+    "social_sentiment_analyzer": {
+        "summary": "Community chatter is mixed with slightly constructive interest.",
+        "data_sufficiency": "partial",
+        "confidence": 52.0,
+        "sentiment_score": 0.15,
+        "mood_label": "cautiously constructive",
+        "key_themes": ["support level watch", "volume confirmation"],
+        "notable_posts": ["Watchers note consolidation near medium-term average."],
+    },
+    "bull_researcher": {
+        "summary": "Constructive case rests on trend alignment above medium-term support.",
+        "data_sufficiency": "partial",
+        "confidence": 60.0,
+        "stance": "bullish",
+        "thesis": "Constructive trend alignment supports upside continuation if resistance clears.",
+        "key_arguments": [
+            "Price holds above medium-term moving average support.",
+            "Momentum remains positive without overbought exhaustion.",
+        ],
+        "counter_points": ["Volume confirmation is still pending."],
+    },
+    "bear_researcher": {
+        "summary": "Cautious case highlights weak trend strength and absent fundamentals.",
+        "data_sufficiency": "partial",
+        "confidence": 58.0,
+        "stance": "bearish",
+        "thesis": "Low trend strength and missing fundamental coverage limit conviction.",
+        "key_arguments": [
+            "ADX indicates range-bound conditions prone to false breakouts.",
+            "Fundamental valuation metrics are unavailable.",
+        ],
+        "counter_points": ["Nearby support has held so far."],
+    },
+    "research_manager": {
+        "summary": (
+            "Balanced synthesis of constructive trend vs weak volume and missing fundamentals."
+        ),
+        "data_sufficiency": "partial",
+        "confidence": 56.0,
+        "consensus_bias": "neutral",
+        "investment_plan": (
+            "Maintain a watchlist stance until volume confirms a breakout above resistance "
+            "or fundamental coverage is ingested."
+        ),
+        "bull_case_summary": "Supportive trend structure above medium-term average.",
+        "bear_case_summary": "Weak trend strength and incomplete fundamental evidence.",
+        "key_catalysts": ["Breakout above nearest resistance on rising volume"],
+        "key_risks": ["False breakout in low-ADX regime", "No fundamental data"],
+    },
+    "trader_agent": {
+        "summary": "Proposes watchlist stance with clear invalidation at nearest support.",
+        "data_sufficiency": "partial",
+        "confidence": 55.0,
+        "proposed_stance": "watchlist",
+        "thesis": (
+            "Monitor for volume-backed breakout while respecting nearest support as invalidation."
+        ),
+        "horizon": "medium",
+        "position_sizing_note": "Keep exposure light until trend strength improves.",
+        "invalidation_conditions": ["Daily close below nearest support"],
+    },
+    "aggressive_risk_analyst": {
+        "summary": "Notes asymmetric upside if resistance breaks.",
+        "data_sufficiency": "partial",
+        "confidence": 58.0,
+        "risk_posture": "aggressive",
+        "evaluation": "Upside asymmetry favors readiness if volume expands at resistance.",
+        "risk_arguments": ["Waiting for full confirmation may miss initial move."],
+        "recommended_adjustments": ["Consider watchlist-to-constructive readiness on breakout."],
+    },
+    "conservative_risk_analyst": {
+        "summary": "Emphasizes capital preservation amid weak ADX and missing fundamentals.",
+        "data_sufficiency": "partial",
+        "confidence": 62.0,
+        "risk_posture": "conservative",
+        "evaluation": "Incomplete data and narrow range warrant strict caution.",
+        "risk_arguments": ["Range-bound chop increases whipsaw risk."],
+        "recommended_adjustments": ["Keep stance at watchlist or hold until fundamentals arrive."],
+    },
+    "neutral_risk_analyst": {
+        "summary": "Balances breakout opportunity against incomplete evidence.",
+        "data_sufficiency": "partial",
+        "confidence": 57.0,
+        "risk_posture": "neutral",
+        "evaluation": "Watchlist stance aligns with investor risk profile and partial data.",
+        "risk_arguments": ["Evidence is balanced between constructive trend and weak volume."],
+        "recommended_adjustments": ["Maintain watchlist stance with defined invalidation."],
+    },
+    "portfolio_manager": {
+        "summary": (
+            "Final risk-adjusted stance is watchlist given partial data and balanced debate."
+        ),
+        "data_sufficiency": "partial",
+        "confidence": 57.0,
+        "final_rating": "watchlist",
+        "decision_summary": (
+            "Adopt a watchlist stance. Technical structure is constructive, but weak trend "
+            "strength and missing fundamentals argue against high conviction."
+        ),
+        "risk_adjusted_rationale": (
+            "Risk committee consensus favors capital preservation while monitoring resistance."
+        ),
+        "lessons_applied": ["Avoid high conviction when fundamental data is absent."],
+        "key_conditions": ["Volume confirmation above resistance", "Support must hold"],
+    },
+    "decision_reflector": {
+        "summary": "Post-settlement reflection recorded.",
+        "data_sufficiency": "sufficient",
+        "confidence": 65.0,
+        "outcome_assessment": "Watchlist stance appropriately avoided whipsaw.",
+        "what_worked": ["Waiting for volume confirmation prevented premature entry."],
+        "what_missed": ["None material within the settlement window."],
+        "actionable_lesson": "Continue requiring volume confirmation in low-ADX regimes.",
     },
 }
 

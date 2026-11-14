@@ -18,6 +18,7 @@ import { EvidenceChart } from "@/components/EvidenceChart";
 import { IndicatorSnapshotView } from "@/components/Indicators";
 import { Strategy } from "@/components/Strategy";
 import { LanguageSwitch, TranslationNotice } from "@/components/TranslateToggle";
+import { TradingAgentsPanel } from "@/components/TradingAgentsPanel";
 import { useTranslation } from "@/components/useTranslation";
 import type { components } from "@/api/schema";
 
@@ -426,12 +427,21 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
    */
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<"standard" | "trading_agents">("standard");
 
   const start = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/assets/{ticker}/analysis/background", {
         params: { path: { ticker } },
-        body: { timeframe, exchange: "IDX", include_recommendation: true },
+        body: {
+          timeframe,
+          exchange: "IDX",
+          include_recommendation: true,
+          mode: analysisMode,
+          max_debate_rounds: 2,
+          max_risk_rounds: 1,
+          include_social_vendors: analysisMode === "trading_agents",
+        },
       });
       if (error) throw new Error(errorMessage(error, t("analysis.failed")));
       return data;
@@ -564,9 +574,21 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   });
 
   const runButton = (
-    <Button busy={running} onClick={() => start.mutate()}>
-      {running ? t("analysis.running") : t("analysis.run")}
-    </Button>
+    <div className="flex items-center gap-2">
+      <select
+        className={`${inlineControlClass} text-xs`}
+        value={analysisMode}
+        disabled={running}
+        onChange={(e) => setAnalysisMode(e.target.value as "standard" | "trading_agents")}
+        aria-label="Analysis mode"
+      >
+        <option value="standard">Standard</option>
+        <option value="trading_agents">TradingAgents Debate</option>
+      </select>
+      <Button busy={running} onClick={() => start.mutate()}>
+        {running ? t("analysis.running") : t("analysis.run")}
+      </Button>
+    </div>
   );
 
   if (existing.isLoading) return <Loading />;
@@ -666,6 +688,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
         <>
           <AgentRoster result={result} />
           <AgentReports agents={result.agents} showing={translation.showing} />
+          <TradingAgentsPanel ticker={ticker} trace={result.trading_agents} />
           {result.recommendation && (
             <RecommendationPanel
               rec={result.recommendation}

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss.agents.engine import AnalysisEngine
+from aidss.agents.trading_agents import settle_pending_decisions
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
     AgentSkipResponse,
@@ -23,9 +24,12 @@ from aidss.api.schemas import (
     AnalysisUsageResponse,
     JobAcceptedResponse,
     RecommendationResponse,
+    SocialSentimentSnapshotResponse,
+    TradingDecisionResponse,
 )
 from aidss.collectors.normalization import normalize_ticker
-from aidss.db.models import AnalysisResult, Asset, User
+from aidss.collectors.vendors import fetch_reddit_posts, fetch_stocktwits_messages
+from aidss.db.models import AnalysisResult, Asset, TradingDecisionLog, User
 from aidss.domain.types import Timeframe
 from aidss.jobs.queue import enqueue
 from aidss.llm.errors import GatewayError
@@ -94,6 +98,10 @@ def run_analysis(
         user_id=user.id,
         include_recommendation=payload.include_recommendation,
         translate_output=False,
+        mode=payload.mode,
+        max_debate_rounds=payload.max_debate_rounds,
+        max_risk_rounds=payload.max_risk_rounds,
+        include_social_vendors=payload.include_social_vendors,
     )
 
     if run.runs and run.analysis_result_id is not None:
@@ -206,6 +214,8 @@ def _to_response(
             **payload.get("usage", {"total_tokens": 0, "estimated_cost": "0"})
         ),
         disclaimer=ANALYSIS_DISCLAIMER,
+        mode=payload.get("mode", "standard"),
+        trading_agents=payload.get("trading_agents"),
     )
 
 
@@ -241,8 +251,12 @@ def queue_analysis(
             "timeframe": payload.timeframe.value,
             "user_id": str(user.id),
             "include_recommendation": payload.include_recommendation,
+            "mode": payload.mode,
+            "max_debate_rounds": payload.max_debate_rounds,
+            "max_risk_rounds": payload.max_risk_rounds,
+            "include_social_vendors": payload.include_social_vendors,
         },
-        dedup_key=f"analysis:{asset.id}:{payload.timeframe.value}:{minute}",
+        dedup_key=f"analysis:{asset.id}:{payload.timeframe.value}:{payload.mode}:{minute}",
     )
 
     return JobAcceptedResponse(
@@ -274,4 +288,75 @@ def list_analysis_history(
             .order_by(AnalysisResult.generated_at.desc())
             .limit(limit)
         ).all()
+    )
+
+
+def _decision_to_response(row: TradingDecisionLog) -> TradingDecisionResponse:
+    return TradingDecisionResponse(
+        id=row.id,
+        ticker=row.ticker,
+        exchange=row.exchange,
+        trade_date=row.trade_date,
+        final_rating=row.final_rating,
+        confidence=row.confidence,
+        entry_price=str(row.entry_price) if row.entry_price is not None else None,
+        investment_plan=row.investment_plan,
+        trader_proposal=row.trader_proposal,
+        portfolio_decision=row.portfolio_decision,
+        settled_at=row.settled_at,
+        settled_price=str(row.settled_price) if row.settled_price is not None else None,
+        realized_return_pct=row.realized_return_pct,
+        outcome_label=row.outcome_label,
+        reflection_lesson=row.reflection_lesson,
+    )
+
+
+@router.get("/{ticker}/decisions", response_model=list[TradingDecisionResponse])
+def list_trading_decisions(
+    ticker: str,
+    exchange: str = Query(default="IDX"),
+    limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> list[TradingDecisionResponse]:
+    """List TradingAgents decision logs and reflection lessons for an asset."""
+    asset = _resolve_asset(session, ticker, exchange)
+    rows = session.scalars(
+        select(TradingDecisionLog)
+        .where(TradingDecisionLog.asset_id == asset.id)
+        .order_by(TradingDecisionLog.trade_date.desc())
+        .limit(limit)
+    ).all()
+    return [_decision_to_response(r) for r in rows]
+
+
+@router.post("/{ticker}/decisions/settle", response_model=list[TradingDecisionResponse])
+def settle_trading_decisions(
+    ticker: str,
+    exchange: str = Query(default="IDX"),
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> list[TradingDecisionResponse]:
+    """Settle matured TradingAgents decisions against subsequent close prices."""
+    asset = _resolve_asset(session, ticker, exchange)
+    settled = settle_pending_decisions(session, asset)
+    return [_decision_to_response(r) for r in settled]
+
+
+@router.get("/{ticker}/social-sentiment", response_model=SocialSentimentSnapshotResponse)
+def get_social_sentiment_snapshot(
+    ticker: str,
+    exchange: str = Query(default="IDX"),
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> SocialSentimentSnapshotResponse:
+    """Fetch live StockTwits and Reddit posts for an asset."""
+    asset = _resolve_asset(session, ticker, exchange)
+    st_posts = fetch_stocktwits_messages(asset.ticker, limit=20)
+    rd_posts = fetch_reddit_posts(f"{asset.ticker} stock", limit=10)
+    return SocialSentimentSnapshotResponse(
+        ticker=asset.ticker,
+        stocktwits_count=len(st_posts),
+        reddit_count=len(rd_posts),
+        posts=st_posts + rd_posts,
     )

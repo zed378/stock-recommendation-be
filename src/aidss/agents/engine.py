@@ -32,11 +32,13 @@ from aidss.agents.analyzers import (
     FundamentalAnalyzer,
     MarketAnalyzer,
     NewsAnalyzer,
+    SocialSentimentAnalyzer,
     SummaryAgent,
     TechnicalAnalyzer,
 )
 from aidss.agents.base import Agent, AgentRun, AgentRunner, AgentSkip, ConversationRecorder
 from aidss.agents.context import AnalysisContext, ContextBuilder
+from aidss.agents.trading_agents import TradingAgentsPipeline, TradingAgentsTrace
 from aidss.agents.triage import Triage, triage_for
 from aidss.db.models import AIConversation, AnalysisResult, Asset, Recommendation
 from aidss.domain.types import Timeframe
@@ -65,7 +67,21 @@ class AgentFailure:
 #: Agents whose output is a synthesis of others rather than direct evidence.
 #: Excluded from `analyzer_runs` so they are never fed back into themselves or
 #: counted as an independent source during calibration.
-_DERIVED_AGENTS = frozenset({"summary_agent", "recommendation_agent"})
+_DERIVED_AGENTS = frozenset(
+    {
+        "summary_agent",
+        "recommendation_agent",
+        "bull_researcher",
+        "bear_researcher",
+        "research_manager",
+        "trader_agent",
+        "aggressive_risk_analyst",
+        "conservative_risk_analyst",
+        "neutral_risk_analyst",
+        "portfolio_manager",
+        "decision_reflector",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -99,6 +115,8 @@ class AnalysisRun:
     #: prose for a stated reason, and a reader comparing two analyses of
     #: different issuers deserves to see which one was triaged down.
     triage: Triage | None = None
+    mode: str = "standard"
+    trading_agents: TradingAgentsTrace | None = None
 
     @property
     def synthesis(self) -> AgentRun | None:
@@ -140,6 +158,10 @@ class AnalysisRun:
             "failed": [{"agent": f.agent, "reason": f.reason} for f in self.failed],
             "usage": {"total_tokens": self.total_tokens, "estimated_cost": self.total_cost},
             "triage": self.triage.as_payload() if self.triage else None,
+            "mode": self.mode,
+            "trading_agents": (
+                self.trading_agents.as_payload() if self.trading_agents else None
+            ),
             "recommendation": (
                 self.recommendation.as_payload() if self.recommendation else None
             ),
@@ -180,8 +202,18 @@ class AnalysisEngine:
         #: purpose. Batch and scheduled callers leave this false, which is
         #: where the saving actually lives.
         requested_full: bool = False,
+        mode: str = "standard",
+        max_debate_rounds: int = 2,
+        max_risk_rounds: int = 1,
+        include_social_vendors: bool = False,
     ) -> AnalysisRun:
-        context = self._context_builder.build(asset, timeframe, user_id=user_id)
+        fetch_social = include_social_vendors or mode == "trading_agents"
+        context = self._context_builder.build(
+            asset,
+            timeframe,
+            user_id=user_id,
+            include_social_vendors=fetch_social,
+        )
         run = AnalysisRun(
             asset_ticker=asset.ticker,
             timeframe=timeframe,
@@ -190,6 +222,7 @@ class AnalysisEngine:
             # be a second source for one fact, and the two could disagree the
             # moment a caller passes its own composer.
             language=self._composer.language.value,
+            mode=mode,
         )
 
         conversation: AIConversation | None = None
@@ -220,7 +253,23 @@ class AnalysisEngine:
             complexity_cap=triage.complexity,
         )
 
-        for agent in (MarketAnalyzer(), TechnicalAnalyzer(), FundamentalAnalyzer(), NewsAnalyzer()):
+        analyzers: tuple[Agent, ...] = (
+            (
+                MarketAnalyzer(),
+                TechnicalAnalyzer(),
+                FundamentalAnalyzer(),
+                NewsAnalyzer(),
+                SocialSentimentAnalyzer(),
+            )
+            if fetch_social
+            else (
+                MarketAnalyzer(),
+                TechnicalAnalyzer(),
+                FundamentalAnalyzer(),
+                NewsAnalyzer(),
+            )
+        )
+        for agent in analyzers:
             self._execute(agent, context, runner, run)
 
         # Synthesis is constructed after the analyzers so it can decide, from
@@ -231,6 +280,26 @@ class AnalysisEngine:
         # recommendation is a child of one and needs its id.
         if persist:
             run.analysis_result_id = self._persist(asset, timeframe, context, run)
+
+        if mode == "trading_agents" and run.analyzer_runs:
+            try:
+                trace = TradingAgentsPipeline(self._session).run(
+                    runner,
+                    context,
+                    run.analyzer_runs,
+                    user_id=user_id,
+                    analysis_result_id=run.analysis_result_id,
+                    max_debate_rounds=max_debate_rounds,
+                    max_risk_rounds=max_risk_rounds,
+                    persist=persist,
+                )
+                run.trading_agents = trace
+                run.runs.extend(trace.all_runs)
+            except (GatewayError, ValidationFailure) as exc:
+                run.failed.append(AgentFailure(agent="trading_agents_pipeline", reason=str(exc)))
+                logger.warning(
+                    "trading_agents_pipeline failed on %s: %s", context.asset.ticker, exc
+                )
 
         if include_recommendation and run.analyzer_runs:
             self._recommend(context, runner, run, persist=persist)
@@ -247,6 +316,8 @@ class AnalysisEngine:
                 # Re-stored now that the payload includes the recommendation
                 # and whatever rendering succeeded.
                 self._update_snapshot(run, context)
+        elif persist and run.analysis_result_id is not None and run.trading_agents is not None:
+            self._update_snapshot(run, context)
 
         if persist and user_id is not None:
             self._announce(user_id, asset, run)

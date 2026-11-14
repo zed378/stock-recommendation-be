@@ -431,6 +431,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{ticker}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trading Decisions
+         * @description List TradingAgents decision logs and reflection lessons for an asset.
+         */
+        get: operations["list_trading_decisions_assets__ticker__decisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{ticker}/decisions/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Trading Decisions
+         * @description Settle matured TradingAgents decisions against subsequent close prices.
+         */
+        post: operations["settle_trading_decisions_assets__ticker__decisions_settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{ticker}/social-sentiment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Social Sentiment Snapshot
+         * @description Fetch live StockTwits and Reddit posts for an asset.
+         */
+        get: operations["get_social_sentiment_snapshot_assets__ticker__social_sentiment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/watchlist": {
         parameters: {
             query?: never;
@@ -2787,6 +2847,26 @@ export interface components {
              * @default true
              */
             include_recommendation: boolean;
+            /**
+             * Mode
+             * @default standard
+             */
+            mode: string;
+            /**
+             * Max Debate Rounds
+             * @default 2
+             */
+            max_debate_rounds: number;
+            /**
+             * Max Risk Rounds
+             * @default 1
+             */
+            max_risk_rounds: number;
+            /**
+             * Include Social Vendors
+             * @default false
+             */
+            include_social_vendors: boolean;
         };
         /** AnalysisResponse */
         AnalysisResponse: {
@@ -2807,6 +2887,15 @@ export interface components {
             usage: components["schemas"]["AnalysisUsageResponse"];
             /** Disclaimer */
             disclaimer: string;
+            /**
+             * Mode
+             * @default standard
+             */
+            mode: string;
+            /** Trading Agents */
+            trading_agents?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** AnalysisUsageResponse */
         AnalysisUsageResponse: {
@@ -4087,6 +4176,19 @@ export interface components {
             /** Disclaimer */
             disclaimer: string;
         };
+        /** SocialSentimentSnapshotResponse */
+        SocialSentimentSnapshotResponse: {
+            /** Ticker */
+            ticker: string;
+            /** Stocktwits Count */
+            stocktwits_count: number;
+            /** Reddit Count */
+            reddit_count: number;
+            /** Posts */
+            posts: {
+                [key: string]: unknown;
+            }[];
+        };
         /** StockPickResponse */
         StockPickResponse: {
             /** Horizon */
@@ -4156,6 +4258,44 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** TradingDecisionResponse */
+        TradingDecisionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ticker */
+            ticker: string;
+            /** Exchange */
+            exchange: string;
+            /**
+             * Trade Date
+             * Format: date-time
+             */
+            trade_date: string;
+            final_rating: components["schemas"]["RecommendationLabel"];
+            /** Confidence */
+            confidence: number;
+            /** Entry Price */
+            entry_price?: string | null;
+            /** Investment Plan */
+            investment_plan: string;
+            /** Trader Proposal */
+            trader_proposal: string;
+            /** Portfolio Decision */
+            portfolio_decision: string;
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled Price */
+            settled_price?: string | null;
+            /** Realized Return Pct */
+            realized_return_pct?: number | null;
+            /** Outcome Label */
+            outcome_label?: string | null;
+            /** Reflection Lesson */
+            reflection_lesson?: string | null;
         };
         /**
          * TranslationRequest
@@ -4907,6 +5047,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trading_decisions_assets__ticker__decisions_get: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradingDecisionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_trading_decisions_assets__ticker__decisions_settle_post: {
+        parameters: {
+            query?: {
+                exchange?: string;
+            };
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradingDecisionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_social_sentiment_snapshot_assets__ticker__social_sentiment_get: {
+        parameters: {
+            query?: {
+                exchange?: string;
+            };
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialSentimentSnapshotResponse"];
                 };
             };
             /** @description Validation Error */
