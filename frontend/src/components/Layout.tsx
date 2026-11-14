@@ -40,7 +40,7 @@ export function Layout() {
       <aside className="hidden w-56 shrink-0 border-r border-line lg:block">
         <div className="sticky top-0 flex h-screen flex-col overflow-y-auto px-2">
           <NavLink
-            to="/watchlist"
+            to="/"
             className="flex items-center gap-2 px-3 pb-1 pt-4 text-sm font-semibold tracking-tight text-ink"
           >
             <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />
@@ -74,7 +74,7 @@ export function Layout() {
             </button>
 
             <NavLink
-              to="/watchlist"
+              to="/"
               className="flex items-center gap-2 text-sm font-semibold tracking-tight text-ink lg:hidden"
             >
               <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { useAuth } from "@/auth/context";
@@ -69,9 +70,13 @@ export function Login() {
       <aside className="relative hidden overflow-hidden border-r border-line lg:flex lg:flex-col lg:justify-between lg:p-12">
         <Backdrop />
         <div className="relative">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2.5 text-xl font-semibold tracking-tight text-ink hover:underline"
+          >
+            <img src="/logo-symbol.svg" alt="" width={20} height={20} className="h-5 w-5" />
             {t("app.name")}
-          </h1>
+          </Link>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
             {t("login.lede")}
           </p>

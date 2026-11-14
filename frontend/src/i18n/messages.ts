@@ -1319,6 +1319,122 @@ export const id = {
   "trader.params.invalid.order": "EMA cepat harus lebih kecil dari EMA lambat",
   "trader.params.mustFill": "Isi semua angka. Tidak ada nilai bawaan.",
 
+  // --- landing page (/) ----------------------------------------------------
+  "landing.skipToMain": "Lewati ke konten utama",
+  "landing.nav.pipeline": "Alur Deterministik",
+  "landing.nav.debate": "Debat Multi-Agen",
+  "landing.nav.boundaries": "Batasan Sistem",
+  "landing.nav.modules": "Modul",
+  "landing.nav.menu": "Menu",
+  "landing.nav.closeMenu": "Tutup menu",
+  "landing.cta.openWorkspace": "Buka ruang kerja",
+  "landing.cta.signIn": "Masuk ke ruang kerja",
+  "landing.cta.inspectPipeline": "Periksa alur arsitektur",
+  "landing.cta.browsePicks": "Lihat hasil pemindaian pasar",
+  "landing.hero.coordinate": "BURSA EFEK INDONESIA (IDX) · ANALISIS MULTI-AGEN · KRONOS OHLCV",
+  "landing.hero.title": "Indikator dihitung di Python. Agen AI berdebat di atas angka yang sudah dikunci.",
+  "landing.hero.lead":
+    "AIDSS adalah platform pendukung keputusan investasi untuk emiten Bursa Efek Indonesia. " +
+    "Sistem menghitung 13 indikator teknikal, level support dan resistance, serta proyeksi candlestick " +
+    "NeoQuasar/Kronos-base secara deterministik sebelum model bahasa membaca satu baris data pun.",
+  "landing.hero.boundaryNote":
+    "Tanpa perintah beli atau jual imperatif. Setiap rekomendasi wajib menyertakan bukti penyangkal " +
+    "(conflicting factors) atau ditolak oleh validator skema sebelum disimpan.",
+
+  "landing.specimen.header": "CONTOH KELUARAN TERSTRUKTUR (DATA SPESIMEN ARSITEKTUR)",
+  "landing.specimen.ticker": "BBCA.JK · PT Bank Central Asia Tbk",
+  "landing.specimen.tab.deterministic": "01 · Paket Deterministik",
+  "landing.specimen.tab.debate": "02 · Komite Debat & Risiko",
+  "landing.specimen.tab.stance": "03 · Sikap Terkalibrasi",
+  "landing.specimen.det.caption":
+    "Nilai di bawah ini dihitung oleh mesin indikator dan model sekuens Kronos sebelum prompt agen disusun. " +
+    "Model bahasa tidak diizinkan mengubah atau mengarang angka ini.",
+  "landing.specimen.det.indicators": "13 indikator teknikal (SMA, EMA, RSI-14, MACD, Bollinger, ATR-14, ADX, VWAP, OBV, Stochastic)",
+  "landing.specimen.det.levels": "Level struktur harga (Pivot, Support 1/2, Resistance 1/2, status breakout terukur)",
+  "landing.specimen.det.kronos": "Proyeksi OHLCV Kronos-base (sekuens candlestick masa depan + rentang ketidakpastian)",
+  "landing.specimen.debate.caption":
+    "Mode TradingAgents mempertemukan peneliti Bull dan Bear secara bergantian, lalu menguji tesisnya " +
+    "di hadapan tiga analis risiko sebelum Portfolio Manager menetapkan keputusan akhir.",
+  "landing.specimen.debate.bull": "Bull Researcher: Pertumbuhan CASA dan posisi modal menopang ekspansi kredit korporasi.",
+  "landing.specimen.debate.bear": "Bear Researcher: Valuasi PBV berada di atas rata-rata historis; potensi kompresi NIM jika suku bunga turun.",
+  "landing.specimen.debate.risk": "Komite Risiko (Agresif / Netral / Konservatif): Menolak ukuran posisi penuh pada resistensi terdekat; mewajibkan batas stop berbasis ATR.",
+  "landing.specimen.stance.caption":
+    "Mesin rekomendasi menggabungkan skor dimensi dengan bobot terukur dan memvalidasi bahasa keluaran.",
+  "landing.specimen.stance.label": "Sikap terkalibrasi",
+  "landing.specimen.stance.confidence": "Keyakinan terukur",
+  "landing.specimen.stance.stopMethod": "Metode batas risiko",
+  "landing.specimen.stance.conflictsTitle": "Bukti penyangkal wajib (conflicting_factors)",
+  "landing.specimen.stance.conflict1": "Harga mendekati zona resistance kuartalan dengan volume yang mulai melandai.",
+  "landing.specimen.stance.conflict2": "Sensitivitas margin bunga bersih terhadap perubahan suku bunga acuan BI.",
+
+  "landing.pipeline.kicker": "01 / URUTAN KOMPUTASI",
+  "landing.pipeline.title": "Model bahasa tidak pernah menghitung aritmatika harga.",
+  "landing.pipeline.body":
+    "Kesalahan paling umum pada asisten finansial berbasis AI adalah membiarkan LLM menghitung rata-rata bergerak, " +
+    "rasio valuasi, atau jarak stop-loss dari teks mentah. Di AIDSS, seluruh perhitungan kuantitatif selesai " +
+    "di lapisan Python dan disajikan sebagai fakta tetap yang hanya boleh diinterpretasikan oleh agen.",
+  "landing.pipeline.col.stage": "Tahap",
+  "landing.pipeline.col.module": "Modul Kode",
+  "landing.pipeline.col.responsibility": "Mekanisme & Input/Output",
+  "landing.pipeline.s1.name": "01 · Ingesti Pasar & Vendor",
+  "landing.pipeline.s1.desc": "Mengambil deret OHLCV harian/intraday, laporan keuangan emiten, berita terverifikasi, dan transaksi insider dengan pencatatan sumber (provenance) per baris.",
+  "landing.pipeline.s2.name": "02 · Mesin Indikator & Kronos-base",
+  "landing.pipeline.s2.desc": "Menghitung 13 indikator teknikal, support/resistance, dan proyeksi candlestick NeoQuasar/Kronos-base (atau fallback statistik berlabel eksplisit bila bobot lokal belum dipasang).",
+  "landing.pipeline.s3.name": "03 · Orkestrasi Multi-Agen & Debat",
+  "landing.pipeline.s3.desc": "Menjalankan 5 agen spesialis secara paralel atau graf debat TradingAgents (Bull vs Bear, Research Manager, Trader, dan 3 analis risiko).",
+  "landing.pipeline.s4.name": "04 · Kalibrasi & Penjaga Bahasa",
+  "landing.pipeline.s4.desc": "Menghitung skor tertimbang menjadi 6 tingkat sikap (strong_buy hingga sell), memvalidasi keberadaan conflicting_factors, dan menyaring kalimat imperatif.",
+
+  "landing.debate.kicker": "02 / ARSITEKTUR RISET & MEMORI",
+  "landing.debate.title": "Dua jalur analisis dan memori refleksi bebas bocoran masa depan.",
+  "landing.debate.body":
+    "Setiap emiten dapat dianalisis melalui jalur standar 5-agen untuk pemindaian cepat, atau jalur " +
+    "TradingAgents penuh ketika Anda membutuhkan perdebatan Bull/Bear multi-putaran dan komite risiko.",
+  "landing.debate.leftTitle": "Graf Debat TradingAgents",
+  "landing.debate.leftSub": "Diadaptasi secara native ke dalam skema database dan gateway LLM AIDSS",
+  "landing.debate.step1.role": "Analis Paralel (4 Agen)",
+  "landing.debate.step1.detail": "Market, Fundamental, News, dan Sentiment menyusun laporan awal dari paket data deterministik.",
+  "landing.debate.step2.role": "Debat Bull vs Bear + Research Manager",
+  "landing.debate.step2.detail": "BullResearcher dan BearResearcher saling menguji argumen selama N putaran sebelum ResearchManager menetapkan tesis investasi.",
+  "landing.debate.step3.role": "Trader Agent + Komite Risiko (3 Perspektif)",
+  "landing.debate.step3.detail": "Trader menyusun rencana alokasi, lalu diuji oleh debater Agresif, Netral, dan Konservatif sebelum diputuskan oleh PortfolioManager.",
+  "landing.debate.rightTitle": "Memori Situasi & Refleksi (Look-Ahead Safe)",
+  "landing.debate.rightBody":
+    "Setiap putaran debat dicatat ke tabel trading_decision_logs bersama tanda tangan situasi (SHA-256) " +
+    "dan tanggal evaluasi (as_of). Saat imbal hasil aktual telah melewati horizon_days, mesin refleksi " +
+    "mengevaluasi argumen agen mana yang terbukti keliru.",
+  "landing.debate.rightGuard":
+    "Pencegahan look-ahead bias: Memori hanya boleh diambil untuk rekaman yang settled_at <= as_of_timestamp, " +
+    "sehingga pengujian ulang historis tidak pernah membocorkan harga masa depan ke dalam prompt.",
+
+  "landing.boundaries.kicker": "03 / BATASAN SISTEM & RUANG KERJA",
+  "landing.boundaries.title": "Pemisahan tegas antara riset analisis dan eksekusi.",
+  "landing.boundaries.body":
+    "Layanan analisis AIDSS tidak memiliki kode penarikan dana dan tidak mengizinkan AI menyentuh order. " +
+    "Seluruh batasan di bawah ini ditegakkan oleh pengujian otomatis di repositori.",
+  "landing.boundaries.b1.title": "AI Tidak Pernah Menyentuh Order",
+  "landing.boundaries.b1.desc": "Lapisan riset IDX bersifat baca-saja. Untuk modul operator Indodax (aidss_trader), sinyal ditentukan oleh aturan deterministik dan setiap order wajib melewati Risk Engine.",
+  "landing.boundaries.b2.title": "Bukti Penyangkal Wajib",
+  "landing.boundaries.b2.desc": "Skema rekomendasi menolak penyimpanan jika daftar faktor yang berlawanan (conflicting_factors) kosong. Tidak ada rekomendasi satu sisi.",
+  "landing.boundaries.b3.title": "Auditabilitas Prompt & Biaya Penuh",
+  "landing.boundaries.b3.desc": "Setiap panggilan LLM mencatat nama penyedia, model, versi prompt, latensi, jumlah token, dan estimasi biaya di bawah batas anggaran harian.",
+  "landing.boundaries.b4.title": "Isolasi Data Pribadi",
+  "landing.boundaries.b4.desc": "Data portofolio dan jurnal pribadi hanya dapat dikirim ke penyedia AI yang ditandai sebagai inferensi milik sendiri (self-hosted) oleh administrator.",
+
+  "landing.modules.title": "Modul di dalam ruang kerja",
+  "landing.modules.watchlist.name": "Watchlist & Detail Emiten",
+  "landing.modules.watchlist.desc": "Grafik OHLCV, 13 indikator, proyeksi Kronos-base, analisis 5-agen, dan debat TradingAgents.",
+  "landing.modules.picks.name": "Pemindaian Pasar & Stock Picks",
+  "landing.modules.picks.desc": "Penyaringan harian seluruh bursa IDX berdasarkan kriteria teknikal dan struktur volume.",
+  "landing.modules.portfolio.name": "Portofolio & Jurnal Keputusan",
+  "landing.modules.portfolio.desc": "Pencatatan posisi, tesis saat masuk, serta evaluasi hasil keputusan dari waktu ke waktu.",
+  "landing.modules.monitoring.name": "Pemantauan & Peringatan",
+  "landing.modules.monitoring.desc": "Deteksi perubahan kondisi teknikal, berita emiten, dan jadwal keterbukaan informasi.",
+  "landing.footer.loginLink": "Masuk / Daftar",
+  "landing.footer.watchlistLink": "Watchlist",
+  "landing.footer.picksLink": "Pemindaian Pasar",
+  "landing.footer.monitoringLink": "Pemantauan",
+
   // --- trader paper assumptions --------------------------------------------
   "nav.traderPaper": "Asumsi paper",
   "trader.paper.title": "Asumsi simulasi paper",
@@ -2619,6 +2735,121 @@ export const en: Record<MessageKey, string> = {
   "trader.params.invalid.number": "Must be a number above 0",
   "trader.params.invalid.order": "The fast EMA must be shorter than the slow EMA",
   "trader.params.mustFill": "Fill in every number. There are no defaults.",
+
+  // --- landing page (/) ----------------------------------------------------
+  "landing.skipToMain": "Skip to main content",
+  "landing.nav.pipeline": "Deterministic Pipeline",
+  "landing.nav.debate": "Multi-Agent Debate",
+  "landing.nav.boundaries": "System Boundaries",
+  "landing.nav.modules": "Modules",
+  "landing.nav.menu": "Menu",
+  "landing.nav.closeMenu": "Close menu",
+  "landing.cta.openWorkspace": "Open workspace",
+  "landing.cta.signIn": "Sign in to workspace",
+  "landing.cta.inspectPipeline": "Inspect architecture pipeline",
+  "landing.cta.browsePicks": "View market scan",
+  "landing.hero.coordinate": "INDONESIA STOCK EXCHANGE (IDX) · MULTI-AGENT ANALYSIS · KRONOS OHLCV",
+  "landing.hero.title": "Indicators are computed in Python. AI agents debate over locked numbers.",
+  "landing.hero.lead":
+    "AIDSS is an investment decision-support platform for Indonesia Stock Exchange issuers. " +
+    "The system computes 13 technical indicators, support and resistance levels, and NeoQuasar/Kronos-base " +
+    "candlestick projections deterministically before any language model reads a single line of data.",
+  "landing.hero.boundaryNote":
+    "No imperative buy or sell commands. Every recommendation must include counter-evidence " +
+    "(conflicting factors) or it is rejected by the schema validator before storage.",
+
+  "landing.specimen.header": "STRUCTURED OUTPUT SPECIMEN (ARCHITECTURAL SAMPLE DATA)",
+  "landing.specimen.ticker": "BBCA.JK · PT Bank Central Asia Tbk",
+  "landing.specimen.tab.deterministic": "01 · Deterministic Packet",
+  "landing.specimen.tab.debate": "02 · Debate & Risk Committee",
+  "landing.specimen.tab.stance": "03 · Calibrated Stance",
+  "landing.specimen.det.caption":
+    "The values below are computed by the indicator engine and the Kronos sequence model before agent prompts are assembled. " +
+    "Language models cannot alter or invent these numbers.",
+  "landing.specimen.det.indicators": "13 technical indicators (SMA, EMA, RSI-14, MACD, Bollinger, ATR-14, ADX, VWAP, OBV, Stochastic)",
+  "landing.specimen.det.levels": "Price structure levels (Pivot, Support 1/2, Resistance 1/2, measured breakout status)",
+  "landing.specimen.det.kronos": "Kronos-base OHLCV projection (future candlestick sequence + uncertainty range)",
+  "landing.specimen.debate.caption":
+    "TradingAgents mode pits Bull and Bear researchers against each other in alternating rounds, then tests their thesis " +
+    "across three risk analysts before the Portfolio Manager issues a verdict.",
+  "landing.specimen.debate.bull": "Bull Researcher: CASA franchise and capital buffer support corporate loan expansion.",
+  "landing.specimen.debate.bear": "Bear Researcher: PBV multiple trades above historical mean; potential NIM compression if policy rates fall.",
+  "landing.specimen.debate.risk": "Risk Committee (Aggressive / Neutral / Conservative): Rejects full sizing near quarterly resistance; requires ATR-anchored stop distance.",
+  "landing.specimen.stance.caption":
+    "The recommendation engine combines dimension scores with explicit weights and validates output phrasing.",
+  "landing.specimen.stance.label": "Calibrated stance",
+  "landing.specimen.stance.confidence": "Measured confidence",
+  "landing.specimen.stance.stopMethod": "Risk boundary method",
+  "landing.specimen.stance.conflictsTitle": "Mandatory counter-evidence (conflicting_factors)",
+  "landing.specimen.stance.conflict1": "Price approaches quarterly resistance zone with flattening volume.",
+  "landing.specimen.stance.conflict2": "Net interest margin sensitivity to central bank policy rate shifts.",
+
+  "landing.pipeline.kicker": "01 / COMPUTATION ORDER",
+  "landing.pipeline.title": "Language models never do price arithmetic.",
+  "landing.pipeline.body":
+    "A common failure in AI financial tools is letting an LLM calculate moving averages, valuation multiples, " +
+    "or stop distances from raw text. In AIDSS, quantitative work finishes in Python first and enters the " +
+    "agent prompt as locked facts for interpretation.",
+  "landing.pipeline.col.stage": "Stage",
+  "landing.pipeline.col.module": "Code Module",
+  "landing.pipeline.col.responsibility": "Mechanism & Input/Output",
+  "landing.pipeline.s1.name": "01 · Market & Vendor Ingestion",
+  "landing.pipeline.s1.desc": "Fetches daily/intraday OHLCV series, issuer financial statements, verified news, and insider transactions with per-record source provenance.",
+  "landing.pipeline.s2.name": "02 · Indicator Engine & Kronos-base",
+  "landing.pipeline.s2.desc": "Computes 13 technical indicators, support/resistance, and NeoQuasar/Kronos-base candlestick projections (or an explicitly labeled statistical fallback when local weights are absent).",
+  "landing.pipeline.s3.name": "03 · Multi-Agent & Debate Orchestration",
+  "landing.pipeline.s3.desc": "Runs 5 specialist agents in parallel or the TradingAgents debate graph (Bull vs Bear, Research Manager, Trader, and 3 risk analysts).",
+  "landing.pipeline.s4.name": "04 · Calibration & Language Guardrail",
+  "landing.pipeline.s4.desc": "Aggregates weighted scores into 6 graded stances (strong_buy to sell), enforces non-empty conflicting_factors, and strips imperative phrasing.",
+
+  "landing.debate.kicker": "02 / RESEARCH & MEMORY ARCHITECTURE",
+  "landing.debate.title": "Dual analysis paths and look-ahead-safe reflection memory.",
+  "landing.debate.body":
+    "Any issuer can be evaluated through the fast 5-agent parallel pipeline for daily screening, or the full " +
+    "TradingAgents debate graph when you need multi-round Bull/Bear contention and risk committee review.",
+  "landing.debate.leftTitle": "TradingAgents Debate Graph",
+  "landing.debate.leftSub": "Implemented natively against the AIDSS database schema and LLM gateway",
+  "landing.debate.step1.role": "Parallel Analysts (4 Agents)",
+  "landing.debate.step1.detail": "Market, Fundamental, News, and Sentiment compile initial briefs from the deterministic data packet.",
+  "landing.debate.step2.role": "Bull vs Bear Debate + Research Manager",
+  "landing.debate.step2.detail": "BullResearcher and BearResearcher challenge each other over N rounds before ResearchManager synthesizes the thesis.",
+  "landing.debate.step3.role": "Trader Agent + Risk Committee (3 Perspectives)",
+  "landing.debate.step3.detail": "Trader proposes sizing and levels, then Aggressive, Neutral, and Conservative debaters challenge the plan before PortfolioManager rules.",
+  "landing.debate.rightTitle": "Situation Memory & Reflection (Look-Ahead Safe)",
+  "landing.debate.rightBody":
+    "Every debate run is recorded in trading_decision_logs with a SHA-256 situation signature and its evaluation " +
+    "date (as_of). Once realized returns pass horizon_days, the reflection engine audits which agent arguments failed.",
+  "landing.debate.rightGuard":
+    "Look-ahead bias guard: Memory retrieval strictly requires settled_at <= as_of_timestamp, ensuring historical " +
+    "backtests never leak future price outcomes into past prompts.",
+
+  "landing.boundaries.kicker": "03 / SYSTEM BOUNDARIES & WORKSPACE",
+  "landing.boundaries.title": "Strict separation between analytical research and execution.",
+  "landing.boundaries.body":
+    "The AIDSS analysis service contains no withdrawal code and never lets AI touch an order. " +
+    "Every constraint below is verified by automated architecture tests in the repository.",
+  "landing.boundaries.b1.title": "AI Never Touches an Order",
+  "landing.boundaries.b1.desc": "The IDX research layer is strictly read-only. For the Indodax operator module (aidss_trader), deterministic rules decide and every order must pass the Risk Engine.",
+  "landing.boundaries.b2.title": "Mandatory Counter-Evidence",
+  "landing.boundaries.b2.desc": "The recommendation schema rejects storage if conflicting_factors is empty. One-sided recommendations cannot be saved.",
+  "landing.boundaries.b3.title": "Full Prompt & Cost Auditability",
+  "landing.boundaries.b3.desc": "Every LLM call logs the provider, model, prompt version, latency, token counts, and estimated spend against the daily budget ceiling.",
+  "landing.boundaries.b4.title": "Personal Data Isolation",
+  "landing.boundaries.b4.desc": "Portfolio holdings and personal journal entries may only be routed to AI providers explicitly marked as self-hosted inference by an administrator.",
+
+  "landing.modules.title": "Modules inside the workspace",
+  "landing.modules.watchlist.name": "Watchlist & Issuer Detail",
+  "landing.modules.watchlist.desc": "OHLCV charts, 13 indicators, Kronos-base projections, 5-agent analysis, and TradingAgents debates.",
+  "landing.modules.picks.name": "Market Scan & Stock Picks",
+  "landing.modules.picks.desc": "Daily exchange-wide screening across IDX issuers based on technical criteria and volume structure.",
+  "landing.modules.portfolio.name": "Portfolio & Decision Journal",
+  "landing.modules.portfolio.desc": "Position tracking, entry thesis logging, and post-decision outcome review over time.",
+  "landing.modules.monitoring.name": "Monitoring & Alerts",
+  "landing.modules.monitoring.desc": "Detection of technical condition shifts, issuer news sweeps, and corporate disclosure schedules.",
+  "landing.footer.loginLink": "Sign in / Register",
+  "landing.footer.watchlistLink": "Watchlist",
+  "landing.footer.picksLink": "Market Scan",
+  "landing.footer.monitoringLink": "Monitoring",
 
   // --- trader paper assumptions --------------------------------------------
   "nav.traderPaper": "Paper assumptions",

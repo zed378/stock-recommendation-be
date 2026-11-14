@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n";
 import { Layout } from "@/components/Layout";
 import { Loading } from "@/components/primitives";
 import { ToastProvider } from "@/components/Toasts";
+import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
 import { Watchlist } from "@/pages/Watchlist";
 import { AssetDetail } from "@/pages/AssetDetail";
@@ -62,6 +63,7 @@ export default function App() {
           <ToastProvider>
           <BrowserRouter>
             <Routes>
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Public />} />
               <Route element={<Protected />}>
                 <Route path="/watchlist" element={<Watchlist />} />
