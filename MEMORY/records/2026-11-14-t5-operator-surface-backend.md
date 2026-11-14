@@ -54,7 +54,7 @@ line (the `trader` role, which the analysis API already had).
 
 ## Not Done, Not Verified
 
-- Front end gaps: no limits or allowlist editor, strategy parameter editor, credential screen, PnL or position
+- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), no strategy parameter editor, paper-config editor, credential screen, PnL or position
   panels, export button, or realtime feed; the approval card lacks signal reasons, limit headroom, and costs
   because the API does not provide them. The nginx and Vite proxy to `trader:8001` are a plan, not a deployment.
 - **Not wired:** nothing creates an `OrderIntentRow` or calls `ApprovalWorkflow.request` from a running
@@ -69,3 +69,14 @@ line (the `trader` role, which the analysis API already had).
 - PostgreSQL grants for migration 0004 and the Telegram channel against the real service are unverified.
 - T5-06 has not been started and must not be by an agent. Its checklist status is in
   `TASKS/PROGRESS.md`.
+
+## Limits and allowlist editor (added later)
+
+`/trader/limits` edits the thirteen risk limits and the pair allowlist with its liquidity filter. No field has a
+default or a suggestion; an empty field is unset and says trading is disabled. Every save goes through a review
+that names what gets looser, tighter, cleared, or switched on, and a change that lets more risk through asks for
+the password again (the screen mirrors the server's `loosens` rules; the server decides). The API now validates
+ranges (percentages above 0 and at most 100, positive amounts and counts, a `HH:MM-HH:MM` window, only the
+`LOCAL` day boundary) and the allowlist accepts any IDR pair, not only BTCIDR and ETHIDR (ADR-044 was a starting
+list). **Not verified:** never rendered in a browser; no front-end tests; the client-side mirror of the server's
+rules is hand-kept and could drift. All pairs share one strategy parameter set; per-pair parameters do not exist.

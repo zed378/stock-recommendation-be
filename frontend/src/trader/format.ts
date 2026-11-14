@@ -31,3 +31,15 @@ export function groupDigits(value: string, locale: string): string {
 export function ageSeconds(fromMs: number, nowMs: number): number {
   return Math.max(0, Math.round((nowMs - fromMs) / 1000));
 }
+
+/** Compare two non-negative decimal strings exactly, without a float. -1, 0, or 1. */
+export function compareDecimals(a: string, b: string): number {
+  const [ai, af = ""] = a.trim().split(".");
+  const [bi, bf = ""] = b.trim().split(".");
+  const scale = Math.max(af.length, bf.length);
+  const x = BigInt(ai + af.padEnd(scale, "0"));
+  const y = BigInt(bi + bf.padEnd(scale, "0"));
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+export const DECIMAL = /^\d+(\.\d+)?$/;

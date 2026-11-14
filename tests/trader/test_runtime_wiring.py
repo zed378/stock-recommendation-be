@@ -688,3 +688,22 @@ def test_the_service_loop_runs_the_runtime_only_while_it_holds_the_lease(key_fil
         runtime=other.runtime,
     )
     assert other.runtime.last_snapshot_at is None
+
+
+def test_any_idr_pair_can_be_added_but_not_other_quote_currencies() -> None:
+    w = World("PAPER", configured=False)
+    call = api_for(w)
+    grant = call(
+        "POST", "/stepup", {"email": "o@x", "password": "pw", "scope": "RAISE_LIMIT"}
+    ).json()["data"]["grant"]
+    body = {
+        "pairs": ["BTCIDR", "ETHIDR", "SOLIDR"],
+        "min_quote_volume_24h_idr": "1000000000",
+        "max_spread_pct": "1",
+    }
+    ok = call("PUT", "/allowlist", body, **{"X-Step-Up": grant})
+    assert ok.status_code == 200 and ok.json()["data"]["pairs"] == ["BTCIDR", "ETHIDR", "SOLIDR"]
+    for bad in (["BTCUSDT"], ["BTC_IDR"], ["IDR"], ["BTCEUR"]):
+        r = call("PUT", "/allowlist", {**body, "pairs": bad})
+        assert r.status_code in (400, 403)
+    assert call("PUT", "/allowlist", {**body, "pairs": ["BTCUSDT"]}).status_code == 400

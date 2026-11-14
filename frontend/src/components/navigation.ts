@@ -66,6 +66,7 @@ const TRADING: Group = {
     { to: "/trader", label: "nav.trader", end: true },
     { to: "/trader/approvals", label: "nav.traderApprovals" },
     { to: "/trader/strategies", label: "nav.traderStrategies" },
+    { to: "/trader/limits", label: "nav.traderLimits" },
   ],
 };
 

@@ -158,3 +158,62 @@ export function useDemote() {
     onSettled: () => void refresh(),
   });
 }
+
+export function useSaveLimits() {
+  const refresh = useAfterMutation();
+  return useMutation<
+    { version: number; unset: string[] },
+    TraderError,
+    { limits: Record<string, string | null>; stepUp?: string }
+  >({
+    mutationFn: async ({ limits, stepUp }) => {
+      const out = await unwrap<{ version: number; unset: string[] }>(
+        traderApi.PUT("/trader/v1/limits", {
+          params: {
+            header: {
+              "Idempotency-Key": idempotencyKey(),
+              ...(stepUp ? { "x-step-up": stepUp } : {}),
+            },
+          },
+          body: { limits },
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useSaveAllowlist() {
+  const refresh = useAfterMutation();
+  return useMutation<
+    { pairs: string[]; active: boolean },
+    TraderError,
+    {
+      pairs: string[];
+      minVolume: string | null;
+      maxSpread: string | null;
+      stepUp?: string;
+    }
+  >({
+    mutationFn: async ({ pairs, minVolume, maxSpread, stepUp }) => {
+      const out = await unwrap<{ pairs: string[]; active: boolean }>(
+        traderApi.PUT("/trader/v1/allowlist", {
+          params: {
+            header: {
+              "Idempotency-Key": idempotencyKey(),
+              ...(stepUp ? { "x-step-up": stepUp } : {}),
+            },
+          },
+          body: {
+            pairs,
+            min_quote_volume_24h_idr: minVolume,
+            max_spread_pct: maxSpread,
+          },
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}

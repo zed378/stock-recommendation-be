@@ -377,11 +377,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
     @app.get(f"{r}/limits")
     def limits(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         cur = load_risk_limits(s)
-        data = (
-            None
-            if cur is None
-            else {k: (None if v is None else str(v)) for k, v in asdict(cur).items()}
-        )
+        data = None if cur is None else {k: _plain_limit(v) for k, v in asdict(cur).items()}
         return envelope({"limits": data, "unset": unset_risk_fields(cur)})  # unset shown as null
 
     @app.get(f"{r}/reconciliation")
@@ -632,6 +628,10 @@ def create_app(ctx: ApiContext) -> FastAPI:
                 )
             except (InvalidOperation, ValueError):
                 raise ApiError(400, "VALIDATION", "bad_value", f"bad value for {k}") from None
+            if k == "trading_window" and parsed[k] == "":
+                parsed[k] = None  # an empty window means always open
+            if (problem := limit_problem(k, parsed[k])) is not None:
+                raise ApiError(400, "VALIDATION", "bad_value", f"{k}: {problem}")
         current = load_risk_limits(s) or RiskLimits()
         new = RiskLimits(**{**asdict(current), **parsed})
         if loosens(current, new):
@@ -681,6 +681,15 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(
                 400, "VALIDATION", "bad_value", "a liquidity number is not a decimal"
             ) from None
+        # Any IDR pair may be listed, not only the first two (ADR-044). The quote currency is
+        # fixed: equity is valued and orders are sized in IDR (ADR-002).
+        import re
+
+        bad = [p for p in new.pairs if not re.fullmatch(r"[A-Z0-9]{2,12}IDR", p)]
+        if bad:
+            raise ApiError(
+                400, "VALIDATION", "bad_pair", f"only IDR pairs such as BTCIDR are supported: {bad}"
+            )
         old = get_allowlist(s)
         if allowlist_loosens(old, new):
             step_up(s, who, "RAISE_LIMIT", x_step_up)
@@ -774,6 +783,56 @@ def create_app(ctx: ApiContext) -> FastAPI:
         return envelope({"acked": ev.acked_at is not None})
 
     return app
+
+
+_PCT = (
+    "risk_per_trade_pct",
+    "max_drawdown_pct",
+    "max_exposure_per_pair_pct",
+    "max_total_exposure_pct",
+    "price_deviation_pct",
+)
+_POSITIVE_IDR = ("max_daily_loss_idr", "max_order_idr")
+_POSITIVE_INT = (
+    "max_consecutive_losses",
+    "max_open_positions",
+    "freshness_limit_s",
+    "order_rate_limit",
+)
+
+
+def _plain_limit(v: Any) -> str | None:
+    """A limit as the string the screen shows: no 18-digit padding from the database."""
+    if v is None:
+        return None
+    return format(v.normalize(), "f") if hasattr(v, "as_tuple") else str(v)
+
+
+def limit_problem(name: str, value: Any) -> str | None:
+    """Why a limit value is not acceptable, or None. A `None` (unset) is always acceptable: it
+    switches trading off, which is the safe direction. Ranges are checked here, not left to
+    the form, because the API is the control (docs/04-UX-UI/00 principle 8)."""
+    import re
+
+    if value is None:
+        return None
+    if name in _PCT:
+        return None if 0 < value <= 100 else "must be above 0 and at most 100"
+    if name in _POSITIVE_IDR:
+        return None if value > 0 else "must be above 0"
+    if name in _POSITIVE_INT:
+        return None if value >= 1 else "must be a whole number of at least 1"
+    if name == "cooldown_s":
+        return None if value >= 0 else "cannot be negative"
+    if name == "daily_loss_day_boundary":
+        return None if value == "LOCAL" else "only LOCAL (midnight WIB, ADR-034) is supported"
+    if name == "trading_window":
+        m = re.fullmatch(r"(\d{2}):(\d{2})-(\d{2}):(\d{2})", value)
+        ok = m is not None and all(
+            int(m[i]) < limit for i, limit in ((1, 24), (2, 60), (3, 24), (4, 60))
+        )
+        return None if ok else "use HH:MM-HH:MM"
+    return None
 
 
 def allowlist_loosens(old: Allowlist, new: Allowlist) -> bool:

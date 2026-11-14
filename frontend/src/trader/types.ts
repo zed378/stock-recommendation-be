@@ -108,3 +108,11 @@ export interface KillResult {
   event_id: string;
   tier: "HALT" | "CANCEL" | "FLATTEN";
 }
+
+export interface Allowlist {
+  pairs: string[];
+  min_quote_volume_24h_idr: string | null;
+  max_spread_pct: string | null;
+  /** On the allowlist and the liquidity filter fully set. */
+  active: boolean;
+}

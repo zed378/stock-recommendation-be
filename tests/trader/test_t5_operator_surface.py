@@ -976,3 +976,34 @@ def test_timestamps_are_always_utc_with_an_offset_so_a_browser_cannot_misread_th
     api.seed_intent()
     row = api.call("GET", "/intents").json()["data"][0]
     assert row["created_at"].endswith("+00:00") and row["approval"]["expires_at"].endswith("+00:00")
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("risk_per_trade_pct", "0"),
+        ("risk_per_trade_pct", "101"),
+        ("max_order_idr", "-5"),
+        ("max_open_positions", "0"),
+        ("freshness_limit_s", "-1"),
+        ("cooldown_s", "-1"),
+        ("daily_loss_day_boundary", "UTC"),
+        ("trading_window", "25:00-26:00"),
+        ("trading_window", "9-17"),
+    ],
+)
+def test_a_limit_outside_its_range_is_refused_by_the_api(api, name, value) -> None:
+    r = api.call("PUT", "/limits", body={"limits": {name: value}})
+    assert r.status_code == 400 and name in r.json()["error"]["message"]
+
+
+def test_clearing_a_limit_is_accepted_and_reads_back_as_unset(api) -> None:
+    with api.factory() as s:
+        save_risk_limits(s, LIMITS, set_by="owner")
+        s.commit()
+    r = api.call("PUT", "/limits", body={"limits": {"max_order_idr": None, "trading_window": ""}})
+    assert r.status_code == 200 and "max_order_idr" in r.json()["data"]["unset"]
+    got = api.call("GET", "/limits").json()["data"]
+    assert got["limits"]["max_order_idr"] is None and got["limits"]["max_drawdown_pct"] == "20"
+    ok = api.call("PUT", "/limits", body={"limits": {"trading_window": "08:00-22:30"}})
+    assert ok.status_code == 200
