@@ -48,6 +48,7 @@ rather than only a mention in a chat or a record.
 | The exact interaction of mixed query and body parameters when signing | `06/04` | T2-07 |
 | `GET order` visibility lag after acceptance is stated but not quantified | `06/06` | T2-07, mock `visibility lag` |
 | No `/api/pairs` fee fields on some pairs | `06/05` | Optional; do not rely on them |
+| The analysis API connects to PostgreSQL as the bootstrap superuser, which bypasses every grant, so ADR-021's role isolation is not real until it uses a limited role | `deploy/trader/bootstrap.sql`, `docker-compose.yml` | **Open, needs the owner:** change the analysis stack's DB role (a deployment change outside the Trader) before relying on the isolation |
 | Tamper-evidence design for the audit log | `09/04` | T1-05 ADR |
 | Step-up authentication mechanism for high-impact actions | `09/01` | T5-01 ADR |
 

@@ -23,6 +23,10 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[str]] = {
     UserRole.VIEWER: frozenset(
         {Permission.READ_MARKET_DATA, Permission.READ_ANALYSIS}
     ),
+    # Same as a viewer on purpose (ADR-028); see UserRole.TRADER.
+    UserRole.TRADER: frozenset(
+        {Permission.READ_MARKET_DATA, Permission.READ_ANALYSIS}
+    ),
     UserRole.INVESTOR: frozenset(
         {
             Permission.READ_MARKET_DATA,

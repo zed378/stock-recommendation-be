@@ -1,0 +1,31 @@
+# Override for the existing Compose project; not merged into docker-compose.yml.
+#
+#   docker compose -f docker-compose.yml -f deploy/trader/docker-compose.trader.yml up -d trader
+#
+# `image:` only, never `build:`, so a rebuild on the host cannot replace it (a
+# rebuild from source on the deployment host can revert a deployed image).
+# Values come from the environment; nothing secret is written here.
+
+services:
+  trader:
+    image: ${AIDSS_TRADER_IMAGE}            # an immutable commit tag, never "latest"
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIDSS_TRADER_DATABASE_URL: ${AIDSS_TRADER_DATABASE_URL}   # role trader_rw
+      AIDSS_TRADER_MASTER_KEY_FILE: /run/secrets/trader_master_key
+      AIDSS_TRADER_INSTANCE_NAME: ${AIDSS_TRADER_INSTANCE_NAME:-trader-1}
+    secrets:
+      - trader_master_key
+    # No ports are published; the operator surface arrives in T5.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  trader_master_key:
+    file: ${AIDSS_TRADER_MASTER_KEY_PATH}   # on the host, outside git, excluded from backups (ADR-029)

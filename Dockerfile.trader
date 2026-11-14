@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Only the Trader's package, its dependency metadata, and its migrations. No
+# analysis code, no tests, no torch, and no secret or owner number: the image
+# may be public during development (ADR-030) and everything pushed while public
+# must be assumed copied.
+COPY pyproject.toml README.md ./
+COPY src/aidss_trader ./src/aidss_trader
+RUN pip install --upgrade pip \
+    && pip install .
+
+COPY alembic_trader.ini ./
+COPY alembic_trader ./alembic_trader
+
+RUN useradd --system --no-create-home trader
+USER trader
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-m", "aidss_trader", "healthcheck"]
+
+CMD ["python", "-m", "aidss_trader", "run"]

@@ -28,6 +28,10 @@ class UserRole(StrEnum):
     VIEWER = "viewer"
     INVESTOR = "investor"
     ADMIN = "admin"
+    #: Identifies the owner to the separate AIDSS Trader service (ADR-028). It
+    #: carries NO privilege here beyond a viewer's: every `trade:*` permission
+    #: is defined and enforced inside the Trader, never in this platform.
+    TRADER = "trader"
 
 
 class UserStatus(StrEnum):

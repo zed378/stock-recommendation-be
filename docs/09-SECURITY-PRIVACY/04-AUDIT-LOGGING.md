@@ -32,7 +32,9 @@ Schema: `../03-DATA-MODEL/05-RISK-AND-AUDIT-SCHEMA.md`.
 - **Before and after** for every change, redacted.
 - **Correlation.** One id links a signal, intent, order, fills, and events.
 - **Mode recorded.** The strategy's mode at the time, so a `PAPER` row cannot pass for a live one.
-- **Time from the database**, not the client.
+- **Time** comes from the Trader process, not the database (the hash needs it before the row exists, and an
+  UPDATE to add it later is exactly what the role cannot do). Appends assume a single writer, which the lease
+  guarantees (ADR-027).
 
 ## Tamper Evidence (proposed)
 

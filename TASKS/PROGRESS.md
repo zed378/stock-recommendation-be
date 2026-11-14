@@ -9,7 +9,7 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 | Phase | Name | Status | Notes |
 |---|---|---|---|
 | T0 | Specification | 🔎 in review (2026-11-14) | Documents written; **awaiting the owner's review**. See `MEMORY/records/2026-11-14-trader-docs-scaffolding.md`. 108 files in `docs/`, 45 ADRs, 8 open questions |
-| T1 | Foundation | ⏳ TODO | Waiting only for T0 to be accepted; OQ-14, OQ-17, OQ-24 are decided (ADR-028 to ADR-030) |
+| T1 | Foundation | 🚧 built, in review (2026-11-14) | Code and 40 tests exist. **Not verified:** PostgreSQL privileges (`-m postgres`, no PostgreSQL was available), the Docker image build, and the Compose override. See `MEMORY/records/2026-11-14-t1-foundation.md` |
 | T2 | Exchange connector | ⏳ TODO | T2-07 is owner-led (needs a Read-only key) |
 | T3 | Strategy, backtest, paper | ⏳ TODO | Needs OQ-5, OQ-11 (AI context deferred to post-MVP, ADR-032) |
 | T4 | Execution core | ⏳ TODO | Needs OQ-9 (mechanism can be built before values are set) |
@@ -58,7 +58,20 @@ Every Indodax detail in `docs/06-INTEGRATIONS/` is **documented, not yet observe
 | T0-05 Archive the planning document; README note | REVIEW | `git mv`; one README line |
 | T0-06 Owner fills the numbers worksheet | TODO | Owner-led; every value is the owner's |
 
-### T1 to T6
+### T1 — Foundation
+
+| Task | Status | Notes |
+|---|---|---|
+| T1-01 Scaffold, `Dockerfile.trader`, Compose override | REVIEW | Image **not built** (Docker unavailable); the package runs under pytest only |
+| T1-02 Guard tests | REVIEW | Import boundary, no-withdrawal, no-float, tree-not-empty. The "architecture test unmodified" check is manual (the file is untouched); no CI step yet |
+| T1-03 Schema, roles, privileges, Alembic | REVIEW | Migration builds the models on SQLite. **Privileges unverified** (`tests/trader/test_privileges_postgres.py` never run) |
+| T1-04 Credential store | REVIEW | Fernet, key from a file; not derived from the JWT secret (tested) |
+| T1-05 Audit log | REVIEW | Hash chain detects an altered or removed row (tested). Recording the head hash outside the database is **not built** |
+| T1-06 Configuration, unset means disabled | REVIEW | Risk-limit mechanism and tests. Loading operational settings from the database is **not built** |
+| T1-07 Lease | REVIEW | Tested on SQLite; the real PostgreSQL behaviour is untested |
+| T1-08 Token verification, `trader` role | WIP | Role added with viewer-level rights (tested). The Trader's `GET /auth/me` verification client is **not built** |
+
+### T2 to T6
 
 All `TODO`. See each phase file.
 
