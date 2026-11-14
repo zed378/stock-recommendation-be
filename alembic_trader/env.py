@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 from alembic import context
-from sqlalchemy import create_engine, pool
+from sqlalchemy import create_engine, pool, text
 
 import aidss_trader.db.models  # noqa: F401  (populates metadata)
 from aidss_trader.db.base import SCHEMA, Base
@@ -26,6 +26,13 @@ target_metadata = Base.metadata
 def run_migrations_online() -> None:
     engine = create_engine(url, poolclass=pool.NullPool)
     with engine.connect() as connection:
+        if connection.dialect.name == "postgresql":
+            # The version table lives in this schema, so it must exist before the first migration
+            # runs (found on the first real PostgreSQL deploy: migration 0001 creates the schema
+            # too late for Alembic's own bookkeeping table). Created by, and owned by, the
+            # migration role.
+            connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}"))
+            connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
