@@ -1067,6 +1067,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-step-up"?: string | null;
                 authorization?: string | null;
                 "Idempotency-Key"?: string | null;
             };

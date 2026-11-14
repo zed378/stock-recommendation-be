@@ -248,3 +248,32 @@ export function useSaveParameters() {
     onSettled: () => void refresh(),
   });
 }
+
+export interface PaperValues {
+  slippage_pct: string;
+  partial_fill_fraction: string;
+  maker_fee_pct: string;
+  taker_fee_pct: string;
+  tax_pct: string;
+  clearing_pct: string;
+  start_equity_idr: string;
+}
+
+export function useSavePaper() {
+  const refresh = useAfterMutation();
+  return useMutation<unknown, TraderError, { values: PaperValues; stepUp?: string }>({
+    mutationFn: ({ values, stepUp }) =>
+      unwrap(
+        traderApi.PUT("/trader/v1/paper-config", {
+          params: {
+            header: {
+              "Idempotency-Key": idempotencyKey(),
+              ...(stepUp ? { "x-step-up": stepUp } : {}),
+            },
+          },
+          body: values,
+        }),
+      ),
+    onSettled: () => void refresh(),
+  });
+}

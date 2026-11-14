@@ -379,7 +379,7 @@ def test_the_paper_config_and_promotion_evidence_over_the_api() -> None:
 
     w = World("PAPER", configured=False)
     call = api_for(w)
-    assert call("GET", "/paper-config").json()["data"] == {"configured": False}
+    assert call("GET", "/paper-config").json()["data"] == {"configured": False, "paper_fills": 0}
     assert call("GET", "/paper-config").json()["meta"]["origin"] == "PAPER"
     cfg = {k: str(v) for k, v in PAPER_VALUES.items()}
     assert call("PUT", "/paper-config", cfg).status_code == 200
@@ -395,3 +395,50 @@ def test_the_paper_config_and_promotion_evidence_over_the_api() -> None:
     gates = call("GET", "/strategies/ema_adx/promotion").json()["data"]["gates"]
     dd = next(g for g in gates if g["name"] == "paper_drawdown")
     assert D(dd["measured"]) == D("25")  # computed from the stored series, not supplied by anyone
+
+
+def test_paper_config_rejects_negative_or_absurd_costs_over_the_api() -> None:
+    from tests.trader.test_runtime_wiring import api_for
+
+    w = World("PAPER", configured=False)
+    call = api_for(w)
+    cfg = {k: str(v) for k, v in PAPER_VALUES.items()}
+    for bad in (
+        {"taker_fee_pct": "-0.1"},
+        {"slippage_pct": "101"},
+        {"tax_pct": "-1"},
+        {"partial_fill_fraction": "1.5"},
+        {"start_equity_idr": "-5"},
+    ):
+        assert call("PUT", "/paper-config", {**cfg, **bad}).status_code == 400, bad
+    assert call("PUT", "/paper-config", cfg).status_code == 200
+
+
+def test_flattering_the_cost_model_after_paper_fills_exist_needs_a_step_up() -> None:
+    from tests.trader.test_runtime_wiring import api_for
+
+    w = World("PAPER")
+    call = api_for(w)
+    cfg = {k: str(v) for k, v in PAPER_VALUES.items()}
+    # No paper history yet: any change is free, because nothing has been simulated under it.
+    assert call("PUT", "/paper-config", {**cfg, "taker_fee_pct": "0.05"}).status_code == 200
+    assert call("GET", "/paper-config").json()["data"]["paper_fills"] == 0
+    with w.factory() as s:
+        start(s)
+        advance(s, [candle(0, 100, 101, 99, 100), candle(1, 102, 103, 98, 101)])
+    assert call("GET", "/paper-config").json()["data"]["paper_fills"] >= 1
+    # Harsher assumptions never need a password; flattering ones do.
+    harsher = {**cfg, "taker_fee_pct": "0.5", "slippage_pct": "0.3"}
+    assert call("PUT", "/paper-config", harsher).status_code == 200
+    flat = {**harsher, "slippage_pct": "0.0"}
+    r = call("PUT", "/paper-config", flat)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "step_up_required"
+    grant = call(
+        "POST", "/stepup", {"email": "o@x", "password": "pw", "scope": "RAISE_LIMIT"}
+    ).json()["data"]["grant"]
+    ok = call("PUT", "/paper-config", flat, **{"X-Step-Up": grant})
+    assert ok.status_code == 200
+    # Start capital alone is not a flattery.
+    assert (
+        call("PUT", "/paper-config", {**flat, "start_equity_idr": "200000000"}).status_code == 200
+    )

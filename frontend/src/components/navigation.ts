@@ -67,6 +67,7 @@ const TRADING: Group = {
     { to: "/trader/approvals", label: "nav.traderApprovals" },
     { to: "/trader/strategies", label: "nav.traderStrategies" },
     { to: "/trader/parameters", label: "nav.traderStrategy" },
+    { to: "/trader/paper", label: "nav.traderPaper" },
     { to: "/trader/limits", label: "nav.traderLimits" },
   ],
 };

@@ -125,3 +125,16 @@ export interface StrategyParams {
   mode: Mode | null;
   max_history_bars: number;
 }
+
+export interface PaperConfig {
+  configured: boolean;
+  slippage_pct?: string;
+  partial_fill_fraction?: string;
+  maker_fee_pct?: string;
+  taker_fee_pct?: string;
+  tax_pct?: string;
+  clearing_pct?: string;
+  start_equity_idr?: string;
+  /** Simulated fills already recorded; they keep the numbers they were made with. */
+  paper_fills: number;
+}

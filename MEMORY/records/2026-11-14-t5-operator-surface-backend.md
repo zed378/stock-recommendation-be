@@ -54,7 +54,7 @@ line (the `trader` role, which the analysis API already had).
 
 ## Not Done, Not Verified
 
-- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), ~~no strategy parameter editor~~ (added, see below), no paper-config editor, credential screen, PnL or position
+- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), ~~no strategy parameter editor~~ (added, see below), ~~no paper-config editor~~ (added, see below), credential screen, PnL or position
   panels, export button, or realtime feed; the approval card lacks signal reasons, limit headroom, and costs
   because the API does not provide them. The nginx and Vite proxy to `trader:8001` are a plan, not a deployment.
 - **Not wired:** nothing creates an `OrderIntentRow` or calls `ApprovalWorkflow.request` from a running
@@ -90,3 +90,15 @@ API gained `GET /strategies/{id}/parameters`, and now refuses an ADX threshold o
 need more candle history than the 300 the runtime keeps (such a strategy would sit silently inert). **Not
 verified:** never rendered in a browser, no front-end tests, and the client-side checks are a hand-kept mirror of
 the server's. Parameters are shared by every pair on the allowlist.
+
+## Paper assumptions editor (added later)
+
+`/trader/paper` edits the seven paper numbers (start capital, slippage, fill fraction, maker and taker fees, tax,
+clearing). No defaults and no suggestions; until every number is set the paper simulation does not run. These
+numbers decide how good paper results look, so the server now also: refuses costs or slippage outside 0 to 100;
+reports how many paper fills exist (`paper_fills`); and, once paper fills exist, requires a step-up for a change
+that flatters the results (lower costs or slippage, a larger filled share). A harsher change, and a change to
+starting capital alone, does not. Fills already recorded are not recalculated, and the screen says so. **Not
+verified:** never rendered in a browser; no front-end tests; the screen's flattery rule is a hand-kept mirror of
+`paper_flatters`. A flattering change before any paper fill exists is free, which is deliberate: nothing has been
+simulated under the old numbers yet.

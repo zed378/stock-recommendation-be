@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss_trader.api import permissions as perm
@@ -33,6 +33,7 @@ from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, 
 from aidss_trader.db.models import (
     ApprovalRow,
     AuditLog,
+    Fill,
     LedgerEntry,
     OrderIntentRow,
     OrderRow,
@@ -45,15 +46,18 @@ from aidss_trader.export import export_audit, export_ledger
 from aidss_trader.intents import Intent, intent_from_row
 from aidss_trader.killswitch import KillSwitch, KillSwitchRefused
 from aidss_trader.notify import Notifier
+from aidss_trader.paper import CostModel, PaperConfig
 from aidss_trader.promotion import Promotion, PromotionRefused, SuppliedEvidence, Thresholds
 from aidss_trader.runtime.accounting import paper_drawdown_pct
 from aidss_trader.runtime.settings_store import (
     MAX_HISTORY_BARS,
     Allowlist,
     LiquidityFilter,
+    PaperSettings,
     get_allowlist,
     get_paper_settings,
     get_strategy_params,
+    paper_flatters,
     set_allowlist,
     set_paper_settings,
     set_strategy_params,
@@ -764,8 +768,11 @@ def create_app(ctx: ApiContext) -> FastAPI:
     @app.get(f"{r}/paper-config")
     def get_paper(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         ps = get_paper_settings(s)
+        history = (
+            s.scalar(select(func.count()).select_from(Fill).where(Fill.origin == "PAPER")) or 0
+        )
         if ps is None:
-            return envelope({"configured": False}, origin="PAPER")
+            return envelope({"configured": False, "paper_fills": history}, origin="PAPER")
         c = ps.config
         plain = lambda v: format(v.normalize(), "f")  # noqa: E731
         return envelope(
@@ -778,6 +785,8 @@ def create_app(ctx: ApiContext) -> FastAPI:
                 "tax_pct": plain(c.costs.tax_pct),
                 "clearing_pct": plain(c.costs.clearing_pct),
                 "start_equity_idr": plain(ps.start_equity_idr),
+                # Simulated fills already recorded keep the numbers they were made with.
+                "paper_fills": history,
             },
             origin="PAPER",
         )
@@ -788,11 +797,34 @@ def create_app(ctx: ApiContext) -> FastAPI:
         who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
         _k: str = Depends(idempotent),
         s: Session = Depends(db),
+        x_step_up: str | None = Header(default=None),
     ):
         from decimal import Decimal, InvalidOperation
 
         try:
             values = {k: Decimal(v) for k, v in body.model_dump().items()}
+            old = get_paper_settings(s)
+            history = (
+                s.scalar(select(func.count()).select_from(Fill).where(Fill.origin == "PAPER")) or 0
+            )
+            if old is not None and history > 0:
+                # Making simulated results look better after they exist is the way paper evidence
+                # gets quietly flattered, so it asks for the password like loosening a limit.
+                trial = PaperSettings(
+                    PaperConfig(
+                        values["slippage_pct"],
+                        values["partial_fill_fraction"],
+                        CostModel(
+                            values["maker_fee_pct"],
+                            values["taker_fee_pct"],
+                            values["tax_pct"],
+                            values["clearing_pct"],
+                        ),
+                    ),
+                    values["start_equity_idr"],
+                )
+                if paper_flatters(old, trial):
+                    step_up(s, who, "RAISE_LIMIT", x_step_up)
             set_paper_settings(s, values, by=who.user_id)
         except (InvalidOperation, ValueError) as exc:
             raise ApiError(400, "VALIDATION", "bad_paper_config", str(exc)) from None

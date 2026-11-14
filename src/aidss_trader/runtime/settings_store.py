@@ -229,6 +229,9 @@ def set_paper_settings(
     )
     if values["start_equity_idr"] <= 0:
         raise ValueError("start_equity_idr must be positive")
+    for name in ("maker_fee_pct", "taker_fee_pct", "tax_pct", "clearing_pct", "slippage_pct"):
+        if not 0 <= values[name] <= 100:
+            raise ValueError(f"{name} must be between 0 and 100")
     _put(
         session,
         PAPER_KEY,
@@ -244,3 +247,17 @@ def get_strategy_params(session: Session, strategy_id: str) -> dict[str, str] | 
     if row is None:
         return None
     return {k: ("" if v is None else str(v)) for k, v in row.value.items()}
+
+
+def paper_flatters(old: PaperSettings, new: PaperSettings) -> bool:
+    """True if `new` makes simulated results look better than `old`: lower costs or slippage,
+    or more of each order filled. Starting capital is not a flattery, it only scales the book."""
+    a, b = old.config, new.config
+    return (
+        b.slippage_pct < a.slippage_pct
+        or b.partial_fill_fraction > a.partial_fill_fraction
+        or b.costs.maker_fee_pct < a.costs.maker_fee_pct
+        or b.costs.taker_fee_pct < a.costs.taker_fee_pct
+        or b.costs.tax_pct < a.costs.tax_pct
+        or b.costs.clearing_pct < a.costs.clearing_pct
+    )
