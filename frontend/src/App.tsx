@@ -24,6 +24,7 @@ import { Trader } from "@/pages/Trader";
 import { TraderApprovals } from "@/pages/TraderApprovals";
 import { TraderStrategies } from "@/pages/TraderStrategies";
 import { TraderLimits } from "@/pages/TraderLimits";
+import { TraderParameters } from "@/pages/TraderParameters";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="/trader/approvals" element={<TraderApprovals />} />
                 <Route path="/trader/strategies" element={<TraderStrategies />} />
                 <Route path="/trader/limits" element={<TraderLimits />} />
+                <Route path="/trader/parameters" element={<TraderParameters />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/agenda" element={<Agenda />} />
                 <Route path="/screens" element={<ScreenBuilder />} />

@@ -21,6 +21,9 @@ from aidss_trader.promotion import Promotion
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 
 PAPER_KEY = "paper_config"
+# Candles the runtime keeps per pair. A strategy that needs more history than this could never
+# evaluate, so the parameter API refuses it instead of letting it sit silently inert.
+MAX_HISTORY_BARS = 300
 ALLOWLIST_KEY = "allowlist"
 STRATEGY_PREFIX = "strategy_params:"
 
@@ -233,3 +236,11 @@ def set_paper_settings(
         by,
         now or datetime.now(UTC),
     )
+
+
+def get_strategy_params(session: Session, strategy_id: str) -> dict[str, str] | None:
+    """The stored parameters as plain strings for display, or None when never set."""
+    row = session.get(TraderSetting, STRATEGY_PREFIX + strategy_id)
+    if row is None:
+        return None
+    return {k: ("" if v is None else str(v)) for k, v in row.value.items()}

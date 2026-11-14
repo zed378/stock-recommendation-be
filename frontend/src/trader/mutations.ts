@@ -217,3 +217,34 @@ export function useSaveAllowlist() {
     onSettled: () => void refresh(),
   });
 }
+
+export function useSaveParameters() {
+  const refresh = useAfterMutation();
+  return useMutation<
+    { version: string; mode: string },
+    TraderError,
+    {
+      ema_fast: number;
+      ema_slow: number;
+      adx_period: number;
+      adx_threshold: string;
+      atr_period: number;
+      atr_stop_multiple: string;
+      cooldown_s: number;
+    }
+  >({
+    mutationFn: async (body) => {
+      const out = await unwrap<{ version: string; mode: string }>(
+        traderApi.PUT("/trader/v1/strategies/{strategy_id}/parameters", {
+          params: {
+            path: { strategy_id: "ema_adx" },
+            header: { "Idempotency-Key": idempotencyKey() },
+          },
+          body,
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}

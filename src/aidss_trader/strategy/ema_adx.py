@@ -37,6 +37,8 @@ class EmaAdxParams:
             raise ValueError("ema_fast must be positive and shorter than ema_slow")
         if min(self.adx_period, self.atr_period) < 1 or self.atr_stop_multiple <= 0:
             raise ValueError("periods and the ATR multiple must be positive")
+        if not 0 < self.adx_threshold <= 100:
+            raise ValueError("adx_threshold must be above 0 and at most 100")
         if self.cooldown_s < 0:
             raise ValueError("cooldown_s cannot be negative")
 

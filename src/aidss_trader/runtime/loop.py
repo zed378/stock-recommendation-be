@@ -71,6 +71,7 @@ from aidss_trader.risk.engine import CheckResult, Decision, RiskContext, breaker
 from aidss_trader.runtime import accounting
 from aidss_trader.runtime.paper_lifecycle import PaperBook
 from aidss_trader.runtime.settings_store import (
+    MAX_HISTORY_BARS,
     Allowlist,
     get_allowlist,
     get_paper_settings,
@@ -143,7 +144,7 @@ class Runtime:
         notifier: Callable[[Session], Notifier] | None = None,
         now: Callable[[], datetime] = _now,
         timeframe: str = "4H",
-        candle_bars: int = 300,
+        candle_bars: int = MAX_HISTORY_BARS,
         price_poll_s: float = 10,
         reconcile_s: float = 60,
         candle_poll_s: float = 300,

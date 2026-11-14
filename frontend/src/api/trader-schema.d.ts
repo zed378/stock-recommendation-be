@@ -354,7 +354,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Params */
+        get: operations["get_params_trader_v1_strategies__strategy_id__parameters_get"];
         /** Put Params */
         put: operations["put_params_trader_v1_strategies__strategy_id__parameters_put"];
         post?: never;
@@ -1280,6 +1281,39 @@ export interface operations {
                 "application/json": components["schemas"]["DemoteBody"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_params_trader_v1_strategies__strategy_id__parameters_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

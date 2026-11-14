@@ -116,3 +116,12 @@ export interface Allowlist {
   /** On the allowlist and the liquidity filter fully set. */
   active: boolean;
 }
+
+export interface StrategyParams {
+  configured: boolean;
+  /** Plain strings as stored, or null when never set. */
+  params: Record<string, string> | null;
+  version: string | null;
+  mode: Mode | null;
+  max_history_bars: number;
+}

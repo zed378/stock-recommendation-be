@@ -48,15 +48,17 @@ from aidss_trader.notify import Notifier
 from aidss_trader.promotion import Promotion, PromotionRefused, SuppliedEvidence, Thresholds
 from aidss_trader.runtime.accounting import paper_drawdown_pct
 from aidss_trader.runtime.settings_store import (
+    MAX_HISTORY_BARS,
     Allowlist,
     LiquidityFilter,
     get_allowlist,
     get_paper_settings,
+    get_strategy_params,
     set_allowlist,
     set_paper_settings,
     set_strategy_params,
 )
-from aidss_trader.strategy.ema_adx import EmaAdxParams
+from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 
 PREFIX = "/trader/v1"
 CONFIRMATION = {
@@ -702,6 +704,25 @@ def create_app(ctx: ApiContext) -> FastAPI:
             {"pairs": list(new.pairs), "active": new.liquidity.configured and bool(new.pairs)}
         )
 
+    @app.get(f"{r}/strategies/{{strategy_id}}/parameters")
+    def get_params(
+        strategy_id: str, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
+    ):
+        if strategy_id != "ema_adx":
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        row = s.get(StrategyRow, strategy_id)
+        params = get_strategy_params(s, strategy_id)
+        return envelope(
+            {
+                "configured": params is not None,
+                "params": params,
+                "version": None if row is None else row.version,
+                "mode": None if row is None else row.mode,
+                "max_history_bars": MAX_HISTORY_BARS,
+            },
+            origin="PAPER",
+        )
+
     @app.put(f"{r}/strategies/{{strategy_id}}/parameters")
     def put_params(
         strategy_id: str,
@@ -726,6 +747,15 @@ def create_app(ctx: ApiContext) -> FastAPI:
             )
         except (InvalidOperation, ValueError) as exc:
             raise ApiError(400, "VALIDATION", "bad_parameters", str(exc)) from None
+        needed = EmaAdxStrategy(params).min_history()
+        if needed > MAX_HISTORY_BARS:
+            raise ApiError(
+                400,
+                "VALIDATION",
+                "bad_parameters",
+                f"these periods need {needed} candles of history but only "
+                f"{MAX_HISTORY_BARS} are kept, so the strategy could never evaluate",
+            )
         version = set_strategy_params(s, strategy_id, params, by=who.user_id)
         s.commit()
         # A new version always starts again in PAPER (ADR-020); the response says so.

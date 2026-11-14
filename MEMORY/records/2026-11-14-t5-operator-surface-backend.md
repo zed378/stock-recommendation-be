@@ -54,7 +54,7 @@ line (the `trader` role, which the analysis API already had).
 
 ## Not Done, Not Verified
 
-- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), no strategy parameter editor, paper-config editor, credential screen, PnL or position
+- Front end gaps: ~~no limits or allowlist editor~~ (added, see below), ~~no strategy parameter editor~~ (added, see below), no paper-config editor, credential screen, PnL or position
   panels, export button, or realtime feed; the approval card lacks signal reasons, limit headroom, and costs
   because the API does not provide them. The nginx and Vite proxy to `trader:8001` are a plan, not a deployment.
 - **Not wired:** nothing creates an `OrderIntentRow` or calls `ApprovalWorkflow.request` from a running
@@ -80,3 +80,13 @@ ranges (percentages above 0 and at most 100, positive amounts and counts, a `HH:
 `LOCAL` day boundary) and the allowlist accepts any IDR pair, not only BTCIDR and ETHIDR (ADR-044 was a starting
 list). **Not verified:** never rendered in a browser; no front-end tests; the client-side mirror of the server's
 rules is hand-kept and could drift. All pairs share one strategy parameter set; per-pair parameters do not exist.
+
+## Strategy parameter editor (added later)
+
+`/trader/parameters` edits the seven EMA-ADX numbers. No field has a default or a suggestion and every field must
+be filled. Saving different numbers creates a new strategy version and returns the strategy to PAPER; the screen
+says so before saving, with more force when the strategy is live, and unchanged numbers are not a new version. The
+API gained `GET /strategies/{id}/parameters`, and now refuses an ADX threshold outside 0 to 100 and periods that
+need more candle history than the 300 the runtime keeps (such a strategy would sit silently inert). **Not
+verified:** never rendered in a browser, no front-end tests, and the client-side checks are a hand-kept mirror of
+the server's. Parameters are shared by every pair on the allowlist.

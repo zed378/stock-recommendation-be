@@ -707,3 +707,67 @@ def test_any_idr_pair_can_be_added_but_not_other_quote_currencies() -> None:
         r = call("PUT", "/allowlist", {**body, "pairs": bad})
         assert r.status_code in (400, 403)
     assert call("PUT", "/allowlist", {**body, "pairs": ["BTCUSDT"]}).status_code == 400
+
+
+def test_strategy_parameters_can_be_read_back_and_bad_ones_are_refused() -> None:
+    w = World("PAPER", configured=False)
+    call = api_for(w)
+    first = call("GET", "/strategies/ema_adx/parameters").json()["data"]
+    assert (
+        first["configured"] is False
+        and first["params"] is None
+        and first["max_history_bars"] == 300
+    )
+    params = {
+        "ema_fast": 3,
+        "ema_slow": 6,
+        "adx_period": 3,
+        "adx_threshold": "30",
+        "atr_period": 3,
+        "atr_stop_multiple": "2",
+        "cooldown_s": 0,
+    }
+    out = call("PUT", "/strategies/ema_adx/parameters", params).json()["data"]
+    got = call("GET", "/strategies/ema_adx/parameters").json()["data"]
+    assert got["configured"] is True and got["params"]["ema_slow"] == "6"
+    assert got["version"] == out["version"] and got["mode"] == "PAPER"
+    for bad in (
+        {"adx_threshold": "0"},
+        {"adx_threshold": "101"},
+        {"ema_slow": 3},
+        {"atr_stop_multiple": "0"},
+        {"cooldown_s": -1},
+        {"adx_period": 0},
+        {"ema_slow": 400},
+    ):
+        r = call("PUT", "/strategies/ema_adx/parameters", {**params, **bad})
+        assert r.status_code == 400, bad
+    assert (
+        "history"
+        in call("PUT", "/strategies/ema_adx/parameters", {**params, "ema_slow": 400}).json()[
+            "error"
+        ]["message"]
+    )
+    assert call("GET", "/strategies/nope/parameters").status_code == 404
+
+
+def test_saving_new_parameters_returns_a_promoted_strategy_to_paper() -> None:
+    w = World("AUTO")
+    call = api_for(w)
+    with w.factory() as s:
+        assert s.get(StrategyRow, "ema_adx").mode == "AUTO"
+    params = {
+        "ema_fast": 4,
+        "ema_slow": 8,
+        "adx_period": 3,
+        "adx_threshold": "25",
+        "atr_period": 3,
+        "atr_stop_multiple": "2",
+        "cooldown_s": 0,
+    }
+    out = call("PUT", "/strategies/ema_adx/parameters", params).json()["data"]
+    with w.factory() as s:
+        row = s.get(StrategyRow, "ema_adx")
+        assert row.mode == "PAPER" and row.version == out["version"]
+    same = call("PUT", "/strategies/ema_adx/parameters", params).json()["data"]
+    assert same["version"] == out["version"]  # unchanged numbers are not a new version
