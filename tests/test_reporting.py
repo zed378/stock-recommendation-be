@@ -392,3 +392,29 @@ def test_an_admin_can_read_the_overview(client, admin_headers) -> None:
     assert "inventory" in body
     assert "ai_usage" in body
     assert "market_data" in body["providers"]["registered"]
+
+
+def test_mark_all_notifications_read_in_bulk(client, auth_headers, session) -> None:
+    from aidss.db.models import User as UserModel
+
+    investor = session.scalar(select(UserModel).where(UserModel.email == "investor@example.com"))
+    other = User(email="other-bulk@example.com", password_hash=hash_password("correct-horse-b"))
+    session.add(other)
+    session.flush()
+
+    service = NotificationService(session)
+    for idx in range(5):
+        service.notify(investor.id, NotificationEvent.NEWS_INGESTED, f"Headline {idx}")
+    service.notify(other.id, NotificationEvent.NEWS_INGESTED, "Other user notice")
+    session.commit()
+
+    resp = client.post("/notifications/read-all", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["updated"] == 5
+
+    count_resp = client.get("/notifications/unread-count", headers=auth_headers)
+    assert count_resp.status_code == 200
+    assert count_resp.json()["unread"] == 0
+
+    # Other user's unread notification remains untouched
+    assert service.unread_count(other.id) == 1

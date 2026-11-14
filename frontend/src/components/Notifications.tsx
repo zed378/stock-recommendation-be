@@ -199,6 +199,18 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     },
   });
 
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/notifications/read-all");
+      if (error) throw new Error(errorMessage(error, t("common.error")));
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+    },
+  });
+
   const unreadRows = (list.data ?? []).filter((row) => row.status !== "read");
 
   return (
@@ -212,8 +224,9 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
         <div className="ml-auto flex items-center gap-3">
           {unreadRows.length > 0 && (
             <button
-              onClick={() => unreadRows.forEach((row) => markRead.mutate(row.id))}
-              className="text-xs text-muted transition-colors hover:text-ink"
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+              className="text-xs text-muted transition-colors hover:text-ink disabled:opacity-50"
             >
               {t("notif.markAllRead")}
             </button>

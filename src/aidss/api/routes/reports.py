@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from aidss.api.deps import CommitBeforeResponse, get_db, require_permission
 from aidss.api.schemas import (
+    MarkAllReadResponse,
     NotificationResponse,
     OperationsOverviewResponse,
     ReportResponse,
@@ -147,6 +148,16 @@ def unread_notification_count(
     indicator does not need to cause.
     """
     return UnreadCountResponse(unread=NotificationService(session).unread_count(user.id))
+
+
+@router.post("/notifications/read-all", response_model=MarkAllReadResponse)
+def mark_all_notifications_read(
+    session: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.MANAGE_OWN_DATA)),
+) -> MarkAllReadResponse:
+    """Mark all unread notifications for the current user as read in bulk."""
+    updated = NotificationService(session).mark_all_read(user.id)
+    return MarkAllReadResponse(updated=updated)
 
 
 @router.post("/notifications/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)

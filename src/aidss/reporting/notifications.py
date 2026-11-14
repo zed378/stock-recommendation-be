@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, ClassVar
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from aidss.db.models import Notification, User
@@ -231,3 +231,13 @@ class NotificationService:
         row.status = "read"
         self._session.flush()
         return True
+
+    def mark_all_read(self, user_id: uuid.UUID) -> int:
+        """Mark all unread notifications for ``user_id`` as read in one bulk UPDATE."""
+        result = self._session.execute(
+            update(Notification)
+            .where(Notification.user_id == user_id, Notification.status == "delivered")
+            .values(status="read")
+        )
+        self._session.flush()
+        return int(result.rowcount or 0)

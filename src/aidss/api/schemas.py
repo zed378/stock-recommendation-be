@@ -287,6 +287,10 @@ class KronosForecastResponse(BaseModel):
     bars: list[KronosForecastBarResponse]
 
 
+class MarkAllReadResponse(BaseModel):
+    updated: int
+
+
 # --- Watchlist -------------------------------------------------------------
 
 
