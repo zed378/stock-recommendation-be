@@ -10,7 +10,9 @@ WORKDIR /app
 # edits.
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --upgrade pip && pip install -e ".[dev]"
+# CPU-only torch first: the default wheel pulls ~2 GB of CUDA libraries that
+# Kronos never uses (inference is pinned to CPU).
+RUN pip install --upgrade pip     && pip install torch --index-url https://download.pytorch.org/whl/cpu     && pip install -e ".[dev,kronos]"
 
 COPY alembic.ini ./
 COPY alembic ./alembic
