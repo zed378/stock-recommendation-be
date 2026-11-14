@@ -90,3 +90,8 @@ extend-immutable-calls = [
     # Our own dependency factory, used the same way as fastapi.Depends.
     "aidss.api.deps.require_permission",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# `Depends(need("permission"))` is the Trader API's declaration of each route's
+# permission, built per app instance, so it cannot be a module-level singleton.
+"src/aidss_trader/api/app.py" = ["B008"]

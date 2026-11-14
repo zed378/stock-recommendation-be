@@ -360,3 +360,73 @@ class ReconciliationDifference(Base):
     exchange_value: Mapped[str | None] = mapped_column(String(80), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class StrategyRow(Base):
+    """A strategy's current version and mode. A new version returns it to PAPER (ADR-020)."""
+
+    __tablename__ = "strategy"
+
+    strategy_id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    version: Mapped[str] = mapped_column(String(64))
+    mode: Mapped[str] = mapped_column(String(10))  # PAPER | APPROVAL | AUTO
+    since: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ModeChange(Base):
+    __tablename__ = "mode_change"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    strategy_id: Mapped[str] = mapped_column(String(48), index=True)
+    from_mode: Mapped[str] = mapped_column(String(10))
+    to_mode: Mapped[str] = mapped_column(String(10))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    by: Mapped[str] = mapped_column(String(64))
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class ApprovalRow(Base):
+    __tablename__ = "approval"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    intent_identity: Mapped[str] = mapped_column(
+        String(160), unique=True
+    )  # one decision per intent
+    intent_hash: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(12))  # AWAITING | APPROVED | DENIED | EXPIRED
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    context: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+
+class TradingEvent(Base):
+    """An operator-facing event, stored before any delivery is attempted (FR-T32)."""
+
+    __tablename__ = "trading_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    severity: Mapped[str] = mapped_column(String(8))  # INFO | WARN | CRITICAL
+    message: Mapped[str] = mapped_column(String(400))
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mobile: Mapped[str] = mapped_column(String(12))  # none | pending | sent | failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class StepUpGrant(Base):
+    __tablename__ = "step_up_grant"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    scope: Mapped[str] = mapped_column(String(24))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

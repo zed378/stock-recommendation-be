@@ -26,12 +26,14 @@ def _load(name: str = "0001_foundation.py"):
 
 
 def test_upgrades_create_exactly_the_declared_tables() -> None:
-    first, second, third = (
+    first, second, third, fourth = (
         _load("0001_foundation.py"),
         _load("0002_market_data.py"),
         _load("0003_trading_core.py"),
+        _load("0004_operator_surface.py"),
     )
     assert second.down_revision == first.revision and third.down_revision == second.revision
+    assert fourth.down_revision == third.revision
     engine = create_engine("sqlite+pysqlite://", poolclass=StaticPool).execution_options(
         schema_translate_map={"trading": None}
     )
@@ -40,12 +42,16 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
             first.upgrade()
             second.upgrade()
             third.upgrade()
+            fourth.upgrade()
         built = set(inspect(conn).get_table_names())
         declared = {t.name for t in Base.metadata.tables.values()}
         assert (
             built
             == declared
-            == set(first._FOUNDATION_TABLES) | set(second._TABLES) | set(third._TABLES)
+            == set(first._FOUNDATION_TABLES)
+            | set(second._TABLES)
+            | set(third._TABLES)
+            | set(fourth._TABLES)
         )
         columns = {c["name"] for c in inspect(conn).get_columns("audit_log")}
         assert {"seq", "prev_hash", "hash", "before", "after"} <= columns

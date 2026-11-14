@@ -951,3 +951,25 @@ counterfactual evaluation is done, and only then the owner sets thresholds and d
 **Implications:** The thresholds must be set **before** the evidence is read, as the evaluation method
 requires; that ordering is now an explicit step of the post-MVP review. The veto settings stay unset and the
 rule never fires until then.
+
+---
+
+### ADR-046 — Step-up authentication: a single-use grant minted after password re-entry
+
+**Date:** 2026-11-14
+**Status:** proposed (records the T5-01 mechanism; the window is a safe, reversible default, not a loss limit)
+
+**Decision:** `FLATTEN`, promotion to `AUTO`, a limit increase, and a credential change each need a
+**step-up grant** in addition to the bearer token. The Trader mints a grant only after the user re-enters their
+password, which the Trader checks by calling the analysis API's existing `POST /auth/login` and requiring that
+the returned token resolves (via `/auth/me`) to the same user id as the session. A grant is random, stored only
+as a SHA-256 hash, bound to one user and one scope, valid for **5 minutes**, and **single use**.
+
+**Rationale:** It needs no new infrastructure and no password handling in the Trader (the password is forwarded,
+never stored or logged). A stolen idle session cannot flatten or promote without the password.
+
+**Alternatives considered:** TOTP (needs enrolment, a new secret, and a user-model change in the analysis
+platform); a typed confirmation phrase only (does not stop a stolen session).
+
+**Implications:** The 5-minute window is adjustable. If the analysis API is down the step-up fails closed, so
+`FLATTEN` from the UI is unavailable; the command-line kill tool does not depend on it (ADR-028).
