@@ -116,3 +116,14 @@ def verify_chain(session: Session) -> int:
         prev = row.hash
         count += 1
     return count
+
+
+def chain_head(session: Session) -> tuple[int, str] | None:
+    """(row count, head hash): the value to record somewhere the database owner cannot rewrite.
+
+    A hash chain detects an altered or removed row, but whoever can rewrite the
+    whole table can rewrite the chain. Recording the head outside the database
+    (the scheduled job that does so is not built yet) closes that gap.
+    """
+    last = session.scalar(select(AuditLog).order_by(AuditLog.seq.desc()).limit(1))
+    return None if last is None else (last.seq, last.hash)

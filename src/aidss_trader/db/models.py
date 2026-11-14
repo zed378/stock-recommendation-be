@@ -13,10 +13,21 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Integer, String, Text, Uuid
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from aidss_trader.db.base import Base, Money
+from aidss_trader.db.base import SCHEMA, Base, Money
 
 # SQLite only autoincrements an INTEGER primary key; PostgreSQL wants BIGINT.
 _SEQ = BigInteger().with_variant(Integer, "sqlite")
@@ -94,3 +105,258 @@ class RiskLimitVersion(Base):
     cooldown_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     order_rate_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trading_window: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class PairRule(Base):
+    """Exchange rules for one pair, refreshed before sizing (docs/03-DATA-MODEL/00)."""
+
+    __tablename__ = "pair_rule"
+
+    pair: Mapped[str] = mapped_column(String(16), primary_key=True)  # canonical, BTCIDR
+    ticker_id: Mapped[str] = mapped_column(String(24))
+    quantity_increment: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    price_increment: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    min_base_idr: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    min_traded_qty: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    maintenance: Mapped[bool] = mapped_column(Boolean, default=False)
+    suspended: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: Why this pair may not be traded. Empty means it passed the rules; it still
+    #: has to be on the allowlist and pass the liquidity filter (ADR-005).
+    blocked_reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Candle(Base):
+    """A closed candle. The unfinished one is never stored (docs/02-ARCHITECTURE/05)."""
+
+    __tablename__ = "candle"
+    __table_args__ = (
+        UniqueConstraint("pair", "timeframe", "open_time", name="uq_candle_identity"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    pair: Mapped[str] = mapped_column(String(16), index=True)
+    timeframe: Mapped[str] = mapped_column(String(4))  # 4H | 1D
+    open_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    open: Mapped[Decimal] = mapped_column(Money)
+    high: Mapped[Decimal] = mapped_column(Money)
+    low: Mapped[Decimal] = mapped_column(Money)
+    close: Mapped[Decimal] = mapped_column(Money)
+    volume: Mapped[Decimal] = mapped_column(Money)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source: Mapped[str] = mapped_column(String(24), default="indodax_ohlc")
+
+
+class OrderIntentRow(Base):
+    """A sized, priced proposal that passed (or failed) the Risk Engine."""
+
+    __tablename__ = "order_intent"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    #: Deterministic identity from (strategy version, pair, signal candle, side), so
+    #: re-evaluating the same candle after a restart cannot create a second intent.
+    identity: Mapped[str] = mapped_column(String(160), unique=True)
+    origin: Mapped[str] = mapped_column(String(10))  # LIVE | PAPER | BACKTEST
+    strategy_version: Mapped[str] = mapped_column(String(64))
+    pair: Mapped[str] = mapped_column(String(16), index=True)
+    side: Mapped[str] = mapped_column(String(4))
+    entry_price: Mapped[Decimal] = mapped_column(Money)
+    quantity: Mapped[Decimal] = mapped_column(Money)
+    stop_price: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    risk_amount_idr: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    rule_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    state: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RiskCheckResult(Base):
+    """One row per check per intent, so a rejection names the limit and the numbers."""
+
+    __tablename__ = "risk_check_result"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    intent_identity: Mapped[str] = mapped_column(String(160), index=True)
+    profile: Mapped[str] = mapped_column(String(10))  # ENTRY | EMERGENCY
+    check: Mapped[str] = mapped_column(String(48))
+    passed: Mapped[bool] = mapped_column(Boolean)
+    observed: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    limit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class OrderRow(Base):
+    """An order sent to Indodax, or simulated. The row exists BEFORE the request (ADR-026)."""
+
+    __tablename__ = "order"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    intent_identity: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    origin: Mapped[str] = mapped_column(String(10))
+    pair: Mapped[str] = mapped_column(String(16), index=True)
+    side: Mapped[str] = mapped_column(String(4))
+    type: Mapped[str] = mapped_column(String(8))  # LIMIT | MARKET
+    time_in_force: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    price: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Money)
+    quote_order_qty: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    #: The idempotency key. Unique: a duplicate id is how Indodax refuses a replay.
+    client_order_id: Mapped[str] = mapped_column(String(36), unique=True)
+    exchange_order_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    full_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    executed_qty: Mapped[Decimal] = mapped_column(Money, default=Decimal(0))
+    state: Mapped[str] = mapped_column(String(20), index=True)
+    exchange_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    #: ENTRY, EXIT_TARGET, EXIT_STOP, KILL_CANCEL, KILL_FLATTEN
+    purpose: Mapped[str] = mapped_column(String(16))
+    reprices: Mapped[int] = mapped_column(Integer, default=0)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class OrderEvent(Base):
+    """Every state change of an order. Append-only."""
+
+    __tablename__ = "order_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(f"{SCHEMA}.order.id"), index=True)
+    from_state: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    to_state: Mapped[str] = mapped_column(String(20))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    actor: Mapped[str] = mapped_column(String(24))  # system | owner | killswitch | reconciler
+    reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    raw: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+
+class Fill(Base):
+    """An execution. Append-only; `exchange_trade_id` makes ingestion idempotent."""
+
+    __tablename__ = "fill"
+    __table_args__ = (UniqueConstraint("origin", "exchange_trade_id", name="uq_fill_trade"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(f"{SCHEMA}.order.id"), index=True)
+    origin: Mapped[str] = mapped_column(String(10))
+    exchange_trade_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    pair: Mapped[str] = mapped_column(String(16))
+    side: Mapped[str] = mapped_column(String(4))
+    price: Mapped[Decimal] = mapped_column(Money)
+    quantity: Mapped[Decimal] = mapped_column(Money)
+    quote_quantity: Mapped[Decimal] = mapped_column(Money)
+    is_maker: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    #: As returned by `myTrades`: fees AND taxes combined (OQ-5). The split columns stay
+    #: NULL unless a source provides them; they are never estimated.
+    commission: Mapped[Decimal] = mapped_column(Money, default=Decimal(0))
+    fee: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    tax: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    clearing: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LedgerEntry(Base):
+    """Append-only. A correction is a new ADJUSTMENT row with a reason, never an edit."""
+
+    __tablename__ = "ledger_entry"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    origin: Mapped[str] = mapped_column(String(10))
+    fill_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{SCHEMA}.fill.id"), nullable=True
+    )
+    entry_type: Mapped[str] = mapped_column(String(24))
+    asset: Mapped[str] = mapped_column(String(12))
+    amount: Mapped[Decimal] = mapped_column(Money)  # signed
+    reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PositionStop(Base):
+    """The bot-side stop for an open position (ADR-007). Tightened, never widened."""
+
+    __tablename__ = "position_stop"
+    __table_args__ = (UniqueConstraint("pair", "origin", name="uq_position_stop"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    pair: Mapped[str] = mapped_column(String(16))
+    origin: Mapped[str] = mapped_column(String(10))
+    stop_price: Mapped[Decimal] = mapped_column(Money)
+    target_price: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TradingStateRow(Base):
+    """The global trading state. One row. There is no automatic way back to RUNNING."""
+
+    __tablename__ = "trading_state"
+
+    name: Mapped[str] = mapped_column(String(16), primary_key=True)  # always "trader"
+    state: Mapped[str] = mapped_column(String(12))  # RUNNING | HALTED | CANCELLING | FLATTENING
+    reason: Mapped[str] = mapped_column(String(200))
+    since: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    changed_by: Mapped[str] = mapped_column(String(64))
+
+
+class KillSwitchEvent(Base):
+    __tablename__ = "kill_switch_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tier: Mapped[str] = mapped_column(String(8))  # HALT | CANCEL | FLATTEN
+    trigger: Mapped[str] = mapped_column(String(16))
+    requested_by: Mapped[str] = mapped_column(String(64))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class KillSwitchStep(Base):
+    """One step of a kill action, so a partial FLATTEN is visible step by step."""
+
+    __tablename__ = "kill_switch_step"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey(f"{SCHEMA}.kill_switch_event.id"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    target: Mapped[str] = mapped_column(String(64))
+    result: Mapped[str] = mapped_column(String(12))  # ok | failed | skipped
+    detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BreakerEvent(Base):
+    __tablename__ = "breaker_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    breaker: Mapped[str] = mapped_column(String(32))
+    tier: Mapped[str] = mapped_column(String(8))  # HALT | CANCEL (never FLATTEN, ADR-036)
+    observed: Mapped[str] = mapped_column(String(64))
+    limit: Mapped[str] = mapped_column(String(64))
+    tripped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ReconciliationRun(Base):
+    __tablename__ = "reconciliation_run"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    differences: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[str] = mapped_column(String(12))  # clean | differences | failed
+
+
+class ReconciliationDifference(Base):
+    """A mismatch. Never auto-corrected: it halts trading and waits for the owner."""
+
+    __tablename__ = "reconciliation_difference"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey(f"{SCHEMA}.reconciliation_run.id"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32))
+    reference: Mapped[str] = mapped_column(String(80))
+    local_value: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    exchange_value: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(String(200), nullable=True)

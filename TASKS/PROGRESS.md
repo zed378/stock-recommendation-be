@@ -10,9 +10,9 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 |---|---|---|---|
 | T0 | Specification | 🔎 in review (2026-11-14) | Documents written; **awaiting the owner's review**. See `MEMORY/records/2026-11-14-trader-docs-scaffolding.md`. 108 files in `docs/`, 45 ADRs, 8 open questions |
 | T1 | Foundation | 🚧 built, in review (2026-11-14) | Code and 40 tests exist. **Not verified:** PostgreSQL privileges (`-m postgres`, no PostgreSQL was available), the Docker image build, and the Compose override. See `MEMORY/records/2026-11-14-t1-foundation.md` |
-| T2 | Exchange connector | ⏳ TODO | T2-07 is owner-led (needs a Read-only key) |
-| T3 | Strategy, backtest, paper | ⏳ TODO | Needs OQ-5, OQ-11 (AI context deferred to post-MVP, ADR-032) |
-| T4 | Execution core | ⏳ TODO | Needs OQ-9 (mechanism can be built before values are set) |
+| T2 | Exchange connector | 🚧 built, in review (2026-11-14) | Mock-verified only. **T2-07 (live Read-only check) is owner-led and not done**; every Indodax shape is documented, not observed |
+| T3 | Strategy, backtest, paper | 🚧 built, in review (2026-11-14) | Mechanism only; OQ-5 and OQ-11 values unset, tests use their own numbers. AI context deferred (ADR-032) |
+| T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; **not wired into the run loop**, so the Trader still cannot trade. OQ-9 values unset |
 | T5 | Operator surface and `APPROVAL` | ⏳ TODO | T5-06 is owner-led; needs OQ-12, OQ-16 |
 | T6 | Hardening and release | ⏳ TODO | No open question blocks T6 (ADR-037, ADR-039, ADR-040) |
 
@@ -35,10 +35,10 @@ Deployed on the project's host as images `zed378/aidss-api` and `zed378/aidss-fr
 
 | Item | State |
 |---|---|
-| `aidss_trader` package | does not exist |
-| `trading` schema, roles, migrations | do not exist |
-| Indodax connector, mock exchange | do not exist |
-| Any trading table, route, or order code | does not exist |
+| `aidss_trader` package | exists: T1 foundation plus connector, market data, strategy, intents, paper, backtest, risk, orders, exits, killswitch, reconcile |
+| `trading` schema, roles, migrations | three migrations; privileges unverified on PostgreSQL |
+| Indodax connector, mock exchange | exist; mock is synthetic, the connector has never touched the real API |
+| Order code | exists but is not wired into the run loop; the service still never trades |
 | Documentation | exists (T0) |
 | Indodax API key | none; none has been seen |
 | Live response from Indodax | none captured |
@@ -71,7 +71,11 @@ Every Indodax detail in `docs/06-INTEGRATIONS/` is **documented, not yet observe
 | T1-07 Lease | REVIEW | Tested on SQLite; the real PostgreSQL behaviour is untested |
 | T1-08 Token verification, `trader` role | WIP | Role added with viewer-level rights (tested). The Trader's `GET /auth/me` verification client is **not built** |
 
-### T2 to T6
+### T2 to T4
+
+Built and in review; see `MEMORY/records/2026-11-14-t2-t4-connector-strategy-execution.md` for what is and is not verified.
+
+### T5 to T6
 
 All `TODO`. See each phase file.
 

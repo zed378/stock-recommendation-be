@@ -12,7 +12,7 @@ This repository holds **two systems at two different maturity levels**:
 | System | State | Where |
 |---|---|---|
 | **AIDSS analysis platform** | Built and running. FastAPI + PostgreSQL + React. Decision support only: no order, no broker, no execution, enforced by tests. | `src/aidss/`, `frontend/`, `alembic/`, `tests/` |
-| **AIDSS Trader** (Indodax crypto auto-trading) | **Phase T1 built (foundation only).** `aidss_trader` has a credential store, audit log, lease, and risk-limit mechanism. **No Indodax client, strategy, or order code exists.** | `src/aidss_trader/`, `docs/`, `MEMORY/`, `TASKS/` |
+| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T4 built, in review.** `aidss_trader` has the foundation plus an Indodax connector, strategy, paper and backtest, Risk Engine, order manager, exit monitor, kill switch, and reconciler, all verified against a synthetic mock only and not wired into the run loop. **It cannot trade yet.** | `src/aidss_trader/`, `docs/`, `MEMORY/`, `TASKS/` |
 
 If this file and `TASKS/PROGRESS.md` disagree about what exists, trust `PROGRESS.md` and fix this file. A
 stale instruction document produces confidently wrong work.
@@ -170,7 +170,7 @@ Verified on 2026-11-14 (hermetic, SQLite; no exchange and no PostgreSQL needed):
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
 | `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); **not yet run against PostgreSQL** |
 
-There is no exchange connector, strategy, or order code yet (phase T2 onward).
+The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only) but are **not wired into the run loop**; `aidss_trader run` still never trades. No real Indodax call has been made (T2-07 is owner-led).
 
 ## Code Style
 
@@ -181,7 +181,7 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 ## What Is Currently Failing
 
-Last full run on 2026-11-14 (after T1): 1,797 passed, 1 failed.
+Last full run on 2026-11-14 (after T4, with the known failure below deselected): 1,979 passed.
 
 - `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
   fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not

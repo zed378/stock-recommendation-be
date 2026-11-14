@@ -21,9 +21,7 @@ REDACTED = "***"
 
 def redact(value: Any) -> Any:
     if isinstance(value, dict):
-        return {
-            k: (REDACTED if _SENSITIVE.search(str(k)) else redact(v)) for k, v in value.items()
-        }
+        return {k: (REDACTED if _SENSITIVE.search(str(k)) else redact(v)) for k, v in value.items()}
     if isinstance(value, list):
         return [redact(v) for v in value]
     return value
