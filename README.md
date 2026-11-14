@@ -1,6 +1,6 @@
 # AI Investment Decision Support Platform
 
-Implementation of `Dokumen_Perencanaan_AI_Investment_Decision_Support.md` — **all nine
+Implementation of [`docs/archive/Dokumen_Perencanaan_AI_Investment_Decision_Support.md`](docs/archive/Dokumen_Perencanaan_AI_Investment_Decision_Support.md) — **all nine
 phases** of the roadmap in Section 15.
 
 > **Decision support, not a trading bot.** This system reads market data and produces
@@ -9,6 +9,12 @@ phases** of the roadmap in Section 15.
 > (Sections 1, 2.3, 3, 4, 8, 10), not a feature scheduled for later — and it is enforced
 > by [tests/test_architecture_constraints.py](tests/test_architecture_constraints.py),
 > so the build fails if anyone introduces one.
+
+> **Scope of that statement.** It describes **this analysis platform**, which does not change. A separate
+> crypto auto-trading service for Indodax, the **AIDSS Trader**, is *specified but not built*; it would live
+> in its own package, container, and database schema so this guarantee stays true here. See
+> [trader-document-catalog.md](trader-document-catalog.md), [CLAUDE.md](CLAUDE.md), and
+> [MEMORY/DECISIONS.md](MEMORY/DECISIONS.md) (ADR-001).
 
 ---
 
@@ -25,6 +31,9 @@ phases** of the roadmap in Section 15.
 | **7 — Knowledge Base & RAG** | Boundary-aware chunking, embedding and retrieval, plus the scheduled per-issuer news pipeline of Section 6.3 with cron presets, batched sentiment scoring, and idempotent ingestion | Done |
 | **8 — Reporting & Dashboard** | Asset and portfolio reports in Markdown and JSON, a notification service whose event vocabulary cannot express an instruction, and an operations overview for the admin dashboard | Done |
 | **9 — Production & Optimization** | Prometheus metrics, JSON logging with request correlation and credential redaction, security headers, per-client rate limiting, and daily AI budget governance | Done |
+| **TradingAgents Integration** | Native multi-agent debate (`BullResearcher` vs `BearResearcher`, `ResearchManager`, `TraderAgent`, 3-way Risk Committee, `PortfolioManager`), social/macro/filing vendors (`StockTwits`, `Reddit`, `FRED`, `SEC EDGAR`), look-ahead-safe `TradingDecisionLog` settlement & `DecisionReflector`, plus `TradingAgentsPanel` UI | Done |
+| **Kronos-base Forecasting** | `NeoQuasar/Kronos-base` + `NeoQuasar/Kronos-Tokenizer-base` OHLCV candlestick sequence forecasting (`POST /assets/{ticker}/forecast`), lazy PyTorch loading, fixture mode, and `KronosForecastPanel` UI | Done |
+| **Bulk Notifications** | `POST /notifications/read-all` bulk SQL update (`NotificationService.mark_all_read`) to avoid per-item rate-limit exhaustion | Done |
 
 Every table Phases 1–9 needed was already defined in the Phase 1 migration, so Phases 5
 through 9 required **no schema change at all** beyond one small table for the Memory
@@ -40,6 +49,8 @@ Requires Python 3.11+ and Docker (for PostgreSQL only).
 # 1. Environment
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"   # Linux/macOS: .venv/bin/python
+# Optional: install PyTorch & Hugging Face dependencies for live NeoQuasar/Kronos-base forecasting
+# .venv/Scripts/python -m pip install -e ".[kronos]"
 cp .env.example .env
 
 # 2. Database (PostgreSQL 16 + pgvector)
@@ -597,6 +608,57 @@ None of them is a 500, because none of them is a bug in the server.
 
 ---
 
+## TradingAgents & Kronos-base Extensions
+
+### TradingAgents Multi-Agent Debate & Decision Memory
+
+Inspired by [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents),
+implemented **natively** on AIDSS's `AgentRunner`, `LLMGateway`, `PromptComposer`, and
+`language.py` execution-language guardrails (no LangChain/LangGraph dependency, and
+strictly decision-support only):
+
+- **External Data Vendors** (`src/aidss/collectors/vendors/`): `StockTwits`, `Reddit`,
+  `FRED` macro series (API key or public CSV fallback), and `SEC EDGAR` XBRL company
+  facts, paired with `SocialSentimentAnalyzer`.
+- **Debate & Decision Pipeline** (`src/aidss/agents/trading_agents/`):
+  1. Primary analyzers (`MarketAnalyzer`, `TechnicalAnalyzer`, `FundamentalAnalyzer`,
+     `NewsAnalyzer`, `SocialSentimentAnalyzer`)
+  2. `BullResearcher` vs `BearResearcher` multi-round debate → `ResearchManager`
+  3. `TraderAgent` structured stance proposal
+  4. 3-way Risk Committee (`AggressiveRiskAnalyst`, `ConservativeRiskAnalyst`,
+     `NeutralRiskAnalyst`) → `PortfolioManager`
+- **Decision Memory & Reflection** (`trading_decision_logs`, Alembic revision
+  `a1b2c3d4e5f6`): records debate traces and settles matured decisions strictly against
+  subsequent close bars (look-ahead safe), generating lessons via `DecisionReflector`
+  that feed back into `PortfolioManager` on future runs.
+- **API & UI**: `POST /assets/{ticker}/analysis` (and `/analysis/background`) accept
+  `mode="trading_agents"`, `max_debate_rounds`, `max_risk_rounds`, and
+  `include_social_vendors`. Additional endpoints: `GET /assets/{ticker}/decisions`,
+  `POST /assets/{ticker}/decisions/settle`, `GET /assets/{ticker}/social-sentiment`.
+  Rendered in `frontend/src/components/TradingAgentsPanel.tsx`.
+
+### Kronos-base OHLCV Forecasting (`NeoQuasar/Kronos-base`)
+
+Integrates [NeoQuasar/Kronos-base](https://huggingface.co/NeoQuasar/Kronos-base) and
+`NeoQuasar/Kronos-Tokenizer-base` (`src/aidss/forecasting/`) for candlestick sequence
+projection over stored `Candle` history:
+
+- **Lazy PyTorch Loading**: `torch`, `huggingface_hub`, `einops`, `safetensors`, and `tqdm`
+  are optional (`pip install -e ".[kronos]"`). The API returns HTTP `503` if live
+  inference is requested without `[kronos]` installed, or runs deterministically when
+  `AIDSS_KRONOS_PROVIDER=fixture`.
+- **API & UI**: `POST /assets/{ticker}/forecast` (`pred_len`, `temperature`, `top_p`,
+  `sample_count`) and `frontend/src/components/KronosForecastPanel.tsx` on the Asset
+  Detail Analysis tab.
+
+### Bulk Notification Read
+
+`POST /notifications/read-all` (`NotificationService.mark_all_read`) marks all unread
+notifications for the authenticated user in a single SQL `UPDATE`, preventing client-side
+rate-limit (`120 req/60s`) exhaustion when clearing large notification backlogs.
+
+---
+
 ## Architecture
 
 ```
@@ -811,6 +873,13 @@ matter most:
 | `AIDSS_ALPHAVANTAGE_SYMBOL_SUFFIX` | `.JKT` | The same idea, different spelling — Jakarta is `.JKT` here, not `.JK` |
 | `AIDSS_AI_PROVIDER` | `openai_compatible` | `fixture` for offline runs; `openai_compatible` serves OpenAI, Azure, Ollama, vLLM, LM Studio, Groq, DeepSeek, OpenRouter |
 | `AIDSS_AI_BASE_URL` | OpenAI | Point at any OpenAI-compatible endpoint |
+| `AIDSS_KRONOS_PROVIDER` | `huggingface` | `huggingface` for `NeoQuasar/Kronos-base` inference, or `fixture` for deterministic offline/CI forecasts |
+| `AIDSS_KRONOS_MODEL_ID` | `NeoQuasar/Kronos-base` | Hugging Face model ID for candlestick forecasting |
+| `AIDSS_KRONOS_TOKENIZER_ID` | `NeoQuasar/Kronos-Tokenizer-base` | Companion BSQ tokenizer for Kronos |
+| `AIDSS_KRONOS_DEVICE` | `auto` | `auto`, `cpu`, `cuda:0`, or `mps` |
+| `AIDSS_KRONOS_MAX_CONTEXT` | `512` | Lookback candle window fed to Kronos |
+| `FRED_API_KEY` | unset | Optional St. Louis Fed API key (falls back to public FRED CSV when unset) |
+| `SEC_EDGAR_USER_AGENT` | unset | Custom `User-Agent` header for SEC EDGAR XBRL requests |
 
 Once `ai_providers` has rows, they take precedence over these settings and define the
 routing chain (Section 12.10). The settings above are the single-provider fallback that
