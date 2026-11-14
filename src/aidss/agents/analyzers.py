@@ -83,7 +83,22 @@ class TechnicalAnalyzer(Agent):
             "breakout": snapshot.get("breakout", {}),
             "support": levels.get("support", []),
             "resistance": levels.get("resistance", []),
+            "kronos_forecast": _describe_forecast(context.forecast),
         }
+
+
+def _describe_forecast(forecast: dict[str, Any]) -> Any:
+    if not forecast:
+        return "Not available for this run."
+    return {
+        "model": forecast["model_id"],
+        "horizon_bars": forecast["pred_len"],
+        "last_close": forecast["last_close"],
+        "projected_close": forecast["projected_close"],
+        "projected_return_pct": forecast["projected_return_pct"],
+        "direction_bias": forecast["direction_bias"],
+        "projected_path": forecast["bars"],
+    }
 
 
 class FundamentalAnalyzer(Agent):

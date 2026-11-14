@@ -31,6 +31,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault("AIDSS_MARKET_DATA_PROVIDER", "fixture")
 os.environ.setdefault("AIDSS_NEWS_PROVIDER", "fixture")
+os.environ.setdefault("AIDSS_KRONOS_PROVIDER", "fixture")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

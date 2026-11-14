@@ -491,6 +491,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{ticker}/forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Kronos Forecast
+         * @description Forecast upcoming OHLCV candlesticks using NeoQuasar/Kronos-base.
+         */
+        post: operations["run_kronos_forecast_assets__ticker__forecast_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/watchlist": {
         parameters: {
             query?: never;
@@ -3417,6 +3437,80 @@ export interface components {
              */
             uploaded_at: string;
         };
+        /** KronosForecastBarResponse */
+        KronosForecastBarResponse: {
+            /** Timestamp */
+            timestamp: string;
+            /** Open */
+            open: number;
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
+            /** Close */
+            close: number;
+            /** Volume */
+            volume: number;
+        };
+        /** KronosForecastRequest */
+        KronosForecastRequest: {
+            /** @default 1d */
+            timeframe: components["schemas"]["Timeframe"];
+            /**
+             * Exchange
+             * @default IDX
+             */
+            exchange: string;
+            /**
+             * Pred Len
+             * @default 5
+             */
+            pred_len: number;
+            /**
+             * Temperature
+             * @default 1
+             */
+            temperature: number;
+            /**
+             * Top P
+             * @default 0.9
+             */
+            top_p: number;
+            /**
+             * Sample Count
+             * @default 1
+             */
+            sample_count: number;
+        };
+        /** KronosForecastResponse */
+        KronosForecastResponse: {
+            /** Ticker */
+            ticker: string;
+            /** Exchange */
+            exchange: string;
+            /** Timeframe */
+            timeframe: string;
+            /** Model Id */
+            model_id: string;
+            /** Tokenizer Id */
+            tokenizer_id: string;
+            /** Provider */
+            provider: string;
+            /** Lookback Bars */
+            lookback_bars: number;
+            /** Pred Len */
+            pred_len: number;
+            /** Last Close */
+            last_close: number;
+            /** Projected Close */
+            projected_close: number;
+            /** Projected Return Pct */
+            projected_return_pct: number;
+            /** Direction Bias */
+            direction_bias: string;
+            /** Bars */
+            bars: components["schemas"]["KronosForecastBarResponse"][];
+        };
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -5147,6 +5241,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SocialSentimentSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_kronos_forecast_assets__ticker__forecast_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KronosForecastRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KronosForecastResponse"];
                 };
             };
             /** @description Validation Error */

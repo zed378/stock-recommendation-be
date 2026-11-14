@@ -40,6 +40,13 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.5",
 ]
+kronos = [
+    "torch>=2.0.0",
+    "huggingface_hub>=0.25",
+    "einops>=0.8",
+    "safetensors>=0.4",
+    "tqdm>=4.66",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

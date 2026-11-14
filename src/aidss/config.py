@@ -177,6 +177,21 @@ class Settings(BaseSettings):
     # --- Local storage ---
     local_storage_root: str = "./var/storage"
 
+    # --- Kronos OHLCV foundation model (NeoQuasar/Kronos-base) ---
+    kronos_provider: str = "huggingface"
+    kronos_model_id: str = "NeoQuasar/Kronos-base"
+    kronos_tokenizer_id: str = "NeoQuasar/Kronos-Tokenizer-base"
+    # Inference runs on CPU by design. "auto" would pick CUDA/MPS when present,
+    # which is not what a deployment sized for CPU-only hosts expects.
+    kronos_device: str = "cpu"
+    kronos_max_context: int = 512
+    # Feed a Kronos projection to the Technical Analyzer. A failure here never
+    # fails the analysis; the analyzer is told the forecast is unavailable.
+    kronos_in_analysis: bool = True
+    kronos_analysis_pred_len: int = 5
+    # Samples are averaged by the model. ~4s each on CPU; one sample is noisy.
+    kronos_analysis_samples: int = 3
+
     # --- Operational guardrail (Section 12.4) ---
     min_schedule_interval_seconds: int = 300
 

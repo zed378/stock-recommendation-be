@@ -251,6 +251,7 @@ def test_composer_produces_a_system_and_user_message() -> None:
             "breakout": {},
             "support": [],
             "resistance": [],
+            "kronos_forecast": "Not available for this run.",
         },
         TechnicalOutput,
     )

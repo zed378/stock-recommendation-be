@@ -18,6 +18,7 @@ import { EvidenceChart } from "@/components/EvidenceChart";
 import { IndicatorSnapshotView } from "@/components/Indicators";
 import { Strategy } from "@/components/Strategy";
 import { LanguageSwitch, TranslationNotice } from "@/components/TranslateToggle";
+import { KronosForecastPanel } from "@/components/KronosForecastPanel";
 import { TradingAgentsPanel } from "@/components/TradingAgentsPanel";
 import { useTranslation } from "@/components/useTranslation";
 import type { components } from "@/api/schema";
@@ -689,6 +690,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
           <AgentRoster result={result} />
           <AgentReports agents={result.agents} showing={translation.showing} />
           <TradingAgentsPanel ticker={ticker} trace={result.trading_agents} />
+          <KronosForecastPanel ticker={ticker} timeframe={timeframe} />
           {result.recommendation && (
             <RecommendationPanel
               rec={result.recommendation}

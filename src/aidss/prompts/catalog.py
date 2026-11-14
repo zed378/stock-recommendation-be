@@ -101,6 +101,11 @@ Breakout state: {breakout}
 Support levels: {support}
 Resistance levels: {resistance}
 
+Kronos-base statistical forecast of the next bars (a sampled model projection
+from price history alone, not a prediction of fact; weigh it against the
+indicators and say where it agrees or conflicts):
+{kronos_forecast}
+
 Interpret this evidence.""",
 )
 

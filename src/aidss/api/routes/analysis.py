@@ -23,14 +23,23 @@ from aidss.api.schemas import (
     AnalysisResponse,
     AnalysisUsageResponse,
     JobAcceptedResponse,
+    KronosForecastRequest,
+    KronosForecastResponse,
     RecommendationResponse,
     SocialSentimentSnapshotResponse,
     TradingDecisionResponse,
 )
+from aidss.collectors.market_data import load_candles
 from aidss.collectors.normalization import normalize_ticker
 from aidss.collectors.vendors import fetch_reddit_posts, fetch_stocktwits_messages
+from aidss.config import get_settings
 from aidss.db.models import AnalysisResult, Asset, TradingDecisionLog, User
 from aidss.domain.types import Timeframe
+from aidss.forecasting import (
+    KronosForecaster,
+    KronosInsufficientDataError,
+    KronosUnavailableError,
+)
 from aidss.jobs.queue import enqueue
 from aidss.llm.errors import GatewayError
 from aidss.llm.provisioning import build_gateway
@@ -360,3 +369,40 @@ def get_social_sentiment_snapshot(
         reddit_count=len(rd_posts),
         posts=st_posts + rd_posts,
     )
+
+
+@router.post("/{ticker}/forecast", response_model=KronosForecastResponse)
+def run_kronos_forecast(
+    ticker: str,
+    payload: KronosForecastRequest,
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.READ_ANALYSIS)),
+) -> KronosForecastResponse:
+    """Forecast upcoming OHLCV candlesticks using NeoQuasar/Kronos-base."""
+    asset = _resolve_asset(session, ticker, payload.exchange)
+    settings = get_settings()
+    candles = load_candles(
+        session, asset.id, payload.timeframe, limit=settings.kronos_max_context
+    )
+    try:
+        result = KronosForecaster(settings).forecast(
+            asset.ticker,
+            asset.exchange,
+            payload.timeframe,
+            candles,
+            pred_len=payload.pred_len,
+            temperature=payload.temperature,
+            top_p=payload.top_p,
+            sample_count=payload.sample_count,
+        )
+    except KronosUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except KronosInsufficientDataError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return KronosForecastResponse(**result.as_payload())

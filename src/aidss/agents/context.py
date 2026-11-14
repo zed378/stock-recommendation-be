@@ -16,6 +16,7 @@ this module asks a model to derive a figure.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from aidss.agents.memory import InvestorMemory, MemoryManager
 from aidss.collectors.market_data import load_candles
+from aidss.config import get_settings
 from aidss.db.models import (
     Asset,
     FundamentalMetric,
@@ -36,6 +38,8 @@ from aidss.db.models import (
 from aidss.domain.types import Candle, Timeframe
 from aidss.indicators.engine import IndicatorEngine
 from aidss.indicators.features import compute_features
+
+logger = logging.getLogger("aidss.analysis")
 
 #: How far back news is considered relevant to an analysis run. News decays;
 #: a six-month-old headline is history, not sentiment.
@@ -61,6 +65,9 @@ class AnalysisContext:
     social_posts: list[dict[str, Any]] = field(default_factory=list)
     macro_snapshot: dict[str, Any] = field(default_factory=dict)
     portfolio_context: dict[str, Any] = field(default_factory=dict)
+    #: Kronos OHLCV projection. Empty when disabled or when it failed; a model
+    #: forecast is supporting evidence, never a precondition for an analysis.
+    forecast: dict[str, Any] = field(default_factory=dict)
 
     @property
     def has_price_data(self) -> bool:
@@ -96,6 +103,7 @@ class AnalysisContext:
             "bars": len(self.candles),
             "indicators": self.indicator_snapshot,
             "features": self.features,
+            "kronos_forecast": self.forecast or None,
             "fundamental_count": len(self.fundamentals),
             "news_count": len(self.news),
             "investor": self.memory.as_prompt_context(),
@@ -148,7 +156,37 @@ class ContextBuilder:
             context.portfolio_context = self._load_portfolio_context(user_id, asset.id)
         if include_social_vendors:
             self._enrich_from_vendors(context, asset)
+        if candles and get_settings().kronos_in_analysis:
+            context.forecast = self._kronos_forecast(asset, timeframe, candles)
         return context
+
+    def _kronos_forecast(
+        self, asset: Asset, timeframe: Timeframe, candles: list[Candle]
+    ) -> dict[str, Any]:
+        """Kronos-base projection on CPU, or ``{}`` if it cannot be produced."""
+        from aidss.forecasting import KronosForecaster
+
+        settings = get_settings()
+        try:
+            result = KronosForecaster(settings).forecast(
+                asset.ticker,
+                asset.exchange,
+                timeframe,
+                candles,
+                pred_len=settings.kronos_analysis_pred_len,
+                sample_count=settings.kronos_analysis_samples,
+            )
+        except Exception as exc:  # noqa: BLE001 - supporting evidence must not fail the run
+            logger.warning("kronos forecast skipped for %s: %s", asset.ticker, exc)
+            return {}
+        payload = result.as_payload()
+        # The bars carry the full OHLCV path; the agents need the shape of it,
+        # and the closes are enough for that.
+        payload["bars"] = [
+            {"timestamp": b["timestamp"], "close": b["close"], "high": b["high"], "low": b["low"]}
+            for b in payload["bars"]
+        ]
+        return payload
 
     def _load_portfolio_context(
         self, user_id: uuid.UUID, asset_id: uuid.UUID

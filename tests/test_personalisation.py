@@ -26,6 +26,7 @@ VARIABLES = {
     "structure": "none",
     "support": [],
     "resistance": [],
+    "kronos_forecast": "Not available for this run.",
 }
 
 

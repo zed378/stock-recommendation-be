@@ -253,6 +253,40 @@ class SocialSentimentSnapshotResponse(BaseModel):
     posts: list[dict[str, Any]]
 
 
+class KronosForecastRequest(BaseModel):
+    timeframe: Timeframe = Timeframe.D1
+    exchange: str = "IDX"
+    pred_len: int = Field(default=5, ge=1, le=60)
+    temperature: float = Field(default=1.0, ge=0.1, le=2.0)
+    top_p: float = Field(default=0.9, ge=0.1, le=1.0)
+    sample_count: int = Field(default=1, ge=1, le=5)
+
+
+class KronosForecastBarResponse(BaseModel):
+    timestamp: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class KronosForecastResponse(BaseModel):
+    ticker: str
+    exchange: str
+    timeframe: str
+    model_id: str
+    tokenizer_id: str
+    provider: str
+    lookback_bars: int
+    pred_len: int
+    last_close: float
+    projected_close: float
+    projected_return_pct: float
+    direction_bias: str
+    bars: list[KronosForecastBarResponse]
+
+
 # --- Watchlist -------------------------------------------------------------
 
 
