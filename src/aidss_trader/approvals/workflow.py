@@ -41,7 +41,10 @@ class ApprovalRefused(Exception):
 def _plain(value: Decimal | None) -> str:
     # The database pads Decimals to the column scale (1236777000.000000000000000000),
     # so the same price must hash the same before and after a round trip.
-    return "none" if value is None else format(value.normalize(), "f")
+    # Quantised to the exchange's finest step (8 decimals) first: SQLite stores Numeric as a
+    # float and hands back 0.075987840000000001 for 0.07598784. PostgreSQL does not, but the
+    # hash must not depend on which database the row went through.
+    return "none" if value is None else format(value.quantize(Decimal("1e-8")).normalize(), "f")
 
 
 def intent_hash(intent: Intent) -> str:

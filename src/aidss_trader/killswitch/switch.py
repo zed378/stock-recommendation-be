@@ -53,7 +53,7 @@ def _now() -> datetime:
 
 class KillSwitch:
     def __init__(
-        self, session: Session, client: IndodaxClient, *, now: Callable[[], datetime] = _now
+        self, session: Session, client: IndodaxClient | None, *, now: Callable[[], datetime] = _now
     ) -> None:
         self._s, self._client, self._now = session, client, now
 
@@ -62,6 +62,18 @@ class KillSwitch:
     def state(self) -> str:
         row = self._s.get(TradingStateRow, "trader")
         return row.state if row else "RUNNING"
+
+    def ensure_initialized(self) -> bool:
+        """First start: begin HALTED, so nothing trades until the owner resumes with a note.
+
+        Without this a database with no state row reads as RUNNING, and a fresh install would
+        be one `PUT /limits` away from trading. Returns True if it had to create the row.
+        """
+        if self._s.get(TradingStateRow, "trader") is not None:
+            return False
+        self._set_state("HALTED", "initial state: awaiting the owner's resume", "system")
+        self._s.commit()
+        return True
 
     def _set_state(self, state: str, reason: str, by: str) -> None:
         row = self._s.get(TradingStateRow, "trader")
@@ -125,6 +137,10 @@ class KillSwitch:
         )
 
     def _cancel_all(self, event: KillSwitchEvent) -> None:
+        if self._client is None:
+            # HALT never needs the exchange. The heavier tiers say plainly that they could not act.
+            self._step(event, "list_open", "exchange", "failed", "no exchange client configured")
+            return
         try:
             open_orders = self._client.get_open_orders()
         except ConnectorError as exc:
@@ -155,6 +171,9 @@ class KillSwitch:
             )
 
     def _flatten(self, event: KillSwitchEvent) -> None:
+        if self._client is None:
+            self._step(event, "account", "exchange", "failed", "no exchange client configured")
+            return
         try:
             account = self._client.get_account()
         except ConnectorError as exc:

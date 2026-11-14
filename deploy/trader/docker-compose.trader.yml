@@ -17,9 +17,20 @@ services:
       AIDSS_TRADER_DATABASE_URL: ${AIDSS_TRADER_DATABASE_URL}   # role trader_rw
       AIDSS_TRADER_MASTER_KEY_FILE: /run/secrets/trader_master_key
       AIDSS_TRADER_INSTANCE_NAME: ${AIDSS_TRADER_INSTANCE_NAME:-trader-1}
+      # Authenticates every operator request by asking the analysis API who the caller is.
+      # Unset means the operator API is not served at all.
+      AIDSS_TRADER_ANALYSIS_API_URL: ${AIDSS_TRADER_ANALYSIS_API_URL:-http://api:8000}
+      # Left unset on purpose until the owner confirms which hosts serve Trade API 2.0
+      # (docs/06-INTEGRATIONS/11, D1). Unset means no exchange client: observe and halt.
+      AIDSS_TRADER_EXCHANGE_BASE_URL: ${AIDSS_TRADER_EXCHANGE_BASE_URL:-}
+      AIDSS_TRADER_PUBLIC_BASE_URL: ${AIDSS_TRADER_PUBLIC_BASE_URL:-}
+      AIDSS_TRADER_UI_URL: ${AIDSS_TRADER_UI_URL:-}
     secrets:
       - trader_master_key
-    # No ports are published; the operator surface arrives in T5.
+    # Not published to the host. The front end proxies /trader/ to this port over the compose
+    # network (frontend/nginx.conf), so the operator API is reachable only through the app.
+    expose:
+      - "8001"
     read_only: true
     tmpfs:
       - /tmp

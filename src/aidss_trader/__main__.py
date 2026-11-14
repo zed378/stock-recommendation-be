@@ -11,7 +11,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from aidss_trader.config import get_settings
-from aidss_trader.credentials import generate_master_key_file
+from aidss_trader.credentials import (
+    MasterKeyUnavailable,
+    generate_master_key_file,
+    load_master_key,
+)
+from aidss_trader.runtime.assembly import build_api, build_runtime, serve_in_thread
 from aidss_trader.service import heartbeat_age_s, run
 
 
@@ -40,7 +45,18 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=settings.log_level)
     engine = create_engine(settings.database_url, pool_pre_ping=True)
-    run(settings, sessionmaker(engine, expire_on_commit=False))
+    factory = sessionmaker(engine, expire_on_commit=False)
+    try:
+        fernet = load_master_key(settings.master_key_file)
+    except MasterKeyUnavailable as exc:
+        # The service still starts and says so; with no key it cannot read a credential.
+        logging.getLogger("aidss_trader").error("master key unavailable: %s", exc)
+        fernet = None
+    runtime = build_runtime(settings, factory, fernet)
+    app = build_api(settings, factory, runtime)
+    if app is not None:
+        serve_in_thread(app, settings.api_host, settings.api_port)
+    run(settings, factory, runtime=runtime)
     return 0
 
 

@@ -24,6 +24,7 @@ import hashlib
 import hmac
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
@@ -143,6 +144,8 @@ class IndodaxClient:
         self._sleep = sleep
         self._http = httpx.Client(transport=transport, timeout=timeout_s)
         self._last_clock_ok: float | None = None
+        # Per thread: the runtime loop and the operator API share this client.
+        self._wire = threading.local()
 
     # ------------------------------------------------------------------ core
 
@@ -190,8 +193,10 @@ class IndodaxClient:
             ).hexdigest()
             del secret  # not kept beyond this signature
 
+        sent_ms = self._now_ms()
         try:
             response = self._http.request(method, url, headers=headers, content=content)
+            self._wire.span = (sent_ms, self._now_ms())
         except httpx.TimeoutException as exc:
             raise ConnectorError(
                 ErrorClass.TIMEOUT,
@@ -290,9 +295,10 @@ class IndodaxClient:
         at the midpoint of the round trip so network latency is not mistaken for
         skew.
         """
-        t0 = self._now_ms()
         server_ms = self.get_server_time()
-        t1 = self._now_ms()
+        # Only the time on the wire counts. Measuring around the call would include the
+        # throttle's wait, and a drained bucket would read as a clock skew that is not there.
+        t0, t1 = self._wire.span
         offset = server_ms - (t0 + t1) // 2
         if abs(offset) > self._max_skew_ms:
             raise ConnectorError(

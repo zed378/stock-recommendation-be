@@ -12,8 +12,8 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 | T1 | Foundation | 🚧 built, in review (2026-11-14) | Code and 40 tests exist. **Not verified:** PostgreSQL privileges (`-m postgres`, no PostgreSQL was available), the Docker image build, and the Compose override. See `MEMORY/records/2026-11-14-t1-foundation.md` |
 | T2 | Exchange connector | 🚧 built, in review (2026-11-14) | Mock-verified only. **T2-07 (live Read-only check) is owner-led and not done**; every Indodax shape is documented, not observed |
 | T3 | Strategy, backtest, paper | 🚧 built, in review (2026-11-14) | Mechanism only; OQ-5 and OQ-11 values unset, tests use their own numbers. AI context deferred (ADR-032) |
-| T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; **not wired into the run loop**, so the Trader still cannot trade. OQ-9 values unset |
-| T5 | Operator surface and `APPROVAL` | 🚧 built, unwired, UI never seen in a browser (2026-11-14) | T5-01, 02, 03, 05, the T5-04 API and a first front end exist (typecheck, lint, build pass). **Nothing wired into the run loop, the Trader does not serve its API, and the screens were never rendered.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
+| T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; now wired into the run loop (mock-tested only); a fresh install starts `HALTED`. OQ-9 values unset |
+| T5 | Operator surface and `APPROVAL` | 🚧 built, unwired, UI never seen in a browser (2026-11-14) | T5-01, 02, 03, 05, the T5-04 API and a first front end exist (typecheck, lint, build pass). **Wired into the run loop and the API is served (mock-tested only, see the runtime record); the screens were never rendered.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
 | T6 | Hardening and release | ⏳ TODO | No open question blocks T6 (ADR-037, ADR-039, ADR-040) |
 
 ## What Exists Today
@@ -38,7 +38,7 @@ Deployed on the project's host as images `zed378/aidss-api` and `zed378/aidss-fr
 | `aidss_trader` package | exists: T1 foundation plus connector, market data, strategy, intents, paper, backtest, risk, orders, exits, killswitch, reconcile |
 | `trading` schema, roles, migrations | three migrations; privileges unverified on PostgreSQL |
 | Indodax connector, mock exchange | exist; mock is synthetic, the connector has never touched the real API |
-| Order code | exists but is not wired into the run loop; the service still never trades |
+| Order code | exists and is wired into the run loop (mock-tested only); starts `HALTED`, every owner number unset, no exchange URL configured, so it trades nothing |
 | Documentation | exists (T0) |
 | Indodax API key | none; none has been seen |
 | Live response from Indodax | none captured |

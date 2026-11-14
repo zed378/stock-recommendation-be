@@ -1,12 +1,13 @@
-"""The Trader's run loop for phase T1.
+"""The Trader's service loop: lease, heartbeat, and (when assembled) the trading runtime.
 
-It starts in `DISABLED` and nothing in T1 can move it out: there is no
-strategy, no connector, and no order code yet. What it does prove is the
-safety scaffolding: the master key is readable, the lease is held by exactly
-one instance, and a heartbeat is written for the health check.
+Without a `Runtime` it only proves the safety scaffolding: the master key is
+readable, the lease is held by exactly one instance, and a heartbeat is written for
+the health check. With one, each iteration that holds the lease also runs a
+`Runtime` cycle (docs/02-ARCHITECTURE). The runtime starts HALTED on a fresh
+install, so assembling it does not by itself allow anything to trade.
 
-`DISABLED` always carries its reasons, so a halted or disabled Trader never
-looks like a quiet one.
+`evaluate` reports why the service is not ready; it never reports permission to trade.
+That belongs to the kill-switch state and the Risk Engine.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from aidss_trader.config import TraderSettings, unset_risk_fields
 from aidss_trader.credentials import MasterKeyUnavailable, load_master_key
 from aidss_trader.lease import LeaseHolder
+from aidss_trader.runtime.loop import Runtime
 
 logger = logging.getLogger("aidss_trader")
 
@@ -58,7 +60,6 @@ def evaluate(settings: TraderSettings, session: Session, holder: LeaseHolder) ->
     # The point is that the answer is "disabled", never a permissive default.
     unset = unset_risk_fields(None)
     status.reasons.append(f"{len(unset)} required risk limits are unset")
-    status.reasons.append("no strategy or exchange connector exists yet (phase T1)")
     return status
 
 
@@ -81,12 +82,20 @@ def run(
     *,
     sleep: Callable[[float], None] = time.sleep,
     stop: Callable[[], bool] = lambda: False,
+    runtime: Runtime | None = None,
 ) -> None:
     holder = LeaseHolder(holder=settings.instance_name, ttl_s=settings.lease_ttl_s)
     while not stop():
         with factory() as session:
             status = evaluate(settings, session, holder)
             session.commit()
+        if runtime is not None and status.holds_lease:
+            # Only the lease holder trades (ADR-027). A cycle error never ends the loop: the
+            # heartbeat below must keep telling the truth about whether the process is alive.
+            try:
+                runtime.run_if_due()
+            except Exception:
+                logger.exception("runtime cycle failed")
         write_heartbeat(settings.heartbeat_file)
         logger.info(
             "cycle",

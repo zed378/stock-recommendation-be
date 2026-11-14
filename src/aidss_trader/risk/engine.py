@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
 from sqlalchemy.orm import Session
 
@@ -265,7 +265,21 @@ class Breaker:
     limit: str
 
 
-def breakers(ctx: RiskContext) -> list[Breaker]:
+class BreakerInputs(Protocol):
+    """The part of a risk context the breakers read: no pair or intent is needed."""
+
+    limits: RiskLimits | None
+    permissions_ok: bool
+    clock_ok: bool
+    unknown_orders: int
+    reconciliation_clean: bool
+    daily_realised_loss_idr: Decimal
+    drawdown_pct: Decimal
+    consecutive_losses: int
+    market_data_age_s: float
+
+
+def breakers(ctx: BreakerInputs) -> list[Breaker]:
     """Conditions that stop trading by themselves. They halt or cancel; they never sell."""
     out: list[Breaker] = []
     limits = ctx.limits

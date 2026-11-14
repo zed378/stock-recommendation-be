@@ -11,7 +11,7 @@
 
 The approval, promotion, notification, export, and API logic exists and is tested on the mock, and a front end
 for it now exists (see "Front end" below). **Nothing is wired and nothing was seen in a browser**: the Trader
-process does not serve its API, no strategy creates an intent for approval, and the screens were checked only
+process did not serve its API at the time (the runtime record changes this), and the screens were checked only
 by type check, lint, build, and a check of the API's real response shapes. T5's exit criteria are **not met**.
 
 ---

@@ -31,6 +31,13 @@ class TraderSettings(BaseSettings):
     public_base_url: str | None = None
     analysis_api_url: str | None = None
 
+    # The operator API (docs/07-API-CONTRACTS). Served only when `analysis_api_url` is set,
+    # because every request is authenticated by asking the analysis API who the caller is.
+    api_host: str = "0.0.0.0"  # noqa: S104 (inside the container network; no port is published)
+    api_port: int = Field(default=8001, gt=0, lt=65536)
+    # Link in notifications. Absent means messages carry no link.
+    ui_url: str | None = None
+
     instance_name: str = "trader-1"
     log_level: str = "INFO"
     heartbeat_file: Path = Path("/tmp/aidss-trader.heartbeat")

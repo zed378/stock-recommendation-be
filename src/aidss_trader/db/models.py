@@ -430,3 +430,25 @@ class StepUpGrant(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TraderSetting(Base):
+    """Owner-set operational settings that are not risk limits: allowlist, liquidity filter,
+    strategy parameters. Every change is audited by the code that makes it."""
+
+    __tablename__ = "trader_setting"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_by: Mapped[str] = mapped_column(String(64))
+
+
+class EquitySnapshot(Base):
+    """Account equity in IDR at a moment, so drawdown has a peak to be measured from."""
+
+    __tablename__ = "equity_snapshot"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    equity_idr: Mapped[Decimal] = mapped_column(Money)

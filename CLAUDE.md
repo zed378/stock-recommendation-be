@@ -12,13 +12,14 @@ This repository holds **two systems at two different maturity levels**:
 | System | State | Where |
 |---|---|---|
 | **AIDSS analysis platform** | Built and running. FastAPI + PostgreSQL + React. Decision support only: no order, no broker, no execution, enforced by tests. | `src/aidss/`, `frontend/`, `alembic/`, `tests/` |
-| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T4 built, in review.** `aidss_trader` has the foundation plus an Indodax connector, strategy, paper and backtest, Risk Engine, order manager, exit monitor, kill switch, and reconciler, all verified against a synthetic mock only and not wired into the run loop. **It cannot trade yet.** | `src/aidss_trader/`, `docs/`, `MEMORY/`, `TASKS/` |
+| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T4 built, in review.** `aidss_trader` has the foundation plus an Indodax connector, strategy, paper and backtest, Risk Engine, order manager, exit monitor, kill switch, and reconciler, all verified against a synthetic mock only, now assembled into the run loop. **Never run against a real exchange; a fresh install starts HALTED and every owner number is unset, so it trades nothing until the owner acts.** | `src/aidss_trader/`, `docs/`, `MEMORY/`, `TASKS/` |
 
 If this file and `TASKS/PROGRESS.md` disagree about what exists, trust `PROGRESS.md` and fix this file. A
 stale instruction document produces confidently wrong work.
 
-**Do not describe the Trader as able to trade.** It cannot: it has no connector and no order path. Work follows
-the active phase in `TASKS/PROGRESS.md`.
+**Do not describe the Trader as able to trade.** It has a connector and an order path, but it has never touched
+a real exchange, starts `HALTED`, and has no owner-set number, so nothing has traded and nothing may be claimed
+about live behaviour. Work follows the active phase in `TASKS/PROGRESS.md`.
 
 ## What the Trader Is
 
@@ -171,7 +172,7 @@ Verified on 2026-11-14 (hermetic, SQLite; no exchange and no PostgreSQL needed):
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
 | `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); **not yet run against PostgreSQL** |
 
-The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and a first front end under `frontend/src/trader` (never rendered in a browser), but are **not wired into the run loop**; `aidss_trader run` still never trades. No real Indodax call has been made (T2-07 is owner-led).
+The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and a first front end under `frontend/src/trader` (never rendered in a browser), and are wired into the run loop (`aidss_trader run`, mock-tested only, never against an exchange). A fresh install starts `HALTED`, every owner number is unset, and the Compose file passes no exchange URL, so a deployed image trades nothing. The PAPER position lifecycle is not built. No real Indodax call has been made (T2-07 is owner-led).
 
 ## Code Style
 

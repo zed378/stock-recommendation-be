@@ -973,3 +973,25 @@ platform); a typed confirmation phrase only (does not stop a stolen session).
 
 **Implications:** The 5-minute window is adjustable. If the analysis API is down the step-up fails closed, so
 `FLATTEN` from the UI is unavailable; the command-line kill tool does not depend on it (ADR-028).
+
+---
+
+### ADR-047 — A fresh install starts HALTED; signal exits in APPROVAL mode are not queued
+
+**Date:** 2026-11-14
+**Status:** proposed (reversible, no loss limit involved; the owner has not confirmed)
+
+**Decision:** (1) When the runtime finds no trading-state row it creates one as `HALTED` ("initial state:
+awaiting the owner's resume"). Trading starts only when the owner resumes with a note. (2) In `APPROVAL` mode only
+*entries* wait for approval; a strategy's signal exit is sent through the Risk Engine without a card, the same
+as a stop, because the owner approves entries and the protective exits that follow need no further approval
+(`docs/05-MODULE-SPECIFICATIONS/07`, "Scope of Approval").
+
+**Rationale:** Without (1) a database with no state row reads as `RUNNING`, and a fresh install would be one
+limits change away from trading. For (2), a position held while an exit card expires unanswered is the
+dangerous outcome.
+
+**Alternatives considered:** Starting `RUNNING` once limits are set; queueing signal exits for approval.
+
+**Implications:** The first thing an owner does after setting limits is resume. If the owner wants signal exits
+approved too, the runtime routes them to the approval workflow instead.

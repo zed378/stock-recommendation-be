@@ -42,10 +42,18 @@ from aidss_trader.db.models import (
     TradingEvent,
 )
 from aidss_trader.export import export_audit, export_ledger
-from aidss_trader.intents.builder import Intent
+from aidss_trader.intents import Intent, intent_from_row
 from aidss_trader.killswitch import KillSwitch, KillSwitchRefused
 from aidss_trader.notify import Notifier
 from aidss_trader.promotion import Promotion, PromotionRefused, SuppliedEvidence, Thresholds
+from aidss_trader.runtime.settings_store import (
+    Allowlist,
+    LiquidityFilter,
+    get_allowlist,
+    set_allowlist,
+    set_strategy_params,
+)
+from aidss_trader.strategy.ema_adx import EmaAdxParams
 
 PREFIX = "/trader/v1"
 CONFIRMATION = {
@@ -126,6 +134,22 @@ class StepUpBody(BaseModel):
     email: str
     password: str
     scope: str
+
+
+class AllowlistBody(BaseModel):
+    pairs: list[str]
+    min_quote_volume_24h_idr: str | None = None
+    max_spread_pct: str | None = None
+
+
+class ParametersBody(BaseModel):
+    ema_fast: int
+    ema_slow: int
+    adx_period: int
+    adx_threshold: str
+    atr_period: int
+    atr_stop_multiple: str
+    cooldown_s: int
 
 
 class LimitsBody(BaseModel):
@@ -401,19 +425,8 @@ def create_app(ctx: ApiContext) -> FastAPI:
         return envelope({"grant": token, "valid_for_s": 300})
 
     def _intent_from_row(row: OrderIntentRow) -> Intent:
-        return Intent(
-            identity=row.identity,
-            strategy_version=row.strategy_version,
-            pair=row.pair,
-            side=row.side,
-            entry_price=row.entry_price,
-            quantity=row.quantity,
-            stop_price=row.stop_price,
-            risk_amount_idr=row.risk_amount_idr,
-            rule_snapshot=row.rule_snapshot or {},
-            mode="AUTO",  # approved: it may be sent
-            signal_candle_open=row.created_at,
-        )
+        # Approved means it may be sent: the mode on the rebuilt intent is AUTO.
+        return intent_from_row(row, mode="AUTO")
 
     @app.post(f"{r}/intents/{{identity}}/approve")
     def approve(
@@ -608,6 +621,87 @@ def create_app(ctx: ApiContext) -> FastAPI:
         ctx.notifier(s).emit("limit_changed", "a risk limit changed", {"version": version})
         return envelope({"version": version, "unset": unset_risk_fields(new)})
 
+    @app.get(f"{r}/allowlist")
+    def get_allow(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        a = get_allowlist(s)
+        return envelope(
+            {
+                "pairs": list(a.pairs),
+                "min_quote_volume_24h_idr": None
+                if a.liquidity.min_quote_volume_24h_idr is None
+                else format(a.liquidity.min_quote_volume_24h_idr.normalize(), "f"),
+                "max_spread_pct": None
+                if a.liquidity.max_spread_pct is None
+                else format(a.liquidity.max_spread_pct.normalize(), "f"),
+                "active": a.liquidity.configured and bool(a.pairs),
+            }
+        )
+
+    @app.put(f"{r}/allowlist")
+    def put_allow(
+        body: AllowlistBody,
+        who: Principal = Depends(need(perm.CONFIGURE_RISK)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+        x_step_up: str | None = Header(default=None),
+    ):
+        from decimal import Decimal, InvalidOperation
+
+        try:
+            new = Allowlist(
+                pairs=tuple(sorted({p.strip().upper() for p in body.pairs if p.strip()})),
+                liquidity=LiquidityFilter(
+                    None
+                    if body.min_quote_volume_24h_idr is None
+                    else Decimal(body.min_quote_volume_24h_idr),
+                    None if body.max_spread_pct is None else Decimal(body.max_spread_pct),
+                ),
+            )
+        except InvalidOperation:
+            raise ApiError(
+                400, "VALIDATION", "bad_value", "a liquidity number is not a decimal"
+            ) from None
+        old = get_allowlist(s)
+        if allowlist_loosens(old, new):
+            step_up(s, who, "RAISE_LIMIT", x_step_up)
+        set_allowlist(s, new, by=who.user_id)
+        s.commit()
+        ctx.notifier(s).emit(
+            "limit_changed", "the allowlist or liquidity filter changed", {"pairs": len(new.pairs)}
+        )
+        return envelope(
+            {"pairs": list(new.pairs), "active": new.liquidity.configured and bool(new.pairs)}
+        )
+
+    @app.put(f"{r}/strategies/{{strategy_id}}/parameters")
+    def put_params(
+        strategy_id: str,
+        body: ParametersBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        from decimal import Decimal, InvalidOperation
+
+        if strategy_id != "ema_adx":
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        try:
+            params = EmaAdxParams(
+                ema_fast=body.ema_fast,
+                ema_slow=body.ema_slow,
+                adx_period=body.adx_period,
+                adx_threshold=Decimal(body.adx_threshold),
+                atr_period=body.atr_period,
+                atr_stop_multiple=Decimal(body.atr_stop_multiple),
+                cooldown_s=body.cooldown_s,
+            )
+        except (InvalidOperation, ValueError) as exc:
+            raise ApiError(400, "VALIDATION", "bad_parameters", str(exc)) from None
+        version = set_strategy_params(s, strategy_id, params, by=who.user_id)
+        s.commit()
+        # A new version always starts again in PAPER (ADR-020); the response says so.
+        return envelope({"version": version, "mode": "PAPER"})
+
     @app.post(f"{r}/events/{{event_id}}/ack")
     def ack(
         event_id: str,
@@ -622,6 +716,24 @@ def create_app(ctx: ApiContext) -> FastAPI:
         return envelope({"acked": ev.acked_at is not None})
 
     return app
+
+
+def allowlist_loosens(old: Allowlist, new: Allowlist) -> bool:
+    """True if `new` can trade something `old` could not: a new pair, a lower volume floor, a
+    wider spread cap, or a liquidity filter switched on where it was not."""
+    if set(new.pairs) - set(old.pairs):
+        return True
+    a, b = old.liquidity, new.liquidity
+    if not b.configured:
+        return False
+    if not a.configured:
+        return True
+    assert a.min_quote_volume_24h_idr is not None and b.min_quote_volume_24h_idr is not None
+    assert a.max_spread_pct is not None and b.max_spread_pct is not None
+    return (
+        b.min_quote_volume_24h_idr < a.min_quote_volume_24h_idr
+        or b.max_spread_pct > a.max_spread_pct
+    )
 
 
 # A higher value is looser for these; for the rest a lower value is looser.

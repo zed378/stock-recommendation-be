@@ -18,6 +18,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from aidss_trader.config.limits import RiskLimits, unset_risk_fields
 from aidss_trader.market_data.pairs import PairRules, check_order, floor_to_increment
@@ -43,6 +44,32 @@ class Intent:
 class IntentResult:
     intent: Intent | None
     reasons: list[str] = field(default_factory=list)
+
+
+_EIGHT = Decimal("1e-8")
+
+
+def _exact(value: Decimal | None) -> Decimal | None:
+    """Undo storage noise. The exchange's finest step is 8 decimals, and SQLite (the test
+    database) returns a Numeric as a float, 0.075987840000000001 for 0.07598784."""
+    return None if value is None else value.quantize(_EIGHT)
+
+
+def intent_from_row(row: Any, *, mode: str) -> Intent:
+    """Rebuild an intent from its stored row (duck-typed: this module knows no database)."""
+    return Intent(
+        identity=row.identity,
+        strategy_version=row.strategy_version,
+        pair=row.pair,
+        side=row.side,
+        entry_price=_exact(row.entry_price),
+        quantity=_exact(row.quantity),
+        stop_price=_exact(row.stop_price),
+        risk_amount_idr=_exact(row.risk_amount_idr),
+        rule_snapshot=row.rule_snapshot or {},
+        mode=mode,
+        signal_candle_open=row.created_at,
+    )
 
 
 def intent_identity(strategy_version: str, pair: str, candle_open: datetime, side: str) -> str:

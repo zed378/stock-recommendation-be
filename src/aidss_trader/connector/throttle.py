@@ -11,6 +11,7 @@ section says 20 per second per pair. Both apply; the stricter one binds.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -79,6 +80,9 @@ class Throttle:
         self._headroom = headroom
         self._limits = limits
         self._buckets: dict[str, TokenBucket] = {}
+        # The runtime loop and the operator API share one client, so one throttle: two
+        # unsynchronised buckets would together exceed the exchange limit.
+        self._lock = threading.RLock()
 
     def _bucket(self, scope: str, per_s: float) -> TokenBucket:
         if scope not in self._buckets:
@@ -89,6 +93,10 @@ class Throttle:
         return self._buckets[scope]
 
     def acquire(self, scope: str) -> float:
+        with self._lock:
+            return self._acquire(scope)
+
+    def _acquire(self, scope: str) -> float:
         lim = self._limits
         if scope == "public_v2":
             return self._bucket(scope, lim.public_v2_per_min / 60).acquire()

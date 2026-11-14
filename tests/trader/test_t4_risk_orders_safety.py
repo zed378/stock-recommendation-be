@@ -625,4 +625,12 @@ def test_market_orders_are_only_possible_on_emergency_paths() -> None:
         rel = path.relative_to(SRC).parts[0]
         if rel in {"connector", "orders", "killswitch", "backtest", "paper"}:
             continue
+        if path == SRC / "runtime" / "loop.py":
+            continue  # checked below: exactly one use, inside the stop path
         assert '"MARKET"' not in path.read_text(encoding="utf-8"), path
+    loop = (SRC / "runtime" / "loop.py").read_text(encoding="utf-8")
+    assert loop.count('"MARKET"') == 1
+    stop_path = loop[
+        loop.index("def _send_stop") : loop.index("# ---", loop.index("def _send_stop"))
+    ]
+    assert '"MARKET"' in stop_path and 'purpose="STOP"' in stop_path
