@@ -687,7 +687,7 @@ until the bridge has run for a period after the MVP.
 ### ADR-033 — The `admin` role may `HALT`
 
 **Date:** 2026-11-14
-**Status:** accepted
+**Status:** superseded by ADR-048
 
 **Decision:** Besides `trader`, the platform `admin` role may trigger `HALT`. `CANCEL`, `FLATTEN`, and resume
 remain `trader` only.
@@ -995,3 +995,26 @@ dangerous outcome.
 
 **Implications:** The first thing an owner does after setting limits is resume. If the owner wants signal exits
 approved too, the runtime routes them to the approval workflow instead.
+
+
+---
+
+### ADR-048 — The `admin` role holds every trader permission
+
+**Date:** 2026-11-14
+**Status:** accepted (the owner's instruction in this session). Supersedes ADR-033
+
+**Decision:** `admin` has the same trade permissions as `trader`: approve and deny, edit strategy parameters,
+change limits and the allowlist, promote and demote, `HALT`, `CANCEL`, `FLATTEN`, resume, manage the credential,
+and read the audit log. `investor` and `viewer` stay read-only. Step-up authentication (ADR-046) still applies to
+`FLATTEN`, promotion to `AUTO`, and loosening a limit for both roles.
+
+**Rationale:** The owner administers the platform and wants one account to operate the Trader. There is one owner
+(ADR-015), so a second role with partial rights added friction and no control.
+
+**Alternatives considered:** Keeping `admin` to `HALT` only; a separate `trader` account.
+
+**Implications:** Anyone given the platform `admin` role can now flatten positions and replace the exchange key, so
+granting `admin` is granting control of the money. The analysis API's role management is therefore part of the
+trading threat model: an `admin` account takeover is a trading takeover, and the step-up is the only extra barrier.
+The password is the weakest point; a second factor is worth considering (ADR-046 alternatives).

@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 
 from aidss_trader.audit import AuditLogger
 from aidss_trader.db.models import TraderSetting
+from aidss_trader.paper import CostModel, PaperConfig
 from aidss_trader.promotion import Promotion
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 
+PAPER_KEY = "paper_config"
 ALLOWLIST_KEY = "allowlist"
 STRATEGY_PREFIX = "strategy_params:"
 
@@ -155,3 +157,79 @@ def load_strategy(session: Session, strategy_id: str = "ema_adx") -> EmaAdxStrat
         )
     except (KeyError, TypeError, ValueError, InvalidOperation):
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class PaperSettings:
+    """The owner's paper-trading numbers (OQ-5): costs, slippage, partial fills, start capital.
+
+    Nothing has a default. Until all of them are set the paper simulation does not run, so a
+    paper result can never come from a number nobody chose.
+    """
+
+    config: PaperConfig
+    start_equity_idr: Decimal
+
+
+_PAPER_FIELDS = (
+    "slippage_pct",
+    "partial_fill_fraction",
+    "maker_fee_pct",
+    "taker_fee_pct",
+    "tax_pct",
+    "clearing_pct",
+    "start_equity_idr",
+)
+
+
+def get_paper_settings(session: Session) -> PaperSettings | None:
+    row = session.get(TraderSetting, PAPER_KEY)
+    if row is None:
+        return None
+    v = row.value
+    try:
+        nums = {name: Decimal(str(v[name])) for name in _PAPER_FIELDS}
+        if nums["start_equity_idr"] <= 0:
+            return None
+        return PaperSettings(
+            PaperConfig(
+                slippage_pct=nums["slippage_pct"],
+                partial_fill_fraction=nums["partial_fill_fraction"],
+                costs=CostModel(
+                    nums["maker_fee_pct"],
+                    nums["taker_fee_pct"],
+                    nums["tax_pct"],
+                    nums["clearing_pct"],
+                ),
+            ),
+            nums["start_equity_idr"],
+        )
+    except (KeyError, TypeError, ValueError, InvalidOperation):
+        return None  # unset or invalid: the simulation does not run
+
+
+def set_paper_settings(
+    session: Session, values: dict[str, Decimal], *, by: str, now: datetime | None = None
+) -> None:
+    missing = [n for n in _PAPER_FIELDS if n not in values]
+    if missing:
+        raise ValueError(f"paper settings need every value: missing {missing}")
+    PaperConfig(  # validates ranges
+        slippage_pct=values["slippage_pct"],
+        partial_fill_fraction=values["partial_fill_fraction"],
+        costs=CostModel(
+            values["maker_fee_pct"],
+            values["taker_fee_pct"],
+            values["tax_pct"],
+            values["clearing_pct"],
+        ),
+    )
+    if values["start_equity_idr"] <= 0:
+        raise ValueError("start_equity_idr must be positive")
+    _put(
+        session,
+        PAPER_KEY,
+        {n: _text(values[n]) for n in _PAPER_FIELDS},
+        by,
+        now or datetime.now(UTC),
+    )

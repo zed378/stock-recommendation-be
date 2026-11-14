@@ -17,7 +17,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss_trader.db.models import EquitySnapshot, Fill
+from aidss_trader.db.models import EquitySnapshot, Fill, PaperEquitySnapshot
 from aidss_trader.ledger.position import Position, apply_fill
 
 WIB = timedelta(hours=7)
@@ -35,13 +35,13 @@ class Realised:
     pnl: Decimal
 
 
-def replay_live(session: Session) -> tuple[dict[str, Position], list[Realised]]:
-    """Replay every LIVE fill in time order. Raises LedgerIntegrityError on an impossible sell."""
-    fills = list(
-        session.scalars(
-            select(Fill).where(Fill.origin == "LIVE").order_by(Fill.executed_at, Fill.id)
-        )
-    )
+def replay_origin(session: Session, origin: str) -> tuple[dict[str, Position], list[Realised]]:
+    """Replay every fill of one origin in time order. Raises LedgerIntegrityError on an
+    impossible sell. LIVE and PAPER are never replayed together (FR-T28)."""
+    fills = list(session.scalars(select(Fill).where(Fill.origin == origin)))
+    # Same-instant fills (a stop on the candle an entry filled) must replay buy-first, and a
+    # random UUID tiebreak would not.
+    fills.sort(key=lambda f: (_aware(f.executed_at), f.side == "SELL"))
     positions: dict[str, Position] = {}
     events: list[Realised] = []
     for f in fills:
@@ -51,6 +51,10 @@ def replay_live(session: Session) -> tuple[dict[str, Position], list[Realised]]:
         if f.side == "SELL":
             events.append(Realised(_aware(f.executed_at), f.pair, realised))
     return {p: pos for p, pos in positions.items() if pos.quantity > 0}, events
+
+
+def replay_live(session: Session) -> tuple[dict[str, Position], list[Realised]]:
+    return replay_origin(session, "LIVE")
 
 
 def wib_day_start(now: datetime) -> datetime:
@@ -85,3 +89,46 @@ def drawdown_pct(session: Session, equity: Decimal) -> Decimal:
     peak = max((e for (e,) in session.execute(select(EquitySnapshot.equity_idr))), default=equity)
     peak = max(peak, equity)
     return ZERO if peak <= 0 else (peak - equity) / peak * 100
+
+
+def paper_equity(
+    start: Decimal,
+    positions: dict[str, Position],
+    events: list[Realised],
+    last_prices: dict[str, Decimal],
+) -> Decimal:
+    """Start capital plus realised PnL plus open positions marked at the last price. A position
+    with no price is carried at cost rather than dropped, which would invent a loss."""
+    realised = sum((e.pnl for e in events), ZERO)
+    marked = sum(
+        (
+            pos.quantity * last_prices.get(pair, pos.avg_cost) - pos.quantity * pos.avg_cost
+            for pair, pos in positions.items()
+        ),
+        ZERO,
+    )
+    return start + realised + marked
+
+
+def record_paper_equity(session: Session, equity: Decimal, now: datetime) -> None:
+    session.add(PaperEquitySnapshot(at=now, equity_idr=equity))
+    session.flush()
+
+
+def paper_drawdown_pct(session: Session, since: datetime) -> Decimal | None:
+    """Largest peak-to-trough fall in simulated equity since `since`; None with no snapshots,
+    which a promotion gate reads as "no evidence", never as zero."""
+    rows = session.execute(
+        select(PaperEquitySnapshot.at, PaperEquitySnapshot.equity_idr).order_by(
+            PaperEquitySnapshot.at
+        )
+    ).all()
+    series = [e for at, e in rows if _aware(at) >= _aware(since)]
+    if not series:
+        return None
+    peak, worst = series[0], ZERO
+    for e in series:
+        peak = max(peak, e)
+        if peak > 0:
+            worst = max(worst, (peak - e) / peak * 100)
+    return worst

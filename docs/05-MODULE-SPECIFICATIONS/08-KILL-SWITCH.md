@@ -25,7 +25,7 @@ The highest-priority control in the system. It works when everything else is bro
 | Risk circuit breaker | `HALT` or `CANCEL`, as configured for that breaker (never `FLATTEN`) |
 | Reconciler (difference found) | `HALT` |
 | Watchdog (Trader or feed stalled) | `HALT` |
-| `admin` role | `HALT` only (ADR-033) |
+| `admin` role | Any tier, same as `trader` (ADR-048); `FLATTEN` needs a step-up |
 
 **There is no automatic `FLATTEN`** (ADR-036). Automatic triggers are limited to `HALT` and `CANCEL`; `FLATTEN` is
 always a human decision, and no condition can cause it (FR-T25). Selling everything at

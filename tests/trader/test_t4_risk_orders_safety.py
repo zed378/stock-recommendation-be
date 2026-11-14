@@ -627,6 +627,12 @@ def test_market_orders_are_only_possible_on_emergency_paths() -> None:
             continue
         if path == SRC / "runtime" / "loop.py":
             continue  # checked below: exactly one use, inside the stop path
+        if path == SRC / "runtime" / "paper_lifecycle.py":
+            # Simulated fills are recorded as MARKET orders, but this module can send nothing.
+            text = path.read_text(encoding="utf-8")
+            assert "connector.client" not in text and "orders.manager" not in text
+            assert "create_order" not in text and "cancel_order" not in text
+            continue
         assert '"MARKET"' not in path.read_text(encoding="utf-8"), path
     loop = (SRC / "runtime" / "loop.py").read_text(encoding="utf-8")
     assert loop.count('"MARKET"') == 1

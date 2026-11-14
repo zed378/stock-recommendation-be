@@ -46,11 +46,14 @@ from aidss_trader.intents import Intent, intent_from_row
 from aidss_trader.killswitch import KillSwitch, KillSwitchRefused
 from aidss_trader.notify import Notifier
 from aidss_trader.promotion import Promotion, PromotionRefused, SuppliedEvidence, Thresholds
+from aidss_trader.runtime.accounting import paper_drawdown_pct
 from aidss_trader.runtime.settings_store import (
     Allowlist,
     LiquidityFilter,
     get_allowlist,
+    get_paper_settings,
     set_allowlist,
+    set_paper_settings,
     set_strategy_params,
 )
 from aidss_trader.strategy.ema_adx import EmaAdxParams
@@ -150,6 +153,16 @@ class ParametersBody(BaseModel):
     atr_period: int
     atr_stop_multiple: str
     cooldown_s: int
+
+
+class PaperBody(BaseModel):
+    slippage_pct: str
+    partial_fill_fraction: str
+    maker_fee_pct: str
+    taker_fee_pct: str
+    tax_pct: str
+    clearing_pct: str
+    start_equity_idr: str
 
 
 class LimitsBody(BaseModel):
@@ -268,7 +281,12 @@ def create_app(ctx: ApiContext) -> FastAPI:
         gates = (
             [
                 asdict(g)
-                for g in Promotion(s).gates(strategy_id, nxt, ctx.thresholds(), SuppliedEvidence())
+                for g in Promotion(s).gates(
+                    strategy_id,
+                    nxt,
+                    ctx.thresholds(),
+                    SuppliedEvidence(paper_drawdown_pct=paper_drawdown_pct(s, row.since)),
+                )
             ]
             if nxt
             else []
@@ -497,9 +515,11 @@ def create_app(ctx: ApiContext) -> FastAPI:
         def d(v: str | None):
             return None if v is None else Decimal(v)
 
+        # Paper drawdown is measured from the stored simulated equity, never typed in: a figure
+        # the owner could edit before promoting would be no evidence at all.
         supplied = SuppliedEvidence(
             d(body.backtest_return_pct),
-            d(body.paper_drawdown_pct),
+            paper_drawdown_pct(s, row.since),
             d(body.live_capital_used_idr),
             d(body.slippage_vs_paper_pct),
         )
@@ -701,6 +721,44 @@ def create_app(ctx: ApiContext) -> FastAPI:
         s.commit()
         # A new version always starts again in PAPER (ADR-020); the response says so.
         return envelope({"version": version, "mode": "PAPER"})
+
+    @app.get(f"{r}/paper-config")
+    def get_paper(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        ps = get_paper_settings(s)
+        if ps is None:
+            return envelope({"configured": False}, origin="PAPER")
+        c = ps.config
+        plain = lambda v: format(v.normalize(), "f")  # noqa: E731
+        return envelope(
+            {
+                "configured": True,
+                "slippage_pct": plain(c.slippage_pct),
+                "partial_fill_fraction": plain(c.partial_fill_fraction),
+                "maker_fee_pct": plain(c.costs.maker_fee_pct),
+                "taker_fee_pct": plain(c.costs.taker_fee_pct),
+                "tax_pct": plain(c.costs.tax_pct),
+                "clearing_pct": plain(c.costs.clearing_pct),
+                "start_equity_idr": plain(ps.start_equity_idr),
+            },
+            origin="PAPER",
+        )
+
+    @app.put(f"{r}/paper-config")
+    def put_paper(
+        body: PaperBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        from decimal import Decimal, InvalidOperation
+
+        try:
+            values = {k: Decimal(v) for k, v in body.model_dump().items()}
+            set_paper_settings(s, values, by=who.user_id)
+        except (InvalidOperation, ValueError) as exc:
+            raise ApiError(400, "VALIDATION", "bad_paper_config", str(exc)) from None
+        s.commit()
+        return envelope({"configured": True}, origin="PAPER")
 
     @app.post(f"{r}/events/{{event_id}}/ack")
     def ack(

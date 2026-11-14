@@ -36,21 +36,22 @@ A new role `trader` (ADR-015) and these permissions, enforced by the **Trader's 
 |---|---|---|---|---|
 | View positions, orders, PnL, limits | Yes | Yes | Yes | Yes |
 | Read trading audit log | Yes | Yes | No | No |
-| Approve or deny an intent | Yes | No | No | No |
-| Edit strategy parameters | Yes | No | No | No |
-| Change limits or allowlist | Yes | No | No | No |
-| Promote a strategy | Yes | No | No | No |
-| `HALT` | Yes | Yes (ADR-033) | No | No |
-| `CANCEL`, `FLATTEN` | Yes | No | No | No |
-| Resume after a halt | Yes | No | No | No |
-| Manage the Indodax credential | Yes | No | No | No |
+| Approve or deny an intent | Yes | Yes (ADR-048) | No | No |
+| Edit strategy parameters | Yes | Yes (ADR-048) | No | No |
+| Change limits or allowlist | Yes | Yes (ADR-048) | No | No |
+| Promote a strategy | Yes | Yes (ADR-048) | No | No |
+| `HALT` | Yes | Yes | No | No |
+| `CANCEL`, `FLATTEN` | Yes | Yes (ADR-048) | No | No |
+| Resume after a halt | Yes | Yes (ADR-048) | No | No |
+| Manage the Indodax credential | Yes | Yes (ADR-048) | No | No |
 
 "View" for `investor` and `viewer` follows ADR-015's "existing roles are read-only". Positions are
 sensitive; with one owner, no such users are expected, and the owner may switch this off
 (`10-OPERATIONS/00-ENVIRONMENTS-AND-CONFIG.md`).
 
-**Decided (ADR-033):** `admin` may `HALT`. A halt only stops new orders, so
-allowing more people to do it fails safe. `CANCEL`, `FLATTEN`, and `resume` stay with `trader`.
+**Decided (ADR-048, superseding ADR-033):** `admin` holds every trader permission, at the owner's request. Step-up
+authentication (ADR-046) still guards `FLATTEN`, promotion to `AUTO`, and loosening a limit, for both roles. The
+audit log records the actor either way.
 
 ## Rules
 

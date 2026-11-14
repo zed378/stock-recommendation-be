@@ -19,9 +19,9 @@ a failure in one never skips a protective one:
 Fail closed throughout: a value that cannot be computed (equity, drawdown) blocks
 entries rather than being assumed.
 
-Not built here, on purpose and stated: the PAPER position lifecycle (paper fills,
-paper stops) and the liquidity filter's use of exchange 24-hour volume (it is
-derived from stored candles instead).
+PAPER intents are simulated forward by `paper_lifecycle` (fills, stops, exits) on the
+owner's cost model; with none set, nothing is simulated or recorded. The liquidity
+filter's 24-hour volume is derived from stored candles, not from an exchange call.
 """
 
 from __future__ import annotations
@@ -69,7 +69,13 @@ from aidss_trader.orders.state import OrderState
 from aidss_trader.reconcile import reconcile, windows
 from aidss_trader.risk.engine import CheckResult, Decision, RiskContext, breakers
 from aidss_trader.runtime import accounting
-from aidss_trader.runtime.settings_store import Allowlist, get_allowlist, load_strategy
+from aidss_trader.runtime.paper_lifecycle import PaperBook
+from aidss_trader.runtime.settings_store import (
+    Allowlist,
+    get_allowlist,
+    get_paper_settings,
+    load_strategy,
+)
 
 logger = logging.getLogger("aidss_trader.runtime")
 
@@ -215,6 +221,9 @@ class Runtime:
                     lambda: self._protect(s, ks, notifier, snap, positions, limits, report),
                 )
             self._step(report, "sync", lambda: self._sync_orders(s, notifier, snap, ks))
+            if self._client is not None:
+                self._step(report, "candles", lambda: self._refresh_all_candles(s, report))
+            self._step(report, "paper", lambda: self._paper_step(s, report))
             if snap is not None:
                 self._step(report, "equity", lambda: self._record_equity(s, snap))
                 if ks.state() == "RUNNING":
@@ -748,17 +757,20 @@ class Runtime:
         if limits is None or unset_risk_fields(limits):
             report.skipped.append("required risk limits unset")
             return
-        refresh = self._due("candles", self._candle_poll_s)
+        paper_equity: Decimal | None = None
+        if row.mode == "PAPER":
+            ps = get_paper_settings(s)
+            if ps is None:
+                report.skipped.append("paper cost model and start capital unset (owner)")
+                return
+            positions, events = accounting.replay_origin(s, "PAPER")
+            closes = {p: c[-1].close for p in allow.pairs if (c := self._load_candles(s, p))}
+            paper_equity = accounting.paper_equity(ps.start_equity_idr, positions, events, closes)
         for pair in allow.pairs:
             rules = self._rules.get(pair)
             if rules is None or not rules.tradable:
                 report.skipped.append(f"{pair}: pair rules missing or blocked")
                 continue
-            if refresh:
-                try:
-                    self._refresh_candles(s, pair)
-                except ConnectorError as exc:
-                    report.errors.append(f"candles {pair}: {exc.error_class}")
             if not self._liquid(s, pair, allow, snap):
                 report.skipped.append(f"{pair}: liquidity filter unset or not met")
                 continue
@@ -785,6 +797,7 @@ class Runtime:
                 pair,
                 rules,
                 candles,
+                paper_equity,
             )
 
     def _decide_pair(
@@ -802,6 +815,7 @@ class Runtime:
         pair,
         rules,
         candles,
+        equity_override: Decimal | None = None,
     ) -> None:
         from aidss_trader.strategy.base import PositionState, SignalKind
 
@@ -815,7 +829,8 @@ class Runtime:
                 last_exit_at=last_exit,
             ),
         )
-        if signal.kind is SignalKind.NONE or snap.equity is None:
+        equity = equity_override if equity_override is not None else snap.equity
+        if signal.kind is SignalKind.NONE or equity is None:
             return
         book = snap.books.get(pair)
         if book is None:
@@ -827,7 +842,7 @@ class Runtime:
                 strategy_version=strategy.version_id(),
                 pair=pair,
                 candle_open=last.open_time,
-                equity_idr=snap.equity,
+                equity_idr=equity,
                 limits=limits,
                 rules=rules,
                 best_bid=book.bid_price,
@@ -979,6 +994,40 @@ class Runtime:
             return False  # an unreadable window is closed, not open
         local = (now + accounting.WIB).time()
         return start <= local <= end if start <= end else (local >= start or local <= end)
+
+    # ------------------------------------------------------------------- paper
+
+    def _refresh_all_candles(self, s: Session, report: CycleReport) -> None:
+        """Keep stored candles current for every allowlisted pair, halted or not: the paper
+        simulation and the strategies both read them, and neither may wait for a resume."""
+        if not self._due("candles", self._candle_poll_s):
+            return
+        for pair in get_allowlist(s).pairs:
+            try:
+                self._refresh_candles(s, pair)
+            except ConnectorError as exc:
+                report.errors.append(f"candles {pair}: {exc.error_class}")
+
+    def _paper_step(self, s: Session, report: CycleReport) -> None:
+        """Advance the simulated book over any candle that closed since the last cycle."""
+        ps = get_paper_settings(s)
+        if ps is None:
+            return
+        book = PaperBook(ps, self._tf)
+        closes: dict[str, Decimal] = {}
+        for pair in get_allowlist(s).pairs:
+            candles = self._load_candles(s, pair)
+            if not candles:
+                continue
+            closes[pair] = candles[-1].close
+            book.advance(s, pair, candles, self._rules.get(pair))
+        if closes and self._due("paper_equity", 60):
+            positions, events = accounting.replay_origin(s, "PAPER")
+            accounting.record_paper_equity(
+                s,
+                accounting.paper_equity(ps.start_equity_idr, positions, events, closes),
+                self._now(),
+            )
 
     # ------------------------------------------------------------ housekeeping
 

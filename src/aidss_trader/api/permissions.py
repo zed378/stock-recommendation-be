@@ -1,7 +1,8 @@
 """Roles to permissions (docs/01-PRODUCT-REQUIREMENTS/06). Enforced here, never by the UI.
 
 No role has an order-entry, withdrawal, deposit, or fiat permission because none exists.
-`admin` may HALT (ADR-033); CANCEL, FLATTEN, and resume stay with `trader`.
+`admin` holds every trader permission (ADR-048, which supersedes ADR-033). Step-up
+authentication still guards FLATTEN, promotion to AUTO, and loosening a limit for both roles.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ ALL = frozenset(
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "trader": ALL,
-    "admin": frozenset({VIEW, READ_AUDIT, HALT}),
+    "admin": ALL,
     "investor": frozenset({VIEW}),
     "viewer": frozenset({VIEW}),
 }

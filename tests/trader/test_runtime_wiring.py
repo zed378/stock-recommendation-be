@@ -46,6 +46,7 @@ from aidss_trader.runtime import (
     set_strategy_params,
 )
 from aidss_trader.runtime.assembly import build_api, build_client
+from aidss_trader.runtime.settings_store import set_paper_settings
 from aidss_trader.service import run
 from aidss_trader.strategy import EmaAdxParams
 from tests.trader.test_connector_contract import Env
@@ -67,6 +68,16 @@ LIMITS = RiskLimits(
     order_rate_limit=20,
 )
 TF = 4 * 3600
+# TEST values for the paper cost model; the real ones are the owner's (OQ-5).
+PAPER_VALUES = {
+    "slippage_pct": D("0.1"),
+    "partial_fill_fraction": D("1"),
+    "maker_fee_pct": D("0.1"),
+    "taker_fee_pct": D("0.2"),
+    "tax_pct": D("0.1"),
+    "clearing_pct": D("0.01"),
+    "start_equity_idr": D("100000000"),
+}
 
 
 class World:
@@ -121,6 +132,7 @@ class World:
                 )
                 if mode != "PAPER":
                     s.get(StrategyRow, "ema_adx").mode = mode
+                set_paper_settings(s, PAPER_VALUES, by="owner")
                 self.version = version
             s.commit()
             if running:
@@ -630,6 +642,9 @@ def test_the_owner_can_set_the_allowlist_and_parameters_through_the_api_and_it_i
         "atr_stop_multiple": "2",
         "cooldown_s": 0,
     }
+    cfg = {k: str(v) for k, v in PAPER_VALUES.items()}
+    assert call("PUT", "/paper-config", cfg).status_code == 200
+    assert call("PUT", "/paper-config", {**cfg, "partial_fill_fraction": "0"}).status_code == 400
     out = call("PUT", "/strategies/ema_adx/parameters", params).json()["data"]
     assert out["mode"] == "PAPER" and out["version"].startswith("ema_adx-")
     assert (

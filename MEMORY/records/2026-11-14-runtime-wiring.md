@@ -46,8 +46,7 @@ file, so deploying this image trades nothing.
 ## Not Done, Not Verified
 
 - **Never run against an exchange**, a PostgreSQL database, or the Docker image. Nothing was observed live.
-- **PAPER lifecycle is not built:** paper intents are recorded but no paper fills, paper stops, or paper
-  positions exist, so the promotion gate "paper trades" cannot yet be met from real running.
+- ~~PAPER lifecycle is not built~~ Built afterwards: see `2026-11-14-paper-lifecycle-and-admin-role.md`.
 - The liquidity filter derives 24-hour volume from stored candles (volume x close over six 4H candles) because
   the connector has no volume call; this approximation is mine, not documented by Indodax.
 - Candle freshness uses two timeframes and the entry-wait on reconciliation is a structural rule, not an owner

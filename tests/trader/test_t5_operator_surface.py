@@ -784,12 +784,15 @@ def test_authentication_and_permissions_are_enforced_server_side(api) -> None:
     assert api.call("GET", "/status", token="tok-viewer").status_code == 200
     assert api.call("GET", "/audit", token="tok-viewer").status_code == 403
     assert api.call("GET", "/audit", token="tok-admin").status_code == 200
-    r = api.call("POST", "/resume", token="tok-admin", body={"note": "x"})
+    # admin holds every trader permission (ADR-048); a viewer holds none of the write ones.
+    assert api.call("POST", "/resume", token="tok-admin", body={"note": "x"}).status_code == 200
+    r = api.call("POST", "/resume", token="tok-viewer", body={"note": "x"})
     assert r.status_code == 403 and r.json()["error"]["class"] == "FORBIDDEN"
 
 
 def test_role_matrix_matches_the_document() -> None:
-    assert allowed("admin", "trade:halt") and not allowed("admin", "trade:kill")
+    assert ROLE_PERMISSIONS["admin"] == ROLE_PERMISSIONS["trader"]  # ADR-048
+    assert allowed("admin", "trade:kill") and allowed("admin", "trade:approve")
     assert not allowed("viewer", "trade:approve") and not allowed("investor", "trade:halt")
     assert ROLE_PERMISSIONS["trader"] >= {"trade:approve", "trade:promote", "trade:kill"}
     assert not allowed("nobody", "trade:view")
@@ -814,16 +817,25 @@ def test_unset_limits_are_shown_as_unset(api) -> None:
     assert data["limits"] is None and "max_order_idr" in data["unset"]
 
 
-def test_kill_halt_works_for_an_admin_and_heavier_tiers_need_the_trader(api) -> None:
+def test_kill_works_for_an_admin_at_every_tier_but_flatten_still_needs_a_step_up(api) -> None:
     assert api.call("POST", "/kill", token="tok-admin", body={"tier": "HALT"}).status_code == 200
     assert api.call("GET", "/status").json()["data"]["trading_state"] == "HALTED"
-    r = api.call(
+    ok = api.call(
         "POST",
         "/kill",
         token="tok-admin",
         body={"tier": "CANCEL", "confirmation": "CANCEL ALL OPEN ORDERS"},
     )
-    assert r.status_code == 403
+    assert ok.status_code == 200
+    flat = api.call(
+        "POST",
+        "/kill",
+        token="tok-admin",
+        body={"tier": "FLATTEN", "confirmation": "SELL ALL HOLDINGS AT MARKET"},
+    )
+    assert flat.status_code == 403 and flat.json()["error"]["code"] == "step_up_required"
+    viewer = api.call("POST", "/kill", token="tok-viewer", body={"tier": "HALT"})
+    assert viewer.status_code == 403
     assert any("kill switch HALT" in m for m in api.chan.messages)
 
 
@@ -868,14 +880,15 @@ def test_approval_is_bound_to_exact_intent_over_the_api(api) -> None:
     assert twice.json()["data"]["already_decided"] is True and api.sent.calls == 1
 
 
-def test_only_the_trader_may_approve_or_deny(api) -> None:
+def test_only_the_trader_and_admin_roles_may_approve_or_deny(api) -> None:
     h = api.seed_intent()
     path = f"/intents/{intent().identity}/approve"
-    for token in ("tok-admin", "tok-viewer"):
-        assert api.call("POST", path, token=token, body={"intent_hash": h}).status_code == 403
-        deny = api.call("POST", path.replace("approve", "deny"), token=token, body={})
-        assert deny.status_code == 403
+    assert api.call("POST", path, token="tok-viewer", body={"intent_hash": h}).status_code == 403
+    deny = api.call("POST", path.replace("approve", "deny"), token="tok-viewer", body={})
+    assert deny.status_code == 403
     assert api.sent.calls == 0
+    assert api.call("POST", path, token="tok-admin", body={"intent_hash": h}).status_code == 200
+    assert api.sent.calls == 1
 
 
 def test_deny_records_the_reason(api) -> None:

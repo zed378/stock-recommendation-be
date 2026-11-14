@@ -452,3 +452,14 @@ class EquitySnapshot(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     equity_idr: Mapped[Decimal] = mapped_column(Money)
+
+
+class PaperEquitySnapshot(Base):
+    """Simulated equity, kept apart from `equity_snapshot` so a paper figure can never become
+    the peak a live drawdown is measured from (FR-T28)."""
+
+    __tablename__ = "paper_equity_snapshot"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    equity_idr: Mapped[Decimal] = mapped_column(Money)
