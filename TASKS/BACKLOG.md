@@ -27,7 +27,7 @@ rather than only a mention in a chat or a record.
 | **OQ-14** | **RESOLVED 2026-11-14 (ADR-028).** New pages in the existing front end; the Trader verifies tokens through `GET /auth/me`. *Left to verify:* that the response carries the role needed, and adding a `trader` role to the platform's `UserRole` | T1-01, T5-04 | `02/02`, `07/00`, `09/01` |
 | **OQ-15** | **RESOLVED 2026-11-14 (ADR-041).** Every 60 seconds | T4-07 | `ADR-022`, `05/10` |
 | **OQ-16** | **Initial live capital** for `APPROVAL`, and rollout amounts | T5-06 | `ADR-020`, `05/11` |
-| **OQ-17** | **RESOLVED 2026-11-14 (ADR-029).** A file secret on the host with strict permissions, read-only in the container, excluded from backups. *Left to write (operational, not a decision):* generation, exact path and permissions, rotation schedule, re-entry procedure | T1-04 | `ADR-014`, `05/13`, `09/02` |
+| **OQ-17** | **RESOLVED 2026-11-14 (ADR-029).** A file secret on the host with strict permissions, read-only in the container, excluded from backups. Generation, path (`~/.aidss-trader-master.key`, `0600`), rotation, and re-entry procedure written in `09/02` and `10/06` R10 | T1-04 | `ADR-014`, `05/13`, `09/02`, `10/06` |
 | **OQ-18** | **DECIDED 2026-11-14 (ADR-038).** T2-07 runs after the connector and mock exist; Phase A may run earlier at the owner's discretion. Still needs the owner's Read-only key | T2-07 | `06/03` to `06/11`, `06/14` |
 | **OQ-19** | **RESOLVED 2026-11-14 (ADR-041).** Halt at 250 ms measured skew; the host must be NTP-disciplined | T2-05 | `NFR-T08`, `06/04` |
 | **OQ-20** | **RESOLVED 2026-11-14 (ADR-040).** Manual off-host backups to an external disk or the owner's PC. Frequency and retention are the owner's (worksheet L1) | T6-03 | `10/04`, `03/06` |
@@ -48,7 +48,7 @@ rather than only a mention in a chat or a record.
 | The exact interaction of mixed query and body parameters when signing | `06/04` | T2-07 |
 | `GET order` visibility lag after acceptance is stated but not quantified | `06/06` | T2-07, mock `visibility lag` |
 | No `/api/pairs` fee fields on some pairs | `06/05` | Optional; do not rely on them |
-| The analysis API connects to PostgreSQL as the bootstrap superuser, which bypasses every grant, so ADR-021's role isolation is not real until it uses a limited role | `deploy/trader/bootstrap.sql`, `docker-compose.yml` | **Open, needs the owner:** change the analysis stack's DB role (a deployment change outside the Trader) before relying on the isolation |
+| The analysis API connects to PostgreSQL as the bootstrap superuser, which bypasses every grant, so ADR-021's role isolation is not real until it uses a limited role | `deploy/trader/bootstrap.sql`, `deploy/trader/isolate_analysis_role.sql`, `deploy/trader/rollback_analysis_role.sql`, `deploy/trader/docker-compose.trader.yml` | **Plan and SQL ready (2026-11-15); awaiting owner approval** to run on `10.1.200.13` (`10/06` R13) |
 | Tamper-evidence design for the audit log | `09/04` | T1-05 ADR |
 | Step-up authentication mechanism for high-impact actions | `09/01` | T5-01 ADR |
 

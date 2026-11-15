@@ -85,10 +85,35 @@ reopens; `FLATTEN` reports it. Decide whether to reduce exposure elsewhere.
 
 `04-BACKUP-RESTORE-AND-RECOVERY.md`. Reconcile before resuming.
 
-## R10 — Credential unreadable
+## R10 — Credential unreadable (master key lost, corrupted, or rotated)
 
-The master key changed or is missing. The Trader stays `DISABLED`. Restore the key from its custody (OQ-17)
-or re-enter the credential.
+The master key (`~/.aidss-trader-master.key`, mounted at `/run/secrets/trader_master_key`) has only one copy on the
+host so it is never paired with a database dump (ADR-014, ADR-029). While the key is missing or differs from the one
+that encrypted `trading.credential`, the Trader fails closed (`readable = false`) and stays `HALTED` / `DISABLED`.
+
+1. Confirm trading is `HALTED` (`GET /trader/v1/status` or the header state bar). If positions are open on Indodax,
+   monitor or manage them manually on the Indodax website/app while credentials are being restored (R1).
+2. On the host (`10.1.200.13` as `infra`), do **not** move or copy `~/.aidss-trader-master.key` into any backup
+   folder. If the file was lost or must be rotated:
+   ```sh
+   rm -f "$HOME/.aidss-trader-master.key"
+   docker run --rm -v "$HOME:/out" zed378/aidss-trader:<commit-tag> \
+     python -m aidss_trader generate-master-key --out /out/.aidss-trader-master.key
+   chmod 0600 "$HOME/.aidss-trader-master.key"
+   ```
+3. Recreate or restart the `trader` container via the stdin Compose override so the new secret file is mounted:
+   ```sh
+   cd ~/stocks
+   set -a; . ~/.aidss-trader.env; set +a
+   docker compose -f docker-compose.yml -f - up -d --no-build trader < ~/aidss-trader.override.yml
+   ```
+4. Open `/trader/credentials` in the browser. Each previously stored item (`indodax`, `telegram`) will display
+   the unreadable warning (`readable: false`).
+5. Re-enter the Indodax TAPIv2 key and secret (Read + Spot Trade only; if rotating after a suspected compromise,
+   revoke the old key at Indodax first per R7) and the Telegram bot token. Each save requires your account password
+   for step-up authentication (ADR-046) and runs a read-only test before overwriting the ciphertext.
+6. Confirm both credentials report `readable: true` and a passing test timestamp, check reconciliation, and only
+   then resume explicitly with a note.
 
 ## R11 — Notification channel down
 
@@ -98,3 +123,33 @@ In-app alerts still exist. Check the app. Fix the channel token or provider issu
 
 Read which limit and the values. Decide whether the cause is market behavior or a defect. Leave it halted
 until you understand it; resume is explicit and needs a note.
+
+## R13 — Host PostgreSQL hardening and `aidss_app` role isolation (ADR-021)
+
+The analysis stack (`api` and `worker`) must connect as the limited role `aidss_app` (which owns `schema public`
+and has zero privileges on `schema trading`), never as the bootstrap superuser `aidss`, and host port 5432 must not
+be exposed to the network.
+
+1. **Pre-check active connections** before closing port 5432:
+   ```sh
+   docker exec stocks-postgres-1 psql -U aidss -d aidss -c \
+     "SELECT client_addr, usename, application_name, state FROM pg_stat_activity WHERE client_addr IS NOT NULL;"
+   ```
+2. **Rehearse on a scratch database first** (never run untested role changes on `aidss` directly):
+   ```sh
+   docker exec stocks-postgres-1 psql -U aidss -d postgres -c "CREATE DATABASE aidss_role_rehearsal;"
+   docker exec -i stocks-postgres-1 psql -U aidss -d aidss_role_rehearsal < deploy/trader/bootstrap.sql
+   docker exec -i stocks-postgres-1 psql -U aidss -d aidss_role_rehearsal < deploy/trader/isolate_analysis_role.sql
+   # Run pytest -m postgres against aidss_role_rehearsal, then drop it:
+   docker exec stocks-postgres-1 psql -U aidss -d postgres -c "DROP DATABASE aidss_role_rehearsal;"
+   ```
+3. **Apply to `aidss`** after owner approval and a fresh `pg_dump` backup:
+   - Run `deploy/trader/isolate_analysis_role.sql` as superuser `aidss`.
+   - Set random passwords for `aidss_app` and rotate the superuser `aidss` password (`ALTER ROLE ... PASSWORD`),
+     recording `AIDSS_APP_DATABASE_URL` in `~/.aidss-trader.env` (mode `0600`).
+   - Apply the Compose override (`deploy/trader/docker-compose.trader.yml`) via stdin so `postgres` unpublishes host
+     port 5432 (`ports: !reset []`) and `api` / `worker` connect via `AIDSS_APP_DATABASE_URL`.
+4. **Rollback** if the analysis API or worker fails startup or migration:
+   - Run `deploy/trader/rollback_analysis_role.sql` as superuser `aidss` to return `public` object ownership to
+     `aidss`.
+   - Point `AIDSS_APP_DATABASE_URL` in `~/.aidss-trader.env` back to the superuser URL and re-run `docker compose up -d --no-build`.

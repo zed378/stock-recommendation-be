@@ -47,12 +47,40 @@ If the master key is lost or changed, the stored credential becomes **unreadable
 
 ## Custody (ADR-029)
 
-The master key is a file on the deployment host, outside git, readable only by the account the Trader runs as
-(and root), mounted read-only into the container. It is **excluded from every backup** and never stored beside
-a database dump. Anyone with root on the host can read it.
+The master key is a file on the deployment host (`~/.aidss-trader-master.key`), outside git, readable only by the
+account the Trader runs as (`chmod 0600`, uid 1000 inside the container) and root, mounted read-only into the
+container at `/run/secrets/trader_master_key`. It is **excluded from every backup** and never stored beside a
+database dump. Anyone with root on the host can read it.
 
-To be written into the runbooks: how it is generated, the exact path and permissions, the rotation schedule,
-and the re-entry procedure after a loss. These are operational details, not open decisions.
+### Generation, Path, and Permissions
+
+```sh
+# Generate a fresh 32-byte URL-safe Fernet key (refuses to overwrite an existing file):
+docker run --rm -v "$HOME:/out" zed378/aidss-trader:<commit-tag> \
+  python -m aidss_trader generate-master-key --out /out/.aidss-trader-master.key
+chmod 0600 "$HOME/.aidss-trader-master.key"
+```
+
+### Master-Key Loss or Rotation (Re-Entry Procedure)
+
+There is deliberately **only one copy** of `~/.aidss-trader-master.key` on the host so a database dump cannot be
+paired with a backed-up master key (ADR-014, ADR-029). If the file is lost, corrupted, or rotated after a host
+incident:
+
+1. Ensure trading is `HALTED` (or stop the `trader` container). When the master key changes or is unreadable, the
+   Trader fails closed (`credential.readable == false`), refuses to sign any request, and stays `DISABLED` /
+   `HALTED`.
+2. If rotating an existing file, remove or rename the old `~/.aidss-trader-master.key` and generate a new one with
+   the command above (`chmod 0600`). Do **not** copy the old file into the database backup directory.
+3. Restart the `trader` container so it mounts the new `/run/secrets/trader_master_key` file.
+4. Open `/trader/credentials` in the operator UI. Both `indodax` and `telegram` will report `readable: false`
+   ("Stored credential cannot be decrypted with the current master key").
+5. Generate or retrieve the Read + Spot Trade TAPIv2 key from Indodax (and the Telegram bot token from BotFather),
+   enter each in `/trader/credentials`, complete the password step-up (ADR-046), and save. The server tests the
+   candidate key read-only (`GET /api/v2/account`, refusing `canWithdraw` or `canWithdrawFiat`, ADR-013) before
+   replacing the unreadable ciphertext and writing an audit row.
+6. Verify `/trader/credentials` shows `readable: true` and `last_test_ok: true`, then run reconciliation before
+   resuming (`10-OPERATIONS/06-RUNBOOKS.md` R10).
 
 ## Detection
 

@@ -7,6 +7,28 @@
 # Values come from the environment; nothing secret is written here.
 
 services:
+  postgres:
+    # Close host-port 5432 exposure from the base docker-compose.yml. All
+    # services (`api`, `worker`, `trader`) connect over the internal Compose
+    # network (`postgres:5432`), and host-side administration uses
+    # `docker exec stocks-postgres-1 psql ...`.
+    ports: !reset []
+
+  api:
+    image: ${AIDSS_API_IMAGE:-zed378/aidss-api:e7b3da3}
+    environment:
+      # Connects as the limited role `aidss_app` (ADR-021), which has no access
+      # to schema `trading`, rather than the bootstrap superuser.
+      AIDSS_DATABASE_URL: ${AIDSS_APP_DATABASE_URL}
+
+  worker:
+    image: ${AIDSS_API_IMAGE:-zed378/aidss-api:e7b3da3}
+    environment:
+      AIDSS_DATABASE_URL: ${AIDSS_APP_DATABASE_URL}
+
+  frontend:
+    image: ${AIDSS_FRONTEND_IMAGE:-zed378/aidss-frontend:e7b3da3}
+
   trader:
     image: ${AIDSS_TRADER_IMAGE}            # an immutable commit tag, never "latest"
     restart: always

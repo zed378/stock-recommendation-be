@@ -18,6 +18,8 @@ pytestmark = pytest.mark.postgres
 
 OWNER = os.environ.get("AIDSS_TRADER_TEST_OWNER_URL")
 RW = os.environ.get("AIDSS_TRADER_TEST_RW_URL")
+APP = os.environ.get("AIDSS_TRADER_TEST_APP_URL")
+MONITOR = os.environ.get("AIDSS_TRADER_TEST_MONITOR_URL")
 
 
 @pytest.fixture(scope="module")
@@ -25,6 +27,20 @@ def engines():
     if not (OWNER and RW):
         pytest.skip("AIDSS_TRADER_TEST_OWNER_URL / AIDSS_TRADER_TEST_RW_URL not set")
     return create_engine(OWNER), create_engine(RW)
+
+
+@pytest.fixture(scope="module")
+def app_engine():
+    if not APP:
+        pytest.skip("AIDSS_TRADER_TEST_APP_URL not set")
+    return create_engine(APP)
+
+
+@pytest.fixture(scope="module")
+def monitor_engine():
+    if not MONITOR:
+        pytest.skip("AIDSS_TRADER_TEST_MONITOR_URL not set")
+    return create_engine(MONITOR)
 
 
 def _denied(engine, sql: str) -> bool:
@@ -59,3 +75,23 @@ def test_rw_cannot_write_outside_the_trading_schema(engines) -> None:
     _, rw = engines
     assert _denied(rw, "CREATE TABLE public.should_not_exist (id int)")
     assert _denied(rw, "CREATE TABLE trading.should_not_exist (id int)")
+
+
+def test_analysis_app_role_owns_public_but_cannot_access_trading_schema(app_engine) -> None:
+    with app_engine.begin() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS public.app_priv_probe (id int)"))
+        conn.execute(text("INSERT INTO public.app_priv_probe (id) VALUES (1)"))
+        conn.execute(text("DROP TABLE public.app_priv_probe"))
+    assert _denied(app_engine, "SELECT * FROM trading.credential")
+    assert _denied(app_engine, "SELECT * FROM trading.audit_log")
+    assert _denied(app_engine, "SELECT * FROM trading.risk_limit")
+    assert _denied(app_engine, "INSERT INTO trading.risk_limit (version, set_by) VALUES (999, 'x')")
+
+
+def test_monitor_role_reads_heartbeat_only(monitor_engine) -> None:
+    with monitor_engine.begin() as conn:
+        conn.execute(text("SELECT * FROM trading.lease"))
+    assert _denied(monitor_engine, "SELECT * FROM trading.credential")
+    assert _denied(monitor_engine, "SELECT * FROM trading.audit_log")
+    assert _denied(monitor_engine, "DELETE FROM trading.lease")
+    assert _denied(monitor_engine, "CREATE TABLE public.should_not_exist (id int)")

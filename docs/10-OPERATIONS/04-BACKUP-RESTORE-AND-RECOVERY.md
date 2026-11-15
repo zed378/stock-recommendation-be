@@ -32,6 +32,11 @@ rebuilt; the audit trail, strategy history, and local annotations cannot.
 What stays mandatory: a backup **before every release** (`03`) and a restore rehearsal in the release checklist. A
 reminder or an automatic off-host copy would be possible later additions and would need the owner's approval.
 
+**Current VM status (2026-11-15):** The pre-deployment dump (`~/aidss-pre-trader-*.sql.gz`) resides on the same
+host disk (`10.1.200.13`) as the running PostgreSQL container. Per ADR-040 this is accepted while no live funds are
+at risk, but a disk or host failure would lose both the database and that local dump until the owner copies dumps
+off-host to their PC or an external drive.
+
 ## Restore
 
 | Step | Action |
