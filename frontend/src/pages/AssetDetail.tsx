@@ -562,7 +562,7 @@ function Analysis({ ticker, timeframe }: { ticker: string; timeframe: Timeframe 
   });
 
   const runButton = (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <select
         className={`${inlineControlClass} text-xs`}
         value={analysisMode}
