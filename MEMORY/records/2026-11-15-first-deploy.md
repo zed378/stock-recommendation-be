@@ -147,3 +147,23 @@ Not verified: any of the new behaviour in a browser, that is, moving between pag
 prompt when a chunk fails (the abort and offline scenarios were run only against `ab5a9ab`, which has no boundary).
 Rollback: set the frontend image back to `aidss-frontend:ab5a9ab` in the override and run the same `up -d --no-build`
 (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of commit dd2d776 (2026-11-15), frontend only
+
+Image `aidss-frontend:dd2d776`, built from a clean `git archive HEAD` export. One fix since `f08e3af`: on `/assets/:ticker` the six
+tabs formed a plain flex row of about 507px, which widened the document to 523px on a 375px phone (found by Task O). The new `TabStrip`
+(`frontend/src/components/TabStrip.tsx`) scrolls inside itself, keeps each label whole, scrolls the selected tab into view, and is 44px
+high under `sm`. See `2026-11-15-asset-page-mobile-overflow.md`. `nginx -t` passed in the image and the routes were checked on a local
+container before the push. On the VM only the frontend container was recreated (`up -d --no-build`, override on stdin);
+`aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database were not touched, no migration ran.
+
+Verified after (`curl` and one SSH session): `/`, `/login`, `/watchlist`, `/assets/BBCA`, `/trader`, `/trader/approvals` answer 200
+`text/html`; `/trader/v1/status` answers 401 JSON; the production main chunk is `index-B1brQ7pV.js`, identical to the local build; the
+`AssetDetail-u7eMYfpv.js` chunk contains the new tab classes (`overflow-x-auto overscroll-x-contain`, `shrink-0 whitespace-nowrap`) and not the
+old row (`flex gap-1 border-b border-line`); frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
+
+Not verified: the overflow itself in production. There is no login for me to open `/assets/BBCA`, so the 375px measurement exists only from a
+local browser run against a mocked API (document width equal to the viewport at 375, 360, 320, 768 and 1280). Rollback: set the frontend image
+back to `aidss-frontend:f08e3af` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
