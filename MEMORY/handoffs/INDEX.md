@@ -2,6 +2,8 @@
 
 Newest first.
 
+- [2026-11-15 — Z: Ringkasan akhir Tahap 7 (ukur ulang `/assets/:ticker` `dd2d776` & perbaikan `0f28c83`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 7 untuk pemilik dan agen utama
+- [2026-11-15 — P: Pengukuran overflow produksi `/assets/:ticker` (`dd2d776`) & perbaikan `320px`/`/picks` (`0f28c83`)](2026-11-15-P-asset-page-overflow-production.md) — `SELESAI` (`TabStrip` 375px lulus 0px di 6 tab EN/ID; ditemukan & diperbaiki `Analisis` 320px `17px` dan `/picks` 375px `5px` di `0f28c83`, `80/80` Vitest; butuh rebuild/deploy `aidss-frontend`)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 6 (verifikasi lazy signed-in pages `f08e3af`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 6 untuk pemilik dan agen utama
 - [2026-11-15 — O: Verifikasi browser halaman lazy-loaded & `ChunkErrorBoundary` (`f08e3af`)](2026-11-15-O-lazy-pages-browser-verification.md) — `SELESAI` (22 rute SPA + `goto`/`reload` + 1.5s fallback + `route.abort()` EN/ID + offline + `/assets/BBCA`→`TLKM` & `/admin/users`→`audit` lulus; zero perubahan kode; catatan pra-ada `/assets/BBCA` `375px` `overflowPx: 148`)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 5 (verifikasi lazy loading & `ChunkErrorBoundary`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 5 untuk pemilik dan agen utama
