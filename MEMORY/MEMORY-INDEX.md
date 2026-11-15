@@ -2,6 +2,7 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-15 — First deployment to the VM](records/2026-11-15-first-deploy.md) — Trader running HALTED with no exchange; migrations and privilege tests verified on real PostgreSQL; found the schema-before-version-table bug; open: DB port 5432 exposed with a weak superuser password
 - [2026-11-14 — PAPER lifecycle and admin role](records/2026-11-14-paper-lifecycle-and-admin-role.md) — simulated fills/stops/exits on the owner's cost model, separate equity series, computed drawdown gate; ADR-048 admin holds every trader permission
 - [2026-11-14 — Runtime assembly and wiring (mock-tested only)](records/2026-11-14-runtime-wiring.md) — loop, breakers, stops, sync, decisions, API served; starts HALTED; found a real clock-check bug; paper lifecycle not built; ADR-047 proposed
 - [2026-11-14 — T5: operator surface (backend and front end built, unwired)](records/2026-11-14-t5-operator-surface-backend.md) — approvals, step-up (ADR-046 proposed), notifier, promotion, export, API, first front end never rendered in a browser; nothing wired; T5-06 untouched

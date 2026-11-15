@@ -166,11 +166,11 @@ Verified on 2026-11-14 (hermetic, SQLite; no exchange and no PostgreSQL needed):
 
 | Command | Description |
 |---|---|
-| `python -m pytest tests/trader` | Trader tests (PostgreSQL privilege tests are `-m postgres`, opt-in, **not yet run**) |
+| `python -m pytest tests/trader` | Trader tests (PostgreSQL privilege tests are `-m postgres`, opt-in; passed once on 2026-11-15 against a throwaway database on the VM) |
 | `python -m aidss_trader generate-master-key --out <path>` | Write a new random master key file; refuses to overwrite |
 | `python -m aidss_trader run` | The T1 loop: lease and heartbeat only, always `DISABLED`. Needs `AIDSS_TRADER_DATABASE_URL` |
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
-| `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); **not yet run against PostgreSQL** |
+| `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); run on the VM's PostgreSQL on 2026-11-15 |
 
 The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and a first front end under `frontend/src/trader` (never rendered in a browser), and are wired into the run loop (`aidss_trader run`, mock-tested only, never against an exchange). A fresh install starts `HALTED`, every owner number is unset, and the Compose file passes no exchange URL, so a deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (T2-07 is owner-led).
 
