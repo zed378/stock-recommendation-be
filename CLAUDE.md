@@ -162,7 +162,7 @@ Windows paths shown (`.venv/Scripts/python`); on Linux and macOS use `.venv/bin/
 
 ### Trader
 
-Verified on 2026-11-15 (`508 passed, 7 deselected, 1 xfailed` on SQLite + mock exchange; `7 passed` `-m postgres` on local PostgreSQL 18; `6 passed` `-m postgres` on VM PostgreSQL 16 clone; frontend Vitest + `tsc` + `oxlint` passing; VM deployed at `zed378/aidss-trader:e410ab7` / `zed378/aidss-frontend:f08e3af` / `zed378/aidss-api:e7b3da3` in `HALTED` state):
+Verified on 2026-11-15 (`513 passed, 7 deselected` on SQLite + mock exchange; `7 passed` `-m postgres` on local PostgreSQL 18; `6 passed` `-m postgres` on VM PostgreSQL 16 clone; frontend Vitest + `tsc` + `oxlint` passing; VM deployed at `zed378/aidss-trader:e410ab7` / `zed378/aidss-frontend:f08e3af` / `zed378/aidss-api:e7b3da3` in `HALTED` state):
 
 | Command | Description |
 |---|---|
@@ -183,7 +183,7 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 ## What Is Currently Failing
 
-Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **508 passed, 7 deselected, 1 intentional strict xfail** (`test_s13_dependencies_are_pinned`, awaiting ADR-050 decision), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **58 passed** (including `TraderLazyRoutes.test.tsx`).
+Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **513 passed, 7 deselected, no xfail** (S13 is closed by `requirements-trader.lock`, ADR-050; the lock is not yet in a deployed image), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **74 passed** (including `TraderLazyRoutes.test.tsx`).
 
 - `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
   fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not

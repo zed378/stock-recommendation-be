@@ -473,16 +473,58 @@ def test_s13_the_trader_image_has_no_torch_and_no_test_suite() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no lock file: every dependency is a lower bound, so a build can pick a new version "
-    "(S13 wants a floating dependency to fail CI). A finding; the owner decides on pinning.",
-)
-def test_s13_dependencies_are_pinned() -> None:
+LOCK = ROOT / "requirements-trader.lock"
+
+
+def _locked() -> dict[str, tuple[str, list[str]]]:
+    """name -> (version, hashes) from the lock file, comments and continuations folded."""
+    entries: dict[str, tuple[str, list[str]]] = {}
+    text = re.sub(r"\\\r?\n", " ", LOCK.read_text("utf-8"))
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.match(r"^([A-Za-z0-9_.\-]+)==(\S+)\s+(.*)$", line)
+        assert match, f"not a pinned requirement with hashes: {line[:60]!r}"
+        hashes = re.findall(r"--hash=sha256:([0-9a-f]{64})", match.group(3))
+        entries[match.group(1).lower().replace("_", "-")] = (match.group(2), hashes)
+    return entries
+
+
+def test_s13_every_locked_dependency_is_pinned_with_hashes() -> None:
+    entries = _locked()
+    assert entries, "the lock file lists nothing"
+    assert all(hashes for _, hashes in entries.values()), "a locked package has no hash"
+
+
+def test_s13_the_image_installs_only_from_the_lock_and_checks_hashes() -> None:
+    lines = (ROOT / "Dockerfile.trader").read_text("utf-8").splitlines()
+    run = [ln for ln in lines if ln.lstrip().startswith("RUN") and "pip install" in ln]
+    assert run, "no pip install in Dockerfile.trader"
+    for ln in run:
+        assert "--require-hashes" in ln and "--no-deps" in ln and "requirements-trader.lock" in ln
+    assert "--upgrade pip" not in " ".join(lines), "an unpinned pip upgrade defeats the lock"
+
+
+def test_s13_the_lock_still_satisfies_pyproject() -> None:
+    """A dependency added or raised in pyproject.toml without regenerating the lock must fail
+    here, not at the next image build."""
     import tomllib
 
+    from packaging.requirements import Requirement
+
     deps = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"]["dependencies"]
-    assert all("==" in d for d in deps)
+    entries = _locked()
+    for dep in deps:
+        req = Requirement(dep)
+        if req.marker and not req.marker.evaluate({"sys_platform": "linux"}):
+            continue  # e.g. tzdata on win32 only; the image is Linux
+        name = req.name.lower().replace("_", "-")
+        assert name in entries, f"{req.name} is in pyproject.toml but not in the lock"
+        version = entries[name][0]
+        assert req.specifier.contains(version, prereleases=True), (
+            f"locked {name}=={version} violates pyproject's {req.specifier}"
+        )
 
 
 # ---------------------------------------------------------------------------- S14

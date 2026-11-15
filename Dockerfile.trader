@@ -6,14 +6,20 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Only the Trader's package, its dependency metadata, and its migrations. No
-# analysis code, no tests, no torch, and no secret or owner number: the image
-# may be public during development (ADR-030) and everything pushed while public
-# must be assumed copied.
-COPY pyproject.toml README.md ./
+# Only the Trader's package, its dependency lock, and its migrations. No analysis
+# code, no tests, no torch, and no secret or owner number: the image may be public
+# during development (ADR-030) and everything pushed while public must be assumed
+# copied.
+#
+# Dependencies come from a hash-pinned lock file (ADR-050): `--require-hashes` makes the
+# build fail rather than pick a different version or accept a changed file, and `--no-deps`
+# keeps pip from resolving anything the lock does not list. The package itself is not
+# pip-installed: building it would fetch an unpinned build backend, so its source is put on
+# PYTHONPATH instead.
+COPY requirements-trader.lock ./
+RUN pip install --require-hashes --no-deps -r requirements-trader.lock
 COPY src/aidss_trader ./src/aidss_trader
-RUN pip install --upgrade pip \
-    && pip install .
+ENV PYTHONPATH=/app/src
 
 COPY alembic_trader.ini ./
 COPY alembic_trader ./alembic_trader
