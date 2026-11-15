@@ -2,6 +2,8 @@
 
 Newest first.
 
+- [2026-11-15 — Z: Ringkasan akhir Tahap 9 (ukur header & tautan ticker produksi `db57068`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 9 untuk pemilik dan agen utama
+- [2026-11-15 — R: Pengukuran header & tautan ticker produksi (`db57068`)](2026-11-15-R-production-header-ticker-remeasure.md) — `SELESAI` (header `375/360/320px` semua `44px`, `overflowPx: 0`, `55` `/picks` + `25` `/monitoring` ticker `47×44`, `1280px` tetap, `768px` kompak; zero perubahan kode)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 8 (ukur ulang produksi `2fc6c0b`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 8 untuk pemilik dan agen utama
 - [2026-11-15 — Q: Pengukuran ulang overflow & tap-target `44px` produksi (`2fc6c0b`)](2026-11-15-Q-production-layout-remeasure.md) — `SELESAI` (`overflowPx: 0` di semua 8 rute & 6 tab `/assets/BBCA` `en`/`id` pada `375/320px`; kontrol `<44px` terverifikasi; `/monitoring` `TabStrip` lulus; zero perubahan kode)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 7 (ukur ulang `/assets/:ticker` `dd2d776` & perbaikan `0f28c83`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 7 untuk pemilik dan agen utama
