@@ -506,25 +506,86 @@ def test_s13_the_image_installs_only_from_the_lock_and_checks_hashes() -> None:
     assert "--upgrade pip" not in " ".join(lines), "an unpinned pip upgrade defeats the lock"
 
 
-def test_s13_the_lock_still_satisfies_pyproject() -> None:
-    """A dependency added or raised in pyproject.toml without regenerating the lock must fail
-    here, not at the next image build."""
+def _direct_requirements():
+    """The Trader image's direct requirements, from requirements-trader.in."""
+    from packaging.requirements import Requirement
+
+    reqs = []
+    for line in (ROOT / "requirements-trader.in").read_text("utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            reqs.append(Requirement(line))
+    return reqs
+
+
+def test_s13_the_lock_satisfies_every_direct_requirement() -> None:
+    """A requirement added or raised in requirements-trader.in without regenerating the lock must
+    fail here, not at the next image build."""
+    entries = _locked()
+    reqs = _direct_requirements()
+    assert reqs, "requirements-trader.in lists nothing"
+    for req in reqs:
+        name = req.name.lower().replace("_", "-")
+        assert name in entries, f"{req.name} is in requirements-trader.in but not in the lock"
+        version = entries[name][0]
+        assert req.specifier.contains(version, prereleases=True), (
+            f"locked {name}=={version} violates requirements-trader.in's {req.specifier}"
+        )
+
+
+def test_s13_direct_requirements_do_not_drift_from_pyproject() -> None:
+    """requirements-trader.in is a subset of the platform's dependencies with the same bounds."""
     import tomllib
 
     from packaging.requirements import Requirement
 
-    deps = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"]["dependencies"]
-    entries = _locked()
-    for dep in deps:
-        req = Requirement(dep)
-        if req.marker and not req.marker.evaluate({"sys_platform": "linux"}):
-            continue  # e.g. tzdata on win32 only; the image is Linux
+    platform = {
+        Requirement(d).name.lower().replace("_", "-"): Requirement(d)
+        for d in tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"][
+            "dependencies"
+        ]
+    }
+    for req in _direct_requirements():
         name = req.name.lower().replace("_", "-")
-        assert name in entries, f"{req.name} is in pyproject.toml but not in the lock"
-        version = entries[name][0]
-        assert req.specifier.contains(version, prereleases=True), (
-            f"locked {name}=={version} violates pyproject's {req.specifier}"
+        assert name in platform, f"{req.name} is not in pyproject.toml"
+        assert str(req.specifier) == str(platform[name].specifier), (
+            f"{name}: requirements-trader.in says {req.specifier}, "
+            f"pyproject.toml says {platform[name].specifier}"
         )
+
+
+# Import names that differ from their distribution names.
+_DISTRIBUTION_OF = {"pydantic_settings": "pydantic-settings"}
+
+
+def test_s13_the_trader_imports_nothing_the_image_does_not_install() -> None:
+    """Trimming the image to the Trader's own dependencies is only safe while the Trader stays
+    inside them. A new third-party import (pandas, numpy, ...) must fail here, with its name,
+    rather than at container start."""
+    import ast
+    import sys
+
+    locked = set(_locked())
+    found: dict[str, str] = {}
+    for root in (ROOT / "src" / "aidss_trader", ROOT / "alembic_trader"):
+        for path in root.rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text("utf-8"))):
+                if isinstance(node, ast.Import):
+                    modules = [alias.name.split(".")[0] for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    modules = [node.module.split(".")[0]]
+                else:
+                    continue
+                for module in modules:
+                    if module in sys.stdlib_module_names or module == "aidss_trader":
+                        continue
+                    found.setdefault(module, str(path.relative_to(ROOT)))
+    missing = {
+        module: where
+        for module, where in found.items()
+        if _DISTRIBUTION_OF.get(module, module).lower().replace("_", "-") not in locked
+    }
+    assert not missing, f"imported but not in the Trader image's lock: {missing}"
 
 
 # ---------------------------------------------------------------------------- S14

@@ -1,0 +1,19 @@
+# Direct runtime dependencies of the Trader image (ADR-050, ADR-053). The lock file is compiled from this.
+#
+# Only what `src/aidss_trader`, `alembic_trader` and the image's database driver import. The analysis
+# platform's `[project].dependencies` in pyproject.toml carry more (pandas, numpy, curl_cffi, bcrypt,
+# PyJWT, croniter, pgvector, email-validator) that the Trader never imports, so they are not installed here.
+# `uvicorn` is the plain package: the Trader serves no WebSocket, and its settings read the environment
+# only (`env_file=None`), so the `[standard]` extras (uvloop, httptools, websockets, watchfiles,
+# python-dotenv, PyYAML) would be dead weight.
+#
+# Lower bounds mirror pyproject.toml so the two cannot drift apart unnoticed (see tests/trader/test_security_s1_s17.py).
+fastapi>=0.111
+uvicorn>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+SQLAlchemy>=2.0.30
+alembic>=1.13
+psycopg[binary]>=3.1
+cryptography>=44
+httpx>=0.27

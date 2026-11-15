@@ -11,7 +11,8 @@ WORKDIR /app
 # during development (ADR-030) and everything pushed while public must be assumed
 # copied.
 #
-# Dependencies come from a hash-pinned lock file (ADR-050): `--require-hashes` makes the
+# Dependencies come from a hash-pinned lock file (ADR-050) compiled from
+# requirements-trader.in, the Trader's own direct dependencies (ADR-053): `--require-hashes` makes the
 # build fail rather than pick a different version or accept a changed file, and `--no-deps`
 # keeps pip from resolving anything the lock does not list. The package itself is not
 # pip-installed: building it would fetch an unpinned build backend, so its source is put on

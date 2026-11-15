@@ -1057,7 +1057,7 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 
 **Evidence:** The lock lists 44 packages, and a local image built from it has the same 44 package versions as the deployed `aidss-trader:e410ab7` (`pip freeze` compared; the only difference is the `aidss` package itself), so adopting it changes no running dependency. A lock with every hash of one package altered makes the build fail (`THESE PACKAGES DO NOT MATCH THE HASHES`, exit 1). `pip check` on the new image reports no broken requirements and `python -m aidss_trader --help` runs. `test_s13_dependencies_are_pinned` (a strict `xfail`) is replaced by three tests: every locked package has hashes; the Dockerfile installs only from the lock with `--require-hashes --no-deps`; and the lock still satisfies `pyproject.toml` (a dependency added or raised there without regenerating the lock fails the suite).
 
-**Implications:** Someone owns the update routine: regenerate the lock with the command in its header, read the diff, build, run the suite. The base image is still the floating tag `python:3.12-slim` (option 3 was not adopted, so OS-level patches arrive with each build and are not reproducible); a digest pin can be added later. The lock is Linux and Python 3.12 only. The image still installs everything in `[project].dependencies` (pandas, numpy, curl_cffi and others), which the Trader may not need; trimming that is a separate decision.
+**Implications:** Someone owns the update routine: regenerate the lock with the command in its header, read the diff, build, run the suite. The base image is still the floating tag `python:3.12-slim` (option 3 was not adopted, so OS-level patches arrive with each build and are not reproducible); a digest pin can be added later. The lock is Linux and Python 3.12 only. Installing only what the Trader imports (instead of all of `[project].dependencies`) is ADR-053.
 
 ---
 
@@ -1091,3 +1091,21 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 **Risks:** Option 1 false-positives on thin pairs and quiet hours (a real price can repeat), which would HALT trading for no cause; option 2 false-positives around candle boundaries and gaps. Both thresholds are owner numbers (limits that gate loss); none is chosen here.
 
 **Implications:** No behavior changes until the owner picks an option and supplies the values through `TASKS/BACKLOG.md`.
+
+---
+
+### ADR-053 - The Trader image installs only the Trader's own dependencies
+
+**Date:** 2026-11-15
+**Status:** accepted (the owner asked for it on 2026-11-15, after it was listed as a separate decision in ADR-050); implemented in the repository, **not yet built into a deployed image**
+
+**Decision:** `requirements-trader.in` lists the Trader's direct dependencies (fastapi, uvicorn, pydantic, pydantic-settings, SQLAlchemy, alembic, psycopg[binary], cryptography, httpx), with the same lower bounds as `pyproject.toml`. `requirements-trader.lock` is compiled from that file instead of from all of `[project].dependencies`. `uvicorn` is the plain package, not `uvicorn[standard]`.
+
+**Rationale:** `src/aidss_trader` and `alembic_trader` import none of pandas, numpy, curl_cffi, bcrypt, PyJWT, croniter, pgvector or email-validator, yet the image carried them (and uvloop, httptools, websockets, watchfiles, PyYAML through the `[standard]` extra). Every package in an image that holds a trading key is surface that has to be patched and reviewed.
+
+**Evidence:** The lock goes from 44 to 28 packages; all 28 that remain keep exactly the versions already locked, and none was added. A local image built from it is 291 MB, against 593 MB for the image built from the 44-package lock. In that image `pip check` is clean and all 73 `aidss_trader` modules import. Against a throwaway PostgreSQL 16, migrations `0001..0008` ran as `trader_owner` (30 tables in `trading`), and the Trader, run as `trader_rw`, started `HALTED`, reported healthy, answered `/trader/v1/status` with `401` and the security headers, and ran cycles with no traceback. Three tests keep it honest: the lock satisfies every direct requirement; `requirements-trader.in` uses the same bounds as `pyproject.toml`; and a new third-party import anywhere in the Trader fails the suite by name (checked with a probe `import pandas`).
+
+**Risks and limits:** The event loop is plain asyncio instead of uvloop (uvicorn picks uvloop only when installed); the Trader's traffic is a few operator requests and the exchange client, so this is not expected to matter, but it is a runtime difference from the image running now. The smoke test did not talk to a real analysis API or exchange. A dependency the Trader later needs must be added to `requirements-trader.in` and the lock regenerated; the import-guard test says which one.
+
+**Implications:** `pyproject.toml` still describes the analysis platform and is unchanged. The analysis image is not affected.
+
