@@ -379,7 +379,10 @@ def test_the_paper_config_and_promotion_evidence_over_the_api() -> None:
 
     w = World("PAPER", configured=False)
     call = api_for(w)
-    assert call("GET", "/paper-config").json()["data"] == {"configured": False, "paper_fills": 0}
+    # The response is typed now, so an unset field is present and null rather than absent.
+    unset = call("GET", "/paper-config").json()["data"]
+    assert unset["configured"] is False and unset["paper_fills"] == 0
+    assert unset["taker_fee_pct"] is None and unset["start_equity_idr"] is None
     assert call("GET", "/paper-config").json()["meta"]["origin"] == "PAPER"
     cfg = {k: str(v) for k, v in PAPER_VALUES.items()}
     assert call("PUT", "/paper-config", cfg).status_code == 200

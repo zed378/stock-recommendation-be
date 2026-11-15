@@ -625,6 +625,11 @@ def test_market_orders_are_only_possible_on_emergency_paths() -> None:
         rel = path.relative_to(SRC).parts[0]
         if rel in {"connector", "orders", "killswitch", "backtest", "paper"}:
             continue
+        if path == SRC / "api" / "app.py":
+            # The API only *describes* an order's type in a response model; it cannot send one.
+            lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if '"MARKET"' in ln]
+            assert lines and all("Literal[" in ln for ln in lines), lines
+            continue
         if path == SRC / "runtime" / "loop.py":
             continue  # checked below: exactly one use, inside the stop path
         if path == SRC / "runtime" / "paper_lifecycle.py":
