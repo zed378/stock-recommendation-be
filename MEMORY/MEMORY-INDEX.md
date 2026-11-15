@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-15 — Task K: Live browser re-verification on `https://aidss.zedth.my.id`](records/2026-11-15-k-live-browser-reverification.md) — Playwright Chromium against `aidss-frontend:75bc905`: direct `goto` + `reload` `200 text/html` on all 7 Trader routes, sidebar group/hide persistence + auto-expand, landing `/` (images, 375/768/1280 `overflowPx: 0`, ID/EN, focus, contrast), 401 security headers, and 502 outage all pass
+
 - [2026-11-15 — Task I: Live browser verification on `https://aidss.zedth.my.id`](records/2026-11-15-i-live-browser-verification.md) — Playwright Chromium (`admin` account): all 7 Trader pages pass via SPA nav (`HALTED`, `PAPER`, 0 console/page errors, `overflowPx: 0` at 1280/768/375, ID/EN, 401 security headers, 502 outage); found reverse-proxy defect where direct `/trader` and `/trader/approvals` return FastAPI `404` JSON
 
 - [2026-11-15 — Task H: Opportunistic pruning of expired `idempotency_key` rows (ADR-051)](records/2026-11-15-h-idempotency-pruning.md) — `_Replays._prune_expired` deletes >24h rows in an isolated transaction; 2 new tests in `test_d_gaps.py` (498 passed, 1 xfail); not yet run on VM PostgreSQL 16
