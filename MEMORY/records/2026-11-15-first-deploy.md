@@ -207,3 +207,21 @@ Not verified: the heights in production. The 375px measurements (controls under 
 `/monitoring` and `/picks`) come from a local browser on a mocked API. Controls outside the shared primitives (admin pages, the notifications panel, dialogs) and the
 native 13px checkboxes were not changed. Rollback: set the frontend image back to `aidss-frontend:eba243c` in the override and run the same `up -d --no-build`
 (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of commit db57068 (2026-11-15), frontend only
+
+Image `aidss-frontend:db57068`, built from a clean `git archive HEAD` export. One change since `2fc6c0b`, from Task Q's production measurement: 44px tap heights below the `sm`
+breakpoint on the header (menu, brand link, notification bell, `ID`/`EN`, `Sign out`), the Trader bar's `All controls` link, and ticker links in lists (`tickerLinkHitArea`: padding plus an equal
+negative margin, so rows keep their height). To keep the sticky header from growing, its row padding and gaps are tighter on phones and the brand text is hidden under 368px (`max-[23rem]:hidden`).
+See `2026-11-15-header-and-ticker-tap-targets.md`. `nginx -t` passed in the image and the routes were checked on a local container before the push. On the VM only the frontend container was
+recreated (`up -d --no-build`, override on stdin); `aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database were not touched, no migration ran. The push also carried the second agent's
+Task Q handoff commit (`61bbfa5`).
+
+Verified after (`curl` and one SSH session): `/`, `/login`, `/watchlist`, `/picks`, `/monitoring`, `/assets/BBCA`, `/trader`, `/trader/approvals` answer 200 `text/html`; `/trader/v1/status` answers 401 JSON;
+the production main chunk is `index-BR0mddld.js`, identical to the local build, and contains `max-sm:size-11`, `max-[23rem]:hidden`, `max-sm:whitespace-nowrap` and the bell badge's `max-sm:right-1 max-sm:top-1`;
+`primitives-DAGn815L.js` contains the `tickerLinkHitArea` classes; frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
+
+Not verified: the sizes in production. The 44px heights, the single-line `Sign out`, and the hidden brand text under 368px were seen only in a local browser on a mocked API (375, 360, 320px). Tablets
+(640 to 1023px) keep the compact header controls. Rollback: set the frontend image back to `aidss-frontend:2fc6c0b` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
