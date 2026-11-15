@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/auth/AuthContext";
@@ -21,13 +22,14 @@ import { Profile } from "@/pages/Profile";
 import { Admin } from "@/pages/Admin";
 import { StockPicks } from "@/pages/StockPicks";
 import { Monitoring } from "@/pages/Monitoring";
-import { Trader } from "@/pages/Trader";
-import { TraderApprovals } from "@/pages/TraderApprovals";
-import { TraderStrategies } from "@/pages/TraderStrategies";
-import { TraderLimits } from "@/pages/TraderLimits";
-import { TraderParameters } from "@/pages/TraderParameters";
-import { TraderPaper } from "@/pages/TraderPaper";
-import { TraderCredentials } from "@/pages/TraderCredentials";
+
+const Trader = lazy(() => import("@/pages/Trader").then((m) => ({ default: m.Trader })));
+const TraderApprovals = lazy(() => import("@/pages/TraderApprovals").then((m) => ({ default: m.TraderApprovals })));
+const TraderStrategies = lazy(() => import("@/pages/TraderStrategies").then((m) => ({ default: m.TraderStrategies })));
+const TraderLimits = lazy(() => import("@/pages/TraderLimits").then((m) => ({ default: m.TraderLimits })));
+const TraderParameters = lazy(() => import("@/pages/TraderParameters").then((m) => ({ default: m.TraderParameters })));
+const TraderPaper = lazy(() => import("@/pages/TraderPaper").then((m) => ({ default: m.TraderPaper })));
+const TraderCredentials = lazy(() => import("@/pages/TraderCredentials").then((m) => ({ default: m.TraderCredentials })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,13 +77,13 @@ export default function App() {
                 <Route path="/monitoring" element={<Monitoring />} />
                 {/* The Trader API enforces who may do what; the link is only hidden
                     for roles that cannot use it. */}
-                <Route path="/trader" element={<Trader />} />
-                <Route path="/trader/approvals" element={<TraderApprovals />} />
-                <Route path="/trader/strategies" element={<TraderStrategies />} />
-                <Route path="/trader/limits" element={<TraderLimits />} />
-                <Route path="/trader/parameters" element={<TraderParameters />} />
-                <Route path="/trader/paper" element={<TraderPaper />} />
-                <Route path="/trader/credentials" element={<TraderCredentials />} />
+                <Route path="/trader" element={<Suspense fallback={<Loading />}><Trader /></Suspense>} />
+                <Route path="/trader/approvals" element={<Suspense fallback={<Loading />}><TraderApprovals /></Suspense>} />
+                <Route path="/trader/strategies" element={<Suspense fallback={<Loading />}><TraderStrategies /></Suspense>} />
+                <Route path="/trader/limits" element={<Suspense fallback={<Loading />}><TraderLimits /></Suspense>} />
+                <Route path="/trader/parameters" element={<Suspense fallback={<Loading />}><TraderParameters /></Suspense>} />
+                <Route path="/trader/paper" element={<Suspense fallback={<Loading />}><TraderPaper /></Suspense>} />
+                <Route path="/trader/credentials" element={<Suspense fallback={<Loading />}><TraderCredentials /></Suspense>} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/agenda" element={<Agenda />} />
                 <Route path="/screens" element={<ScreenBuilder />} />
