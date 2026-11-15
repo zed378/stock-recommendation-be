@@ -194,3 +194,28 @@ Do **not** enable the scheduled monitor until the Trader is intentionally runnin
    `trading.audit_log` or `trading.ledger_entry` while `trader_monitor` can only `SELECT` `trading.lease`, prints
    the elapsed time in seconds, and drops the scratch database.
 3. Record the output and elapsed seconds in `MEMORY/records/` before checking the T6-03 box in `12-DELIVERY-PLAN/05`.
+
+
+## R15 — Updating the Trader image's dependencies (ADR-050, ADR-053)
+
+The Trader image installs from `requirements-trader.lock`, a hash-pinned lock compiled from `requirements-trader.in`. A build either gets exactly
+those files or fails (`pip install --require-hashes --no-deps`). Nothing updates by itself, so someone has to do this on purpose: when a security
+advisory names one of the 28 packages, when `pyproject.toml` raises a bound, or before a release.
+
+1. Edit `requirements-trader.in` only if a requirement is added, removed, or its bound changes. A bound must match `pyproject.toml` (a test checks it);
+   a new third-party import in `src/aidss_trader` or `alembic_trader` must be added here (another test names the missing one).
+2. Regenerate the lock inside the same Python as the image, not on the workstation (hashes are per platform):
+   ```sh
+   docker run --rm -v "$PWD:/w" -w /w python:3.12-slim sh -c      "pip install -q uv && uv pip compile requirements-trader.in --generate-hashes       --python-version 3.12 --python-platform linux --no-header -o requirements-trader.lock"
+   ```
+   The compile step overwrites the header comment; restore it from git (`git diff` shows it) so the regeneration command stays in the file.
+   To move one package only, add `--upgrade-package <name>` to the `uv pip compile` command.
+3. Read `git diff requirements-trader.lock` by package name and version, not by hash. Anything that was not expected to move is a reason to stop.
+4. Build the image (`docker build -f Dockerfile.trader`), then check: `pip check` in the image is clean; every module under `aidss_trader` imports; a throwaway
+   PostgreSQL accepts `alembic upgrade head` as `trader_owner`; the Trader started as `trader_rw` reports `HALTED`, `healthy`, and answers `/trader/v1/status`
+   with `401`; and the Trader tests pass inside the image's own dependency set (see `MEMORY/records/2026-11-15-trader-image-own-dependencies.md`).
+5. Run `python -m pytest tests/trader tests/test_architecture_constraints.py` and `ruff check src tests alembic_trader deploy`. Commit the lock, a record in
+   `MEMORY/records/`, and the index line together. Deploying the new image is a separate step with its own approval; the Trader stays `HALTED`.
+
+The base image is the floating tag `python:3.12-slim`, so the operating-system layer changes with each build; pinning its digest would stop that but also stop OS
+security patches (ADR-050, option 3, not adopted).
