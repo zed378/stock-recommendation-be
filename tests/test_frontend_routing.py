@@ -86,3 +86,15 @@ def test_the_api_prefix_is_not_swallowed_by_the_fallback() -> None:
     """A mistyped API path must return a JSON 404, not the application shell
     with a 200."""
     assert re.search(r"location\s+/api/", read(NGINX))
+
+
+def test_the_trader_proxy_is_scoped_to_the_api_and_not_the_ui_routes() -> None:
+    """`location /trader/` proxied the operator UI's own routes to the Trader, which
+    answered 404 JSON on every refresh of /trader/approvals. Only /trader/v1/ is the
+    Trader's; the rest of /trader belongs to the SPA fallback."""
+    conf = read(NGINX)
+    locations = re.findall(r"location\s+(?:[=~^]+\s+)?(/trader[^\s{]*)\s*\{", conf)
+    assert locations == ["/trader/v1/"], f"unexpected /trader locations: {locations}"
+    ui_routes = [p for p in route_paths() if p.startswith("/trader")]
+    assert ui_routes, "no /trader client routes found - the regex or the file has moved"
+    assert not any(p.startswith("/trader/v1") for p in ui_routes)
