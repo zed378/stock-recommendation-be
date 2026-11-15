@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 import httpx
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, delete, func, select
 
-from aidss_trader.audit import chain_head, verify_chain
+from aidss_trader.__main__ import main as trader_main
+from aidss_trader.audit import (
+    AuditChainBroken,
+    chain_head,
+    record_head_anchor,
+    verify_chain,
+    verify_head_anchor,
+)
 from aidss_trader.auth import AuthFailed, TokenVerifier
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
+from aidss_trader.db.base import Base
 from aidss_trader.db.models import AuditLog, RiskLimitVersion
 
 
@@ -71,3 +80,83 @@ def test_chain_head_reports_the_latest_hash(session) -> None:
     save_risk_limits(session, RiskLimits(), set_by="owner")
     seq, head = chain_head(session)
     assert seq == 1 and len(head) == 64
+
+
+def test_external_head_anchor_records_and_is_idempotent(session, tmp_path) -> None:
+    anchor_file = tmp_path / "audit-anchors.jsonl"
+    assert record_head_anchor(session, anchor_file) is None
+    assert verify_head_anchor(session, anchor_file) is None
+    assert not anchor_file.exists()
+
+    save_risk_limits(session, RiskLimits(max_order_idr=Decimal("1000")), set_by="owner")
+    anchored = record_head_anchor(session, anchor_file)
+    assert anchored == chain_head(session)
+    lines = anchor_file.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["seq"] == 1
+
+    # Re-running with unchanged chain head must not append a duplicate line.
+    assert record_head_anchor(session, anchor_file) == anchored
+    assert len(anchor_file.read_text(encoding="utf-8").splitlines()) == 1
+    assert verify_head_anchor(session, anchor_file) == anchored
+
+    # Advancing the chain appends a second anchor.
+    save_risk_limits(session, RiskLimits(max_order_idr=Decimal("2000")), set_by="owner")
+    anchored2 = record_head_anchor(session, anchor_file)
+    assert anchored2[0] == 2
+    assert len(anchor_file.read_text(encoding="utf-8").splitlines()) == 2
+    assert verify_head_anchor(session, anchor_file) == anchored2
+
+
+def test_external_head_anchor_detects_db_truncation_or_rewrite(session, tmp_path) -> None:
+    anchor_file = tmp_path / "audit-anchors.jsonl"
+    save_risk_limits(session, RiskLimits(max_order_idr=Decimal("1000")), set_by="owner")
+    save_risk_limits(session, RiskLimits(max_order_idr=Decimal("2000")), set_by="owner")
+    record_head_anchor(session, anchor_file)
+
+    # Simulate a DB owner truncating the audit table and rewriting seq=1 with a different hash.
+    session.execute(delete(AuditLog))
+    session.commit()
+    with pytest.raises(AuditChainBroken, match="empty"):
+        verify_head_anchor(session, anchor_file)
+
+    save_risk_limits(session, RiskLimits(max_order_idr=Decimal("9999")), set_by="attacker")
+    with pytest.raises(AuditChainBroken, match="truncated"):
+        record_head_anchor(session, anchor_file)
+
+
+def test_audit_anchor_cli(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "trader.sqlite"
+    anchor_file = tmp_path / "anchors.jsonl"
+    db_url = f"sqlite+pysqlite:///{db_path.as_posix()}"
+
+    real_create_engine = create_engine
+
+    def sqlite_engine(url: str, **kwargs):
+        return real_create_engine(url, **kwargs).execution_options(
+            schema_translate_map={"trading": None}
+        )
+
+    engine = sqlite_engine(db_url)
+    Base.metadata.create_all(engine)
+    engine.dispose()
+
+    monkeypatch.setenv("AIDSS_TRADER_DATABASE_URL", db_url)
+    monkeypatch.setattr("aidss_trader.__main__.create_engine", sqlite_engine)
+
+    # Empty DB succeeds cleanly.
+    assert trader_main(["audit-anchor", "--out", str(anchor_file)]) == 0
+    assert trader_main(["audit-anchor", "--out", str(anchor_file), "--verify-only"]) == 0
+
+    # Add an audit row and anchor via CLI.
+    from sqlalchemy.orm import sessionmaker
+
+    engine = sqlite_engine(db_url)
+    with sessionmaker(engine, expire_on_commit=False)() as s:
+        save_risk_limits(s, RiskLimits(max_order_idr=Decimal("500")), set_by="owner")
+        s.commit()
+    engine.dispose()
+
+    assert trader_main(["audit-anchor", "--out", str(anchor_file), "--verify-only"]) == 2
+    assert trader_main(["audit-anchor", "--out", str(anchor_file)]) == 0
+    assert trader_main(["audit-anchor", "--out", str(anchor_file), "--verify-only"]) == 0

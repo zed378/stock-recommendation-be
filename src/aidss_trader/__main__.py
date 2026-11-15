@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from aidss_trader.audit import AuditChainBroken, record_head_anchor, verify_head_anchor
 from aidss_trader.config import get_settings
 from aidss_trader.credentials import (
     MasterKeyUnavailable,
@@ -65,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--symbol", default="BTCIDR")
     gen = sub.add_parser("generate-master-key")
     gen.add_argument("--out", type=Path, required=True)
+    anchor = sub.add_parser(
+        "audit-anchor",
+        help="record or verify the external audit-log head hash (T1-05)",
+    )
+    anchor.add_argument("--out", type=Path, required=True)
+    anchor.add_argument("--verify-only", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "generate-master-key":
@@ -78,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
         return _live_check(args)
 
     settings = get_settings()
+    if args.command == "audit-anchor":
+        return _audit_anchor(args, settings.database_url)
     if args.command == "healthcheck":
         # Healthy means a recent cycle completed. The cycle itself reports a lease
         # that is not held; the container stays up but the dashboard says so.
@@ -100,6 +109,31 @@ def main(argv: list[str] | None = None) -> int:
         serve_in_thread(app, settings.api_host, settings.api_port)
     run(settings, factory, runtime=runtime)
     return 0
+
+
+def _audit_anchor(args: argparse.Namespace, database_url: str) -> int:
+    engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        factory = sessionmaker(engine, expire_on_commit=False)
+        with factory() as session:
+            try:
+                result = (
+                    verify_head_anchor(session, args.out)
+                    if args.verify_only
+                    else record_head_anchor(session, args.out)
+                )
+            except AuditChainBroken as exc:
+                print(f"audit chain broken: {exc}", file=sys.stderr)
+                return 2
+        if result is None:
+            print("audit log is empty")
+            return 0
+        seq, head_hash = result
+        action = "verified" if args.verify_only else "anchored"
+        print(f"{action} seq={seq} head_hash={head_hash} file={args.out}")
+        return 0
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":

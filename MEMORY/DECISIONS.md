@@ -1109,3 +1109,20 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 
 **Implications:** `pyproject.toml` still describes the analysis platform and is unchanged. The analysis image is not affected.
 
+---
+
+### ADR-054 — External Audit Log Head-Hash Anchoring (`T1-05`)
+
+- **Date:** 2026-11-15
+- **Status:** proposed
+- **Deciders:** Engineering (awaiting owner confirmation of host anchor path and schedule)
+- **Context:** `docs/09-SECURITY-PRIVACY/04-AUDIT-LOGGING.md` requires recording the audit chain's head hash outside the database so a database owner cannot silently truncate or rewrite `trading.audit_log`, and states the external target should be recorded as an ADR. `chain_head(session)` existed, but no external anchor writer, verifier, or CLI entry point had been built.
+- **Options:**
+  1. Append-only JSONL file outside the database (`record_head_anchor` / `verify_head_anchor`) driven by `python -m aidss_trader audit-anchor --out <path>` (plus `--verify-only`), with idempotent appends when `(seq, head_hash)` has not advanced and `AuditChainBroken` failure on DB truncation or hash mismatch.
+  2. Direct remote syslog / external object-storage push from the Trader process on every audit write.
+- **Decision:** Implement Option 1 in `src/aidss_trader/audit/log.py` and `src/aidss_trader/__main__.py` with zero new dependencies. Host-level scheduling (e.g., cron / systemd timer writing to an off-DB host file or synced volume) and `--out` path choice are left for the owner to confirm on the VM.
+- **Consequences:**
+  - `verify_chain` + external anchor comparison now detects whole-table DB rewrites or truncations across runs.
+  - Until the owner schedules `audit-anchor --out <path>` on the deployment host, the mechanism is verified only in hermetic tests.
+
+
