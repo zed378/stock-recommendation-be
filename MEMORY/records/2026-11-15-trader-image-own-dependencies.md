@@ -32,6 +32,19 @@ websockets, watchfiles and PyYAML for a service with no WebSocket and settings t
   fail-closed answer when the analysis API cannot be reached), cycles ran, and the log held no traceback.
 - Suite: Trader + architecture + routing 515 passed, 7 deselected, no xfail; `ruff` clean.
 
+## Suite inside the slim image's dependency set (added after the first commit)
+
+The Trader tests ran inside `aidss-trader-s13:slim` (28 locked packages plus `pytest` and its own dependencies, 34 in all; no pandas, numpy,
+bcrypt, PyJWT or curl_cffi). The repository was mounted read-only and `tests/trader` copied into a scratch directory so the analysis platform's
+`tests/conftest.py` (which imports `aidss.main` and needs bcrypt) was not loaded. Result: **461 passed, 2 failed, 7 deselected**.
+
+- The two failures need the `git` binary, which the slim image does not have, and have nothing to do with dependencies:
+  `test_livecheck.py::test_it_refuses_directories_inside_a_git_repository` and
+  `test_security_s1_s17.py::test_s17_no_tracked_file_contains_a_key_shaped_secret` (it runs `git ls-files`). They pass in the full suite.
+- Left out: `test_guards.py` and `test_trader_role.py`, the only two files in `tests/trader` that import the analysis platform (`aidss.*`); they test
+  the platform's side (guards, the RBAC mapping), not the Trader's runtime.
+- Not covered: the `-m postgres` tests, and `tests/test_architecture_constraints.py` / `tests/test_frontend_routing.py` (static, no dependency question).
+
 ## Not verified / left open
 
 - Not deployed, so the running image still carries the 44 packages. The first real exercise is the next deploy.
