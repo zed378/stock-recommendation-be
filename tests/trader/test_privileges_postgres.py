@@ -71,6 +71,25 @@ def test_rw_cannot_modify_a_risk_limit_version(engines) -> None:
     assert _denied(rw, "DELETE FROM trading.risk_limit")
 
 
+def test_rw_can_insert_but_not_change_backtest_runs(engines) -> None:
+    _, rw = engines
+    with rw.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO trading.backtest_run "
+                "(id, origin, strategy_id, strategy_version, pair, timeframe, candles_used, "
+                "trades, wins, win_rate_pct, total_return_pct, max_drawdown_pct, profit_factor, "
+                "start_equity_idr, final_equity_idr, cost_model, parameters, data_fingerprint, "
+                "ran_at, ran_by) VALUES "
+                "(gen_random_uuid(), 'BACKTEST', 'ema_adx', 'v1', 'BTCIDR', '4H', 100, "
+                "5, 3, 60.0, 4.5, 2.1, 1.5, 10000000, 10450000, '{}'::jsonb, '{}'::jsonb, "
+                "'fp', now(), 'test')"
+            )
+        )
+    assert _denied(rw, "UPDATE trading.backtest_run SET pair = 'ETHIDR'")
+    assert _denied(rw, "DELETE FROM trading.backtest_run")
+
+
 def test_rw_cannot_write_outside_the_trading_schema(engines) -> None:
     _, rw = engines
     assert _denied(rw, "CREATE TABLE public.should_not_exist (id int)")

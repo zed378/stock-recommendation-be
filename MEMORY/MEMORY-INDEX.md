@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-15 — Task D2/D3/D4 & host-hardening local PostgreSQL 18 rehearsal](records/2026-11-15-d2-d3-d4-postgres-rehearsal-and-checklist.md) — 7/7 `-m postgres` tests pass (`backtest_run`, `aidss_app`, `trader_monitor`, `P5`), `EXPLAIN (ANALYZE, BUFFERS)` index scans (`0.016–0.059 ms`), `rehearse_restore.sh` 3s (30 tables), `05-RELEASE-CHECKLIST.md` updated; VM host hardening awaits owner gate
+
 - [2026-11-15 - Task D: dashboard indexes, durable Idempotency-Key replay, ADR-050 to 052](records/2026-11-15-d-indexes-durable-idempotency-and-adrs.md) - migration `0008_indexes_idempotency`, SQL-side dashboard filters, DB-backed replay cache; 496 tests pass on SQLite; PostgreSQL plans and privileges NOT run
 - [2026-11-15 — Task C: Trader UI WCAG AA contrast and ledger header localization fixes](records/2026-11-15-c-trader-ui-contrast-and-i18n-fixes.md) — replaced 47 low-contrast `text-faint` occurrences (`3.53:1`/`3.27:1`) with `text-muted` (`6.55:1`/`6.08:1`), localized `LedgerAndExportPanel` headers in `Trader.tsx`, added 7-page ID/EN Vitest suite; live Chrome DevTools blocked by missing `DevToolsActivePort`
 - [2026-11-15 — T6-01 review packet, T6-03 restore rehearsal script, T6-04 host liveness monitor (Acceptance A13), and T6-05 release checklist evidence](records/2026-11-15-t6-03-04-05-liveness-and-release-prep.md) — `deploy/trader/check_liveness.py` tested against fake Telegram server (A13), `deploy/trader/rehearse_restore.sh`, Runbook R14, `00-THREAT-MODEL.md` review packet, `05-RELEASE-CHECKLIST.md` populated (owner checkboxes left unchecked)
