@@ -135,14 +135,11 @@ be exposed to the network.
    docker exec stocks-postgres-1 psql -U aidss -d aidss -c \
      "SELECT client_addr, usename, application_name, state FROM pg_stat_activity WHERE client_addr IS NOT NULL;"
    ```
-2. **Rehearse on a scratch database first** (never run untested role changes on `aidss` directly):
+2. **Rehearse on a scratch clone first** (never run untested role changes on `aidss` directly):
    ```sh
-   docker exec stocks-postgres-1 psql -U aidss -d postgres -c "CREATE DATABASE aidss_role_rehearsal;"
-   docker exec -i stocks-postgres-1 psql -U aidss -d aidss_role_rehearsal < deploy/trader/bootstrap.sql
-   docker exec -i stocks-postgres-1 psql -U aidss -d aidss_role_rehearsal < deploy/trader/isolate_analysis_role.sql
-   # Run pytest -m postgres against aidss_role_rehearsal, then drop it:
-   docker exec stocks-postgres-1 psql -U aidss -d postgres -c "DROP DATABASE aidss_role_rehearsal;"
+   sh deploy/trader/rehearse_isolation.sh stocks-postgres-1 aidss aidss
    ```
+   The script clones `aidss` into a temporary scratch database via `pg_dump | psql`, applies `deploy/trader/isolate_analysis_role.sql`, assigns a random temporary password via stdin, verifies `aidss_app` attributes and `schema trading` denial, times `deploy/trader/rollback_analysis_role.sql`, and drops both the scratch database and `aidss_app` on exit.
 3. **Apply to `aidss`** after owner approval and a fresh `pg_dump` backup:
    - Run `deploy/trader/isolate_analysis_role.sql` as superuser `aidss`.
    - Set random passwords for `aidss_app` and rotate the superuser `aidss` password (`ALTER ROLE ... PASSWORD`),
@@ -186,8 +183,10 @@ Do **not** enable the scheduled monitor until the Trader is intentionally runnin
 1. On the host (`10.1.200.13`), run:
    ```sh
    sh deploy/trader/rehearse_restore.sh stocks-postgres-1 aidss aidss
+   # Or for a full-database dump rehearsal (both `public` and `trading`):
+   sh deploy/trader/rehearse_restore.sh --full stocks-postgres-1 aidss aidss
    ```
-2. The script dumps `schema trading`, creates a temporary scratch database (`aidss_restore_rehearsal_<timestamp>`),
+2. The script dumps `schema trading` (or the full database with `--full`), creates a temporary scratch database (`aidss_restore_rehearsal_<timestamp>`),
    applies `bootstrap.sql`, restores the dump, verifies table counts and that `trader_rw` cannot `UPDATE`/`DELETE`
    `trading.audit_log` or `trading.ledger_entry` while `trader_monitor` can only `SELECT` `trading.lease`, prints
    the elapsed time in seconds, and drops the scratch database.

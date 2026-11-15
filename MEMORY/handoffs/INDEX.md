@@ -2,6 +2,7 @@
 
 Newest first.
 
+- [2026-11-15 — L: Skrip latihan hardening & restore `--full` yang bisa diulang](2026-11-15-L-rehearsal-scripts.md) — `SELESAI` (`rehearse_isolation.sh`, `rehearse_restore.sh --full`, tes statis, PG 18 lokal)
 - [2026-11-15 — K: Verifikasi browser ulang (perbaikan nginx, sidebar, dan landing page)](2026-11-15-K-live-browser-reverification.md) — `SELESAI` (7 rute Trader `goto`+`reload` 200 HTML, sidebar persist + auto-expand, landing `/` lulus)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 3 (H, I, J selesai; F & G menunggu SSH & gerbang)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 3 untuk pemilik dan agen utama
 - [2026-11-15 — J: Sinkronisasi dokumen Tahap 3 (`PROGRESS.md`, `BACKLOG.md`, `MEMORY-INDEX.md`)](2026-11-15-J-doc-sync.md) — `SELESAI`

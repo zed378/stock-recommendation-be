@@ -8,9 +8,15 @@
 # drops the scratch database on exit.
 #
 # Usage on the VM (after owner approval):
-#   sh deploy/trader/rehearse_restore.sh [postgres-container] [db-user] [source-db]
+#   sh deploy/trader/rehearse_restore.sh [--full] [postgres-container] [db-user] [source-db]
 
 set -eu
+
+FULL_MODE=0
+if [ "${1:-}" = "--full" ]; then
+  FULL_MODE=1
+  shift
+fi
 
 CONTAINER="${1:-stocks-postgres-1}"
 PG_USER="${2:-aidss}"
@@ -21,13 +27,18 @@ DUMP_FILE="/tmp/${SCRATCH_DB}.sql"
 cleanup() {
   rm -f "$DUMP_FILE"
   docker exec "$CONTAINER" psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=0 \
-    -c "DROP DATABASE IF EXISTS ${SCRATCH_DB};" >/dev/null 2>&1 || true
+    -c "DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE);" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
 START_TS="$(date +%s)"
-echo "[1/5] Dumping schema 'trading' from ${SOURCE_DB}..."
-docker exec "$CONTAINER" pg_dump -U "$PG_USER" -d "$SOURCE_DB" -n trading > "$DUMP_FILE"
+if [ "$FULL_MODE" -eq 1 ]; then
+  echo "[1/5] Dumping FULL database ${SOURCE_DB}..."
+  docker exec "$CONTAINER" pg_dump -U "$PG_USER" -d "$SOURCE_DB" > "$DUMP_FILE"
+else
+  echo "[1/5] Dumping schema 'trading' from ${SOURCE_DB}..."
+  docker exec "$CONTAINER" pg_dump -U "$PG_USER" -d "$SOURCE_DB" -n trading > "$DUMP_FILE"
+fi
 
 echo "[2/5] Creating scratch database ${SCRATCH_DB} and bootstrapping roles..."
 docker exec "$CONTAINER" psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=1 \
@@ -35,11 +46,20 @@ docker exec "$CONTAINER" psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=1 \
 sed "s/<database>/${SCRATCH_DB}/g" deploy/trader/bootstrap.sql | \
   docker exec -i "$CONTAINER" psql -U "$PG_USER" -d "$SCRATCH_DB" -v ON_ERROR_STOP=1
 
-echo "[3/5] Restoring schema 'trading' into ${SCRATCH_DB}..."
+if [ "$FULL_MODE" -eq 1 ]; then
+  echo "[3/5] Restoring FULL database into ${SCRATCH_DB}..."
+else
+  echo "[3/5] Restoring schema 'trading' into ${SCRATCH_DB}..."
+fi
 docker exec -i "$CONTAINER" psql -U "$PG_USER" -d "$SCRATCH_DB" -v ON_ERROR_STOP=1 < "$DUMP_FILE"
 
 echo "[4/5] Verifying restored tables and row counts..."
 docker exec "$CONTAINER" psql -U "$PG_USER" -d "$SCRATCH_DB" -v ON_ERROR_STOP=1 -c "
+SELECT table_schema, count(*) AS table_count
+  FROM information_schema.tables
+ WHERE table_schema IN ('public', 'trading')
+ GROUP BY table_schema
+ ORDER BY table_schema;
 SELECT table_name
   FROM information_schema.tables
  WHERE table_schema = 'trading'

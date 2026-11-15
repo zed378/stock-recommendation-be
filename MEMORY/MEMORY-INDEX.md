@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-15 — Task L: Repeatable host-hardening and `--full` restore rehearsal scripts](records/2026-11-15-l-rehearsal-scripts.md) — added `deploy/trader/rehearse_isolation.sh`, `--full` flag on `rehearse_restore.sh`, static tests `test_rehearsal_scripts.py`, R13/R14 runbook updates; verified on local PG 18 (isolate 1s, rollback 1s, intentional fail cleanup, full restore 4s)
+
 - [2026-11-15 — Task K: Live browser re-verification on `https://aidss.zedth.my.id`](records/2026-11-15-k-live-browser-reverification.md) — Playwright Chromium against `aidss-frontend:75bc905`: direct `goto` + `reload` `200 text/html` on all 7 Trader routes, sidebar group/hide persistence + auto-expand, landing `/` (images, 375/768/1280 `overflowPx: 0`, ID/EN, focus, contrast), 401 security headers, and 502 outage all pass
 
 - [2026-11-15 — Task I: Live browser verification on `https://aidss.zedth.my.id`](records/2026-11-15-i-live-browser-verification.md) — Playwright Chromium (`admin` account): all 7 Trader pages pass via SPA nav (`HALTED`, `PAPER`, 0 console/page errors, `overflowPx: 0` at 1280/768/375, ID/EN, 401 security headers, 502 outage); found reverse-proxy defect where direct `/trader` and `/trader/approvals` return FastAPI `404` JSON
