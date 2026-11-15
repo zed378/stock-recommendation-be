@@ -81,7 +81,7 @@ API and front end built, deployed on VM (`zed378/aidss-frontend:e410ab7`), and c
 
 ### T6
 
-Partial: T6-01/T6-02 mock tests, T6-03 restore script (`3s` local PostgreSQL 18 rehearsal), T6-04 liveness script (`check_liveness.py`, awaiting VM cron approval), T6-05 release checklist (`05-RELEASE-CHECKLIST.md`), and `P5` PostgreSQL 18 `EXPLAIN (ANALYZE, BUFFERS)` index verification are done; `S13` (ADR-050), `R5` (ADR-052), VM host hardening, and owner-led drills remain open. See `TASKS/PHASE-T6-HARDENING-AND-RELEASE.md`.
+Partial: T6-01/T6-02 mock tests, T6-03 restore script (`3s` local PostgreSQL 18 rehearsal), T6-04 liveness script (`check_liveness.py`, awaiting VM cron approval), T6-05 release checklist (`05-RELEASE-CHECKLIST.md`), `P5` PostgreSQL 18 `EXPLAIN (ANALYZE, BUFFERS)` index verification, and the host-hardening rehearsal on the VM's PostgreSQL 16 (clone of `aidss`: isolate 1.1 s, rollback 1.2 s database side, 6/6 privilege tests; production steps not run) are done; `S13` (ADR-050), `R5` (ADR-052), VM host hardening, and owner-led drills remain open. See `TASKS/PHASE-T6-HARDENING-AND-RELEASE.md`.
 
 ## Open Risks (named, not fixed)
 

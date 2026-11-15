@@ -5,7 +5,7 @@ Newest first.
 - [2026-11-15 — Z: Ringkasan akhir Tahap 3 (H, I, J selesai; F & G menunggu SSH & gerbang)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 3 untuk pemilik dan agen utama
 - [2026-11-15 — J: Sinkronisasi dokumen Tahap 3 (`PROGRESS.md`, `BACKLOG.md`, `MEMORY-INDEX.md`)](2026-11-15-J-doc-sync.md) — `SELESAI`
 - [2026-11-15 — G: Monitor liveness luar-proses & latihan restore VM](2026-11-15-G-liveness-and-restore-rehearsal.md) — `BERHENTI DI GERBANG` (menunggu kata sandi SSH & persetujuan pemilik; perintah R14 siap)
-- [2026-11-15 — F: Hardening host PostgreSQL 16 (`10.1.200.13`)](2026-11-15-F-host-hardening-pg16.md) — `BERHENTI DI GERBANG` (menunggu kata sandi SSH & gerbang pemilik untuk latihan PG 16 + penerapan `aidss_app`)
+- [2026-11-15 — F: Hardening host PostgreSQL 16 (`10.1.200.13`)](2026-11-15-F-host-hardening-pg16.md) — latihan PG 16 `SELESAI` (agen utama, klon `aidss`); eksekusi produksi `BERHENTI DI GERBANG` (persetujuan pemilik per langkah)
 - [2026-11-15 — I: Verifikasi browser langsung Playwright (`https://aidss.zedth.my.id`)](2026-11-15-I-live-browser-verification.md) — `SELESAI` (7 halaman SPA lulus; temuan bug routing reverse proxy `404` pada akses URL langsung `/trader*`)
 - [2026-11-15 — H: Pemangkasan oportunistik `trading.idempotency_key` (`ADR-051`)](2026-11-15-H-idempotency-pruning.md) — `SELESAI` (`a6b385e`)
 - [2026-11-15 — Z: Ringkasan akhir tahap 2 (commit belum di-push, keadaan VM, 5 risiko utama)](2026-11-15-Z-final.md) — rangkuman akhir untuk pemilik dan agen utama
