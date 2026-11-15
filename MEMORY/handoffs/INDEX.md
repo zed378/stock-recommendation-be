@@ -2,6 +2,8 @@
 
 Newest first.
 
+- [2026-11-15 — Z: Ringkasan akhir Tahap 8 (ukur ulang produksi `2fc6c0b`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 8 untuk pemilik dan agen utama
+- [2026-11-15 — Q: Pengukuran ulang overflow & tap-target `44px` produksi (`2fc6c0b`)](2026-11-15-Q-production-layout-remeasure.md) — `SELESAI` (`overflowPx: 0` di semua 8 rute & 6 tab `/assets/BBCA` `en`/`id` pada `375/320px`; kontrol `<44px` terverifikasi; `/monitoring` `TabStrip` lulus; zero perubahan kode)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 7 (ukur ulang `/assets/:ticker` `dd2d776` & perbaikan `0f28c83`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 7 untuk pemilik dan agen utama
 - [2026-11-15 — P: Pengukuran overflow produksi `/assets/:ticker` (`dd2d776`) & perbaikan `320px`/`/picks` (`0f28c83`)](2026-11-15-P-asset-page-overflow-production.md) — `SELESAI` (`TabStrip` 375px lulus 0px di 6 tab EN/ID; ditemukan & diperbaiki `Analisis` 320px `17px` dan `/picks` 375px `5px` di `0f28c83`, `80/80` Vitest; butuh rebuild/deploy `aidss-frontend`)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 6 (verifikasi lazy signed-in pages `f08e3af`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 6 untuk pemilik dan agen utama
