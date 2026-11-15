@@ -14,7 +14,7 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 | T3 | Strategy, backtest, paper | 🚧 built, in review (2026-11-14) | Mechanism only; OQ-5 and OQ-11 values unset, tests use their own numbers. AI context deferred (ADR-032) |
 | T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; now wired into the run loop (mock-tested only); a fresh install starts `HALTED`. OQ-9 values unset |
 | T5 | Operator surface and `APPROVAL` | 🚧 built, component-tested, live browser check pending (2026-11-15) | T5-01, 02, 03, 05, the T5-04 API and front end exist with 28 Vitest + Testing Library tests (`MEMORY/records/2026-11-15-t5-04-frontend-tests-and-ui-audit.md`). **Live browser click-through on `aidss.zedth.my.id` awaits owner test account.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
-| T6 | Hardening and release | ⏳ TODO | No open question blocks T6 (ADR-037, ADR-039, ADR-040) |
+| T6 | Hardening and release | 🚧 partial (2026-11-15) | T6-01 tests and T6-02 resilience tests exist (mock only); the independent review, runbook drills, liveness check, and release readiness are not done. See `MEMORY/records/2026-11-15-t6-security-and-resilience-tests.md` |
 
 ## What Exists Today
 

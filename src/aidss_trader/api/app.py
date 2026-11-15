@@ -13,6 +13,9 @@ Hard rules, each guarded by a test that enumerates the OpenAPI document:
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -21,7 +24,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -193,8 +196,107 @@ class LimitsBody(BaseModel):
     limits: dict[str, str | int | None]
 
 
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+    # The API serves JSON and CSV only: nothing it returns should ever be rendered or framed.
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+}
+REPLAY_TTL_S = 24 * 3600
+REPLAY_MAX = 5000
+
+
+class _Replays:
+    """Remembers the successful answer to a mutation, so a retried or double-clicked request with
+    the same Idempotency-Key has one effect (S7).
+
+    Held in memory: one Trader process serves the API (the lease guarantees one), so this covers a
+    double click and a client retry. It does not survive a restart, which is stated rather than
+    hidden: a key reused after a restart executes again. The approval and kill paths are
+    idempotent by their own design, so the cases that matter most do not depend on this.
+    """
+
+    def __init__(self) -> None:
+        self._items: dict[str, tuple[float, str, int, bytes, str]] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def lock(self, key: str) -> asyncio.Lock:
+        return self._locks.setdefault(key, asyncio.Lock())
+
+    def get(self, key: str) -> tuple[float, str, int, bytes, str] | None:
+        hit = self._items.get(key)
+        if hit is not None and time.monotonic() - hit[0] > REPLAY_TTL_S:
+            self._items.pop(key, None)
+            return None
+        return hit
+
+    def put(self, key: str, body_hash: str, status: int, body: bytes, media: str) -> None:
+        if len(self._items) >= REPLAY_MAX:
+            oldest = min(self._items, key=lambda k: self._items[k][0])
+            self._items.pop(oldest, None)
+            self._locks.pop(oldest, None)
+        self._items[key] = (time.monotonic(), body_hash, status, body, media)
+
+
 def create_app(ctx: ApiContext) -> FastAPI:
     app = FastAPI(title="AIDSS Trader API", docs_url=None, redoc_url=None)
+    replays = _Replays()
+
+    @app.middleware("http")
+    async def _idempotency_and_headers(request: Request, call_next):
+        key = request.headers.get("idempotency-key")
+        auth = request.headers.get("authorization")
+        mutating = request.method in {"POST", "PUT", "DELETE", "PATCH"}
+        if not (mutating and key and auth):
+            response = await call_next(request)
+        else:
+            body = await request.body()
+            body_hash = hashlib.sha256(body).hexdigest()
+            # Scoped to the caller's token, the method, the path, and the key: one user's key can
+            # never replay another's answer.
+            ck = hashlib.sha256(
+                f"{auth}|{request.method}|{request.url.path}|{key}".encode()
+            ).hexdigest()
+            async with replays.lock(ck):
+                hit = replays.get(ck)
+                if hit is not None and hit[1] != body_hash:
+                    response = JSONResponse(
+                        status_code=409,
+                        content={
+                            "error": {
+                                "class": "CONFLICT",
+                                "code": "idempotency_key_reused",
+                                "message": "this Idempotency-Key was used for a different request",
+                                "correlation_id": uuid.uuid4().hex,
+                                "retryable": False,
+                            }
+                        },
+                    )
+                elif hit is not None:
+                    response = Response(
+                        content=hit[3],
+                        status_code=hit[2],
+                        media_type=hit[4],
+                        headers={"Idempotent-Replay": "true"},
+                    )
+                else:
+                    response = await call_next(request)
+                    if 200 <= response.status_code < 300:
+                        chunks = [c async for c in response.body_iterator]
+                        payload = b"".join(chunks)
+                        media = response.media_type or "application/json"
+                        replays.put(ck, body_hash, response.status_code, payload, media)
+                        response = Response(
+                            content=payload,
+                            status_code=response.status_code,
+                            media_type=media,
+                            headers=dict(response.headers),
+                        )
+        for name, value in SECURITY_HEADERS.items():
+            response.headers[name] = value
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

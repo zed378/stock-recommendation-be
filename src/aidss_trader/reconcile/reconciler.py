@@ -129,6 +129,20 @@ def reconcile(
             )
         )
     run.differences, run.finished_at = len(diffs), now()
+    if run.result == "clean":
+        # A run that could not read the exchange recorded a "difference" only to say so. A later
+        # clean run supersedes it, otherwise a transient outage would leave a difference nobody can
+        # resolve and the Trader could never be resumed. A real data difference (an order or a trade
+        # that does not match) is never closed here: that needs the owner.
+        stamp = now()
+        for stale in session.scalars(
+            select(ReconciliationDifference).where(
+                ReconciliationDifference.kind == "reconcile_failed",
+                ReconciliationDifference.resolved_at.is_(None),
+            )
+        ):
+            stale.resolved_at = stamp
+            stale.resolution_note = "superseded by a later clean run (the exchange was unreadable)"
     session.commit()
     if run.result != "clean" and killswitch is not None:
         killswitch.activate("HALT", "reconciler", "reconciler")

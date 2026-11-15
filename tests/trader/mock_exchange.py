@@ -309,7 +309,7 @@ class MockExchange:
                 "balances": [
                     {"asset": a, "free": f, "locked": lk} for a, (f, lk) in self.balances.items()
                 ],
-                "uid": 1,
+                "uid": getattr(self, "account_uid", 1),
             },
         )
 

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from aidss_trader.config import TraderSettings, unset_risk_fields
 from aidss_trader.credentials import MasterKeyUnavailable, load_master_key
 from aidss_trader.lease import LeaseHolder
+from aidss_trader.logsafe import safe_log
 from aidss_trader.runtime.loop import Runtime
 
 logger = logging.getLogger("aidss_trader")
@@ -95,9 +96,11 @@ def run(
             try:
                 runtime.run_if_due()
             except Exception:
-                logger.exception("runtime cycle failed")
+                safe_log(logger, logging.ERROR, "runtime cycle failed", exc_info=True)
         write_heartbeat(settings.heartbeat_file)
-        logger.info(
+        safe_log(
+            logger,
+            logging.INFO,
             "cycle",
             extra={
                 "state": status.state.value,

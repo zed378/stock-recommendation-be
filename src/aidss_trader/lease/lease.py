@@ -56,6 +56,10 @@ class LeaseHolder:
                 (Lease.holder == self.holder) | (Lease.expires_at < now),
             )
             .values(holder=self.holder, expires_at=expires, heartbeat_at=now)
+            # Decided in the database, not in Python: a Lease already loaded in this session has a
+            # naive datetime on SQLite and an aware one on PostgreSQL, and comparing them in Python
+            # raises.
+            .execution_options(synchronize_session=False)
         )
         session.flush()
         return result.rowcount == 1

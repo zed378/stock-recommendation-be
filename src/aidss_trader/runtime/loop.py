@@ -61,6 +61,7 @@ from aidss_trader.intents.builder import (
 )
 from aidss_trader.killswitch import KillSwitch
 from aidss_trader.ledger.position import LedgerIntegrityError, Position
+from aidss_trader.logsafe import safe_log
 from aidss_trader.market_data.candles import TIMEFRAME_SECONDS, ingest_candles
 from aidss_trader.market_data.pairs import PairRules, build_pair_rules, floor_to_increment
 from aidss_trader.notify import Notifier
@@ -195,10 +196,6 @@ class Runtime:
             ks.ensure_initialized()
             notifier = self._notifier(s) if self._notifier else None
             limits = load_risk_limits(s)
-            snap = self._step(report, "snapshot", lambda: self._snapshot(s, limits))
-            report.snapshot_ok = snap is not None
-            if snap is not None:
-                self._last_snapshot, self.last_snapshot_at = snap, snap.at
             try:
                 positions, events = accounting.replay_live(s)
             except LedgerIntegrityError as exc:
@@ -212,6 +209,21 @@ class Runtime:
                 ks.activate("HALT", "service", "runtime")
                 report.errors.append(f"ledger: {exc}")
                 positions, events = {}, []
+            # Prices come first and on their own: the stops depend on them, and they must not
+            # wait on the account call, the clock check, or anything else that can fail (R1).
+            prices = self._step(report, "prices", lambda: self._fetch_prices(s, positions))
+            # No prices means the exchange is not answering: asking again for the same prices in the
+            # snapshot would only double the requests during an outage (R3).
+            snap = (
+                None
+                if prices is None
+                else self._step(
+                    report, "snapshot", lambda: self._snapshot(s, limits, prices=prices)
+                )
+            )
+            report.snapshot_ok = snap is not None
+            if snap is not None:
+                self._last_snapshot, self.last_snapshot_at = snap, snap.at
 
             inputs = self._breaker_inputs(s, limits, snap, events)
             self._trip_breakers(s, ks, notifier, inputs, report)
@@ -219,7 +231,7 @@ class Runtime:
                 self._step(
                     report,
                     "protect",
-                    lambda: self._protect(s, ks, notifier, snap, positions, limits, report),
+                    lambda: self._protect(s, ks, notifier, snap, prices, positions, limits, report),
                 )
             self._step(report, "sync", lambda: self._sync_orders(s, notifier, snap, ks))
             if self._client is not None:
@@ -268,7 +280,7 @@ class Runtime:
         except ConnectorError as exc:
             report.errors.append(f"{name}: {exc.error_class}")
         except Exception as exc:  # a failed step must never stop the protective ones after it
-            logger.exception("runtime step %s failed", name)
+            safe_log(logger, logging.ERROR, "runtime step %s failed", name, exc_info=True)
             report.errors.append(f"{name}: {type(exc).__name__}")
         return None
 
@@ -312,8 +324,30 @@ class Runtime:
 
     # --------------------------------------------------------------- snapshot
 
+    def _fetch_prices(
+        self, s: Session, positions: dict[str, Position]
+    ) -> dict[str, Decimal] | None:
+        """One price call for every allowlisted pair and every position held."""
+        if self._client is None:
+            return None
+        wanted = sorted({canonical(p) for p in get_allowlist(s).pairs} | set(positions))
+        if not wanted:
+            return {}
+        try:
+            return self._client.get_last_prices(wanted)
+        except ConnectorError:
+            # One bad allowlist entry (an unknown or suspended pair) must not blind the stops:
+            # ask again for only what is held.
+            if positions and set(wanted) != set(positions):
+                return self._client.get_last_prices(sorted(positions))
+            raise
+
     def _snapshot(
-        self, s: Session, limits: RiskLimits | None, pairs: list[str] | None = None
+        self,
+        s: Session,
+        limits: RiskLimits | None,
+        pairs: list[str] | None = None,
+        prices: dict[str, Decimal] | None = None,
     ) -> Snapshot | None:
         if self._client is None:
             return None
@@ -338,7 +372,11 @@ class Runtime:
         wanted = sorted(
             {canonical(p) for p in (pairs or allow.pairs)} | {f"{a}{QUOTE}" for a in held}
         )
-        prices = client.get_last_prices(wanted) if wanted else {}
+        # Prices already fetched this cycle are reused; only what is still missing is asked for.
+        prices = dict(prices or {})
+        missing = [w for w in wanted if w not in prices]
+        if missing:
+            prices.update(client.get_last_prices(missing))
         books = client.get_book_tickers(wanted) if wanted else {}
         equity: Decimal | None = ZERO
         for asset, (free, locked) in account.balances.items():
@@ -355,6 +393,24 @@ class Runtime:
         if self._due("rules", self._rules_refresh_s) or not self._rules:
             self._refresh_rules(s)
         return Snapshot(self._now(), account, prices, books, equity, True, permissions_ok)
+
+    def _minimal_snapshot(self, prices: dict[str, Decimal]) -> Snapshot:
+        """Just enough to send a protective sell when the full snapshot could not be built.
+
+        Permissions are whatever the last good snapshot said, and unknown counts as fine: a
+        stop only reduces risk, and the permission breaker has its own path to HALT.
+        """
+        last = self._last_snapshot
+        account = last.account if last else Account(True, False, False, {})
+        return Snapshot(
+            self._now(),
+            account,
+            dict(prices),
+            {},
+            None,
+            True,
+            last.permissions_ok if last else True,
+        )
 
     def _refresh_rules(self, s: Session) -> None:
         assert self._client is not None
@@ -461,12 +517,15 @@ class Runtime:
         ks: KillSwitch,
         notifier: Notifier | None,
         snap: Snapshot | None,
+        prices: dict[str, Decimal] | None,
         positions: dict[str, Position],
         limits: RiskLimits | None,
         report: CycleReport,
     ) -> None:
-        """`snap` is None when the price call failed: the monitor still runs, blind, so the
-        position is reported unprotected and the watchdog counts the missed cycles."""
+        """`prices` is None when the price call failed: the monitor still runs, blind, so the
+        position is reported unprotected and the watchdog counts the missed cycles. A missing
+        `snap` (the account call failed) does not stop a stop: the prices are enough to decide,
+        and a minimal snapshot carries the sell through the EMERGENCY profile."""
         self._ensure_stops(s, positions, notifier)
         stops = {
             p.pair: p for p in s.scalars(select(PositionStop).where(PositionStop.origin == "LIVE"))
@@ -487,8 +546,8 @@ class Runtime:
                 )
         report_c = self._monitor.cycle(
             watched,
-            dict(snap.prices) if snap is not None else None,
-            price_time=snap.at if snap is not None else None,
+            dict(prices) if prices is not None else None,
+            price_time=self._now() if prices is not None else None,
             now=self._now(),
             max_age_s=self._price_poll_s * 3,
         )
@@ -509,9 +568,16 @@ class Runtime:
             # so it cannot be the key.
             pair = message.split(" has ")[0].split()[-1]
             self._alert_once(s, notifier, f"watchdog:{pair}", "watchdog_stalled", message)
-        for req in report_c.exits if snap is not None else []:
+        for req in report_c.exits:
             sent = self._send_stop(
-                s, ks, notifier, snap, positions[req.pair], req.pair, req.observed_price, limits
+                s,
+                ks,
+                notifier,
+                snap or self._minimal_snapshot(prices or {}),
+                positions[req.pair],
+                req.pair,
+                req.observed_price,
+                limits,
             )
             if sent:
                 report.stops_sent += 1

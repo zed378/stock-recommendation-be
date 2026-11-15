@@ -18,7 +18,7 @@ start T5-06 until these specific T6 tasks are done".
 
 | | |
 |---|---|
-| **Status** | TODO |
+| **Status** | PARTIAL 2026-11-15: S1 to S17 written (25 pass, S13 pinning xfail, S15 role clause diverges); **the independent review is not done** |
 | **Depends on** | T5-04 |
 | **Spec refs** | `docs/11-TESTING-QUALITY/05-SECURITY-TESTS.md` · `docs/09-SECURITY-PRIVACY/00-THREAT-MODEL.md` |
 | **Spec required** | no |
@@ -34,7 +34,7 @@ start T5-06 until these specific T6 tasks are done".
 
 | | |
 |---|---|
-| **Status** | TODO |
+| **Status** | REVIEW 2026-11-15: R1 to R11, P1 to P4, P6 and a PAPER soak pass on the mock; P5 not done; soak is simulated time only |
 | **Depends on** | T4 complete |
 | **Spec refs** | `docs/11-TESTING-QUALITY/06-PERFORMANCE-AND-RESILIENCE-TESTS.md` |
 | **Spec required** | no |
