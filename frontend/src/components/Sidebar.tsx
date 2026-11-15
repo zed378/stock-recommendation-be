@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { useI18n } from "@/i18n/context";
 import { useNavigationGroups } from "@/components/navigation";
+import { useCollapsedGroups } from "@/components/useCollapsedGroups";
 
 /**
  * The primary navigation, rendered.
@@ -10,43 +11,99 @@ import { useNavigationGroups } from "@/components/navigation";
  * "Picks" and "Chat" are both research, "Portfolio" and "Journal" are both
  * records of what you actually did, and Admin is a different job entirely.
  *
- * Groups are headings rather than collapsible drawers. There are four of them
- * with a dozen links in total; hiding any of that behind a disclosure costs a
- * click and saves nothing worth the click.
+ * Each group folds. That was once declined ("four groups, a dozen links, a
+ * disclosure costs a click and saves nothing"), and it stopped being true when the
+ * Trading group arrived with seven links of its own: a reader who never trades
+ * should not scroll past them, and one who only trades should not scroll past
+ * research. The choice is remembered, and the group holding the current page opens
+ * itself when you arrive there, so "where am I" is never hidden by a fold.
  */
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useI18n();
   const groups = useNavigationGroups();
+  const { pathname } = useLocation();
+  const { collapsed, toggle, expand } = useCollapsedGroups();
+
+  const holdsCurrentPage = (group: (typeof groups)[number]) =>
+    group.items.some((item) => matchPath({ path: item.to, end: item.end ?? false }, pathname));
+
+  // Opens the group of the page you arrive on, once per navigation. Keyed on the path
+  // rather than on the groups array, which is rebuilt on every render and would reopen
+  // a group the reader had just folded.
+  const openedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (openedFor.current === pathname) return;
+    openedFor.current = pathname;
+    const current = groups.find((g) =>
+      g.items.some((item) => matchPath({ path: item.to, end: item.end ?? false }, pathname)),
+    );
+    if (current) expand(current.label);
+  }, [pathname, groups, expand]);
 
   return (
-    <nav className="flex flex-col gap-5 py-4">
-      {groups.map((group) => (
-        <div key={group.label}>
-          <p className="px-3 pb-1.5 text-[0.65rem] font-medium uppercase tracking-wider text-faint">
-            {t(group.label)}
-          </p>
-          <ul className="space-y-0.5">
-            {group.items.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  to={item.to}
-                  end={item.end}
-                  onClick={onNavigate}
-                  className={({ isActive }) =>
-                    `block rounded-md px-3 py-1.5 text-sm transition-colors ${
-                      isActive
-                        ? "bg-hover font-medium text-ink"
-                        : "text-muted hover:bg-hover/60 hover:text-ink"
-                    }`
-                  }
-                >
-                  {t(item.label)}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+    <nav aria-label={t("app.shortName")} className="flex flex-col gap-1 py-4">
+      {groups.map((group) => {
+        const open = !(collapsed[group.label] ?? false);
+        const here = holdsCurrentPage(group);
+        const listId = `nav-group-${group.label.replaceAll(".", "-")}`;
+        return (
+          <div key={group.label}>
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={listId}
+              onClick={() => toggle(group.label)}
+              className={`flex min-h-9 w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-[0.65rem] font-medium uppercase tracking-wider transition-colors hover:bg-hover/60 hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-rise ${
+                here ? "text-muted" : "text-faint"
+              }`}
+            >
+              <span>{t(group.label)}</span>
+              {/* Drawn, not imported, like the menu glyph in the shell. It turns with the
+                  state and carries no meaning of its own: aria-expanded says it. */}
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                aria-hidden
+                className={`shrink-0 transition-transform motion-reduce:transition-none ${
+                  open ? "rotate-90" : ""
+                }`}
+              >
+                <path
+                  d="M3 1.5 6.5 5 3 8.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            {/* `hidden` rather than unmounting: the links leave the tab order and the
+                accessibility tree while folded, and come back without a re-render cost. */}
+            <ul id={listId} hidden={!open} className="mb-3 space-y-0.5">
+              {group.items.map((item) => (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    end={item.end}
+                    onClick={onNavigate}
+                    className={({ isActive }) =>
+                      `block rounded-md px-3 py-1.5 text-sm transition-colors ${
+                        isActive
+                          ? "bg-hover font-medium text-ink"
+                          : "text-muted hover:bg-hover/60 hover:text-ink"
+                      }`
+                    }
+                  >
+                    {t(item.label)}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </nav>
   );
 }

@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n/context";
 import type { Locale } from "@/i18n/context";
 import { NotificationBell } from "@/components/Notifications";
 import { SidebarDrawer, SidebarNav } from "@/components/Sidebar";
+import { useSidebarVisible } from "@/components/useSidebarVisible";
 import { useEvents } from "@/realtime/useEvents";
 import { StateBar } from "@/trader/StateBar";
 
@@ -26,6 +27,9 @@ export function Layout() {
   useEvents(Boolean(user));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The desktop column can be put away to give the page the whole width. The drawer on a narrow
+  // screen is a separate thing and is unaffected.
+  const sidebar = useSidebarVisible();
   // Stable identity. Not what fixed the drawer - it compares the path itself
   // now - but an inline arrow here was what made an effect depending on it run
   // on every render, and leaving that trap set for the next caller is worse
@@ -37,18 +41,45 @@ export function Layout() {
       {/* A column on wide screens, a drawer below. Fixed rather than scrolling
           with the page: navigation that scrolls away is navigation you have to
           scroll back for. */}
-      <aside className="hidden w-56 shrink-0 border-r border-line lg:block">
-        <div className="sticky top-0 flex h-screen flex-col overflow-y-auto px-2">
-          <NavLink
-            to="/"
-            className="flex items-center gap-2 px-3 pb-1 pt-4 text-sm font-semibold tracking-tight text-ink"
-          >
-            <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />
-            {t("app.shortName")}
-          </NavLink>
-          <SidebarNav />
-        </div>
-      </aside>
+      {sidebar.visible && (
+        <aside
+          id="app-sidebar"
+          className="hidden w-56 shrink-0 border-r border-line lg:block"
+        >
+          <div className="sticky top-0 flex h-screen flex-col overflow-y-auto px-2">
+            <div className="flex items-center justify-between pr-1">
+              <NavLink
+                to="/"
+                className="flex items-center gap-2 px-3 pb-1 pt-4 text-sm font-semibold tracking-tight text-ink"
+              >
+                <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />
+                {t("app.shortName")}
+              </NavLink>
+              <button
+                type="button"
+                onClick={sidebar.hide}
+                aria-label={t("nav.hideMenu")}
+                aria-expanded
+                aria-controls="app-sidebar"
+                className="mt-3 cursor-pointer rounded-md p-1.5 text-faint transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rise"
+              >
+                {/* Two chevrons pointing at the edge it folds into. */}
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+                  <path
+                    d="M8.5 3.5 4 8l4.5 4.5M13 3.5 8.5 8l4.5 4.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <SidebarNav />
+          </div>
+        </aside>
+      )}
 
       <SidebarDrawer open={drawerOpen} onClose={closeDrawer} />
 
@@ -73,9 +104,32 @@ export function Layout() {
               </svg>
             </button>
 
+            {/* Brings the desktop column back. Only present while it is put away. */}
+            {!sidebar.visible && (
+              <button
+                type="button"
+                onClick={sidebar.show}
+                aria-label={t("nav.openMenu")}
+                aria-expanded={false}
+                aria-controls="app-sidebar"
+                className="hidden cursor-pointer rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rise lg:inline-flex"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+                  <path
+                    d="M2 4.5h14M2 9h14M2 13.5h14"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
+
             <NavLink
               to="/"
-              className="flex items-center gap-2 text-sm font-semibold tracking-tight text-ink lg:hidden"
+              className={`flex items-center gap-2 text-sm font-semibold tracking-tight text-ink ${
+                sidebar.visible ? "lg:hidden" : ""
+              }`}
             >
               <img src="/logo-symbol.svg" alt="" className="h-5 w-5" />
               {t("app.shortName")}
