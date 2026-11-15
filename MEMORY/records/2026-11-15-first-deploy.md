@@ -51,3 +51,18 @@ and no credential, so it can trade nothing. This is also the first run on a real
   (restrict the port, rotate the password, and move the analysis API to a limited role; see the backlog).
 - The database and the server are the same host; the dump above is on the same disk.
 - The password used to deploy was shared in chat earlier and should be rotated.
+
+---
+
+## Redeploy of commit 813d9cd (2026-11-15)
+
+Built from a clean `git archive HEAD` export, so uncommitted work in the working tree (another agent's backtest and
+migration 0007) is not in the images. `aidss-trader:813d9cd` carries the T6 fixes (security headers, idempotency
+replay, stops independent of the account call, resumable after an outage, `safe_log`, lease comparison) and
+`aidss-frontend:813d9cd` carries the front end including its new test suite. The analysis image is unchanged
+(`aidss-api:e7b3da3`; `src/aidss` has not changed since). No migration was needed (still at 0006).
+
+Verified after the swap: all kontainers healthy; the Trader holds the lease and is still `HALTED`; the security
+headers are present on a response proxied through the front end; the Trader log shows an authenticated
+`GET /auth/me` answered 200, so a signed-in user reached the Trader through the proxy. Still unverified: what the
+screens look like, and anything beyond that one authenticated call.
