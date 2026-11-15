@@ -15,7 +15,11 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["src/trader/**/*.test.{ts,tsx}", "src/components/**/*.test.{ts,tsx}"],
+    include: [
+      "src/trader/**/*.test.{ts,tsx}",
+      "src/components/**/*.test.{ts,tsx}",
+      "src/pages/**/*.test.{ts,tsx}",
+    ],
   },
   server: {
     port: 5173,
