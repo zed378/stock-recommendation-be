@@ -2,6 +2,8 @@
 
 Newest first.
 
+- [2026-11-15 — Z: Ringkasan akhir Tahap 6 (verifikasi lazy signed-in pages `f08e3af`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 6 untuk pemilik dan agen utama
+- [2026-11-15 — O: Verifikasi browser halaman lazy-loaded & `ChunkErrorBoundary` (`f08e3af`)](2026-11-15-O-lazy-pages-browser-verification.md) — `SELESAI` (22 rute SPA + `goto`/`reload` + 1.5s fallback + `route.abort()` EN/ID + offline + `/assets/BBCA`→`TLKM` & `/admin/users`→`audit` lulus; zero perubahan kode; catatan pra-ada `/assets/BBCA` `375px` `overflowPx: 148`)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 5 (verifikasi lazy loading & `ChunkErrorBoundary`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 5 untuk pemilik dan agen utama
 - [2026-11-15 — N: Verifikasi lazy loading rute Trader & perbaikan `ChunkErrorBoundary`](2026-11-15-N-lazy-route-verification.md) — `SELESAI` (`ab5a9ab` lulus SPA/goto/delay/responsif; ditemukan & diperbaiki blank screen saat chunk gagal/offline; `59` Vitest, butuh rebuild `aidss-frontend`)
 - [2026-11-15 — M: Sinkronisasi dokumen dan `React.lazy` rute Trader](2026-11-15-M-doc-sync-and-lazy-routes.md) — `SELESAI` (`58` Vitest, `7` routing tests, `PROGRESS.md`/`CLAUDE.md`/`INDEX.md`)
