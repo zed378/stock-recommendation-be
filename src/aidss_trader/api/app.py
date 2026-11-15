@@ -19,14 +19,14 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Generic, Literal, TypeVar
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from aidss_trader.api import permissions as perm
@@ -582,6 +582,7 @@ class _Replays:
         self._items[key] = (time.monotonic(), body_hash, status, body, media)
         if self._factory is None:
             return
+        now = datetime.now(UTC)
         try:
             with self._factory() as s:
                 s.merge(
@@ -591,11 +592,25 @@ class _Replays:
                         status_code=status,
                         response_body=body.decode("utf-8", errors="replace"),
                         media_type=media[:64],
-                        created_at=datetime.now(UTC),
+                        created_at=now,
                     )
                 )
                 s.commit()
         except Exception:  # noqa: BLE001 - the memory copy still covers a double click
+            return
+        self._prune_expired(now)
+
+    def _prune_expired(self, now: datetime) -> None:
+        """Opportunistically delete rows older than REPLAY_TTL_S (ADR-051).
+
+        Runs in its own transaction so a prune failure never fails or rolls back the API response.
+        """
+        cutoff = now - timedelta(seconds=REPLAY_TTL_S)
+        try:
+            with self._factory() as s:  # type: ignore[misc]
+                s.execute(delete(IdempotencyRecord).where(IdempotencyRecord.created_at < cutoff))
+                s.commit()
+        except Exception:  # noqa: BLE001 - pruning failure is non-fatal
             pass
 
 def create_app(ctx: ApiContext) -> FastAPI:

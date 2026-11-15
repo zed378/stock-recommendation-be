@@ -59,6 +59,79 @@ def test_an_expired_database_record_is_not_replayed() -> None:
     assert _Replays(api.factory).get("o" * 64) is None
 
 
+def test_put_prunes_expired_rows_but_keeps_fresh_rows() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    api = Api()
+    now = datetime.now(UTC)
+    with api.factory() as s:
+        s.add(
+            IdempotencyRecord(
+                key_hash="expired-1".ljust(64, "0"),
+                body_hash="b" * 64,
+                status_code=200,
+                response_body="{}",
+                media_type="application/json",
+                created_at=now - timedelta(seconds=REPLAY_TTL_S + 60),
+            )
+        )
+        s.add(
+            IdempotencyRecord(
+                key_hash="fresh-1".ljust(64, "0"),
+                body_hash="b" * 64,
+                status_code=200,
+                response_body='{"fresh":true}',
+                media_type="application/json",
+                created_at=now - timedelta(seconds=60),
+            )
+        )
+        s.commit()
+
+    store = _Replays(api.factory)
+    store.put("new-1".ljust(64, "0"), "b" * 64, 200, b'{"new":true}', "application/json")
+
+    with api.factory() as s:
+        keys = {r.key_hash for r in s.scalars(select(IdempotencyRecord)).all()}
+    assert "expired-1".ljust(64, "0") not in keys
+    assert "fresh-1".ljust(64, "0") in keys
+    assert "new-1".ljust(64, "0") in keys
+
+
+def test_pruning_failure_does_not_fail_put_or_request() -> None:
+    api = Api()
+    orig_factory = api.factory
+    calls = {"n": 0}
+
+    class BrokenPruneSession:
+        def __init__(self, inner) -> None:
+            self._inner = inner
+
+        def __enter__(self):
+            self._inner.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._inner.__exit__(*args)
+
+        def merge(self, obj):
+            return self._inner.merge(obj)
+
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("delete denied")
+
+        def commit(self):
+            return self._inner.commit()
+
+    def wrapped_factory():
+        calls["n"] += 1
+        s = orig_factory()
+        return BrokenPruneSession(s) if calls["n"] >= 2 else s
+
+    resilient = _Replays(wrapped_factory)
+    resilient.put("safe-1".ljust(64, "0"), "b" * 64, 200, b'{"ok":true}', "application/json")
+    assert _Replays(orig_factory).get("safe-1".ljust(64, "0")) is not None
+
+
 def test_without_the_table_the_store_falls_back_to_memory() -> None:
     api = Api()
     with api.engine.begin() as conn:

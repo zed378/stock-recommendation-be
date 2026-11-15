@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-15 — Task H: Opportunistic pruning of expired `idempotency_key` rows (ADR-051)](records/2026-11-15-h-idempotency-pruning.md) — `_Replays._prune_expired` deletes >24h rows in an isolated transaction; 2 new tests in `test_d_gaps.py` (498 passed, 1 xfail); not yet run on VM PostgreSQL 16
+
 - [2026-11-15 — Task E: Document sync (`TASKS/PROGRESS.md`, `CLAUDE.md`, `TASKS/BACKLOG.md`)](records/2026-11-15-e-doc-sync.md) — updated stale T1/T5/T6 status rows, `CLAUDE.md` commands/counts, and `TASKS/BACKLOG.md` open items to match observed VM and local PostgreSQL 18 evidence
 
 - [2026-11-15 — Task D2/D3/D4 & host-hardening local PostgreSQL 18 rehearsal](records/2026-11-15-d2-d3-d4-postgres-rehearsal-and-checklist.md) — 7/7 `-m postgres` tests pass (`backtest_run`, `aidss_app`, `trader_monitor`, `P5`), `EXPLAIN (ANALYZE, BUFFERS)` index scans (`0.016–0.059 ms`), `rehearse_restore.sh` 3s (30 tables), `05-RELEASE-CHECKLIST.md` updated; VM host hardening awaits owner gate

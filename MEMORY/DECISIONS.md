@@ -1070,7 +1070,7 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 
 **Alternatives considered:** Keep memory only (documented gap); use Redis (new service for one table); fail the request when the table is unreachable (stricter, but turns a database blip into refused HALT calls).
 
-**Implications:** `response_body` can contain whatever the API returns; credential responses never include secrets (S1), and the body is still operator-visible data. Nothing prunes old rows yet; a pruning job (`DELETE`, already granted) is a follow-up. Not verified on real PostgreSQL by this change.
+**Implications:** `response_body` can contain whatever the API returns; credential responses never include secrets (S1), and the body is still operator-visible data. Opportunistic pruning (`_Replays._prune_expired`, added in Task H) deletes rows older than 24 hours inside its own transaction after each `put()`, using `DELETE` already granted to `trader_rw` in migration `0008`, so a pruning failure never fails or rolls back the API request. Not verified on real PostgreSQL by this change.
 
 ---
 
