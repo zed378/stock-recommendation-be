@@ -139,7 +139,7 @@ export function AssetDetail() {
               <button
                 key={option}
                 onClick={() => setTimeframe(option)}
-                className={`px-2.5 py-1 font-mono text-xs transition-colors ${
+                className={`px-2.5 py-1 font-mono text-xs transition-colors max-sm:min-h-11 max-sm:min-w-11 ${
                   timeframe === option ? "bg-hover text-ink" : "text-faint hover:text-muted"
                 }`}
               >

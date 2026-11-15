@@ -196,7 +196,12 @@ export function Button({
     "inline-flex items-center justify-center gap-2 rounded-md font-medium " +
     "transition-colors disabled:cursor-not-allowed disabled:opacity-50 " +
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rise";
-  const sizes = { sm: "px-2.5 py-1 text-xs", md: "px-3.5 py-2 text-sm" };
+  // `max-sm:min-h-11` is 44px: the tap-target minimum on a phone. From `sm` up the controls
+  // keep their compact desktop height.
+  const sizes = {
+    sm: "px-2.5 py-1 text-xs max-sm:min-h-11",
+    md: "px-3.5 py-2 text-sm max-sm:min-h-11",
+  };
   const variants = {
     primary: "bg-rise/15 text-rise border border-rise/30 hover:bg-rise/25",
     ghost: "bg-transparent text-muted border border-line hover:bg-hover hover:text-ink",
@@ -242,7 +247,7 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink " +
+  "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink max-sm:min-h-11 " +
   "placeholder:text-faint focus:border-rise/50 focus:outline-none";
 
 /**
@@ -254,7 +259,7 @@ export const inputClass =
  * is what happened to "Run analysis" next to the export menu.
  */
 export const inlineControlClass =
-  "w-auto shrink-0 rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm " +
+  "w-auto shrink-0 rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm max-sm:min-h-11 " +
   "text-ink focus:border-rise/50 focus:outline-none";
 
 /**

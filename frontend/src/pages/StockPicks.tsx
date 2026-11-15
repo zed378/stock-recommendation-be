@@ -79,7 +79,7 @@ export function StockPicks() {
               <button
                 key={option}
                 onClick={() => setHorizon(option)}
-                className={`px-3 py-1 font-mono text-xs transition-colors ${
+                className={`px-3 py-1 font-mono text-xs transition-colors max-sm:min-h-11 max-sm:min-w-11 ${
                   horizon === option ? "bg-hover text-ink" : "text-faint hover:text-muted"
                 }`}
               >

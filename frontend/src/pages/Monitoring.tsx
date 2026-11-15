@@ -5,6 +5,7 @@ import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { MarketScan, type Scope as AlertScope } from "@/components/MarketScan";
+import { TabStrip } from "@/components/TabStrip";
 import {
   Button,
   Card,
@@ -330,31 +331,23 @@ export function Monitoring() {
           </div>
         }
       >
-        <nav className="mb-3 flex gap-1 border-b border-line">
-          {(
-            [
-              { id: "watchlist", label: "scan.tab.watchlist" },
-              { id: "global", label: "scan.tab.global" },
-            ] as { id: AlertScope; label: MessageKey }[]
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setScope(tab.id);
-                // The selection belongs to the stored list; carrying it across
-                // would leave ids ticked that the other view cannot act on.
-                setSelected(new Set());
-              }}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-                scope === tab.id
-                  ? "border-rise text-ink"
-                  : "border-transparent text-muted hover:text-ink"
-              }`}
-            >
-              {t(tab.label)}
-            </button>
-          ))}
-        </nav>
+        <div className="mb-3">
+          <TabStrip
+            tabs={(
+              [
+                { id: "watchlist", label: t("scan.tab.watchlist") },
+                { id: "global", label: t("scan.tab.global") },
+              ] as { id: AlertScope; label: string }[]
+            )}
+            active={scope}
+            onChange={(id) => {
+              setScope(id);
+              // The selection belongs to the stored list; carrying it across
+              // would leave ids ticked that the other view cannot act on.
+              setSelected(new Set());
+            }}
+          />
+        </div>
 
         <input
           className={`${inputClass} mb-3`}
