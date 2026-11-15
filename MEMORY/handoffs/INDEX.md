@@ -2,6 +2,7 @@
 
 Newest first.
 
+- [2026-11-15 — I: Verifikasi browser langsung Playwright (`https://aidss.zedth.my.id`)](2026-11-15-I-live-browser-verification.md) — `SELESAI` (7 halaman SPA lulus; temuan bug routing reverse proxy `404` pada akses URL langsung `/trader*`)
 - [2026-11-15 — H: Pemangkasan oportunistik `trading.idempotency_key` (`ADR-051`)](2026-11-15-H-idempotency-pruning.md) — `SELESAI` (`a6b385e`)
 - [2026-11-15 — Z: Ringkasan akhir tahap 2 (commit belum di-push, keadaan VM, 5 risiko utama)](2026-11-15-Z-final.md) — rangkuman akhir untuk pemilik dan agen utama
 - [2026-11-15 — E: Sinkronisasi dokumen (`TASKS/PROGRESS.md`, `CLAUDE.md`, `TASKS/BACKLOG.md`)](2026-11-15-E-doc-sync.md) — `SELESAI` (`40707f0`)

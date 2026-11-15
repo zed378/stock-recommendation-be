@@ -55,6 +55,7 @@ rather than only a mention in a chat or a record.
 | Per-pair strategy parameter overrides: one `EmaAdxParams` set currently applies to all allowlisted pairs | `MEMORY/DECISIONS.md` ADR-049 (`proposed`) | Owner to choose single baseline vs per-pair overrides with per-pair `PAPER` reset |
 | Pruning job for `trading.idempotency_key` (`DELETE` already granted to `trader_rw`; expired rows are ignored after 24h) | `MEMORY/DECISIONS.md` ADR-051 (`proposed`) | Schedule/add periodic cleanup after owner accepts ADR-051 |
 | Out-of-process liveness cron (`deploy/trader/check_liveness.py`, Acceptance A13 verified on fake Telegram) | `docs/10-OPERATIONS/06-RUNBOOKS.md` R14 | Awaiting owner approval to install cron/systemd on `10.1.200.13` |
+| Direct URL / browser refresh on `/trader` and `/trader/approvals` at `https://aidss.zedth.my.id` returns FastAPI `404` `{"detail":"Not Found"}` JSON (and `/trader` redirects to `http://.../trader/`) instead of serving the React SPA | VM reverse proxy config (`MEMORY/records/2026-11-15-i-live-browser-verification.md`) | Restrict backend proxy rule to `/trader/v1/*` (and `/trader/health` if needed) so `/trader*` UI routes fall through to the frontend SPA |
 | Tamper-evidence design for the audit log | `09/04` | T1-05 ADR |
 | Step-up authentication mechanism for high-impact actions | `09/01` | T5-01 ADR |
 
