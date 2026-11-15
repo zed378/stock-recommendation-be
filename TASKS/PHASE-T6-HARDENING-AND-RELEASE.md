@@ -48,7 +48,7 @@ start T5-06 until these specific T6 tasks are done".
 
 | | |
 |---|---|
-| **Status** | TODO |
+| **Status** | PREPARED 2026-11-15: `deploy/trader/rehearse_restore.sh` and Runbooks R10/R13/R14 written; **owner-led VM execution not yet run** |
 | **Depends on** | T4-06, T4-07 |
 | **Spec refs** | `docs/10-OPERATIONS/04` · `06` · `07` |
 | **Spec required** | no |
@@ -68,22 +68,22 @@ start T5-06 until these specific T6 tasks are done".
 
 | | |
 |---|---|
-| **Status** | TODO |
+| **Status** | REVIEW 2026-11-15: `deploy/trader/check_liveness.py` and `Acceptance A13` pass against a fake Telegram server (`tests/trader/test_liveness_monitor.py`); **host installation awaits owner approval** |
 | **Depends on** | T1-07 |
 | **Spec refs** | `docs/10-OPERATIONS/05-SELF-OBSERVABILITY.md` · ADR-039 |
 | **Spec required** | yes |
 | **Open numbers** | none (ADR-039) |
 
 **Definition of Done**
-- [ ] A scheduled host script alerts to Telegram, directly and independently of the Trader, when the heartbeat is stale
-- [ ] Acceptance A13 passes
+- [x] A scheduled host script alerts to Telegram, directly and independently of the Trader, when the heartbeat is stale
+- [x] Acceptance A13 passes
 - [ ] The read-only role `trader_monitor`, the root-only token file, and the host-down gap are documented and rehearsed
 
 ### T6-05 — Release checklist and the `AUTO` readiness review
 
 | | |
 |---|---|
-| **Status** | TODO |
+| **Status** | PREPARED 2026-11-15: `docs/12-DELIVERY-PLAN/05-RELEASE-CHECKLIST.md` populated with automated test & record evidence; **owner-led gates remain unchecked** |
 | **Depends on** | T5-06 and the `APPROVAL` period |
 | **Spec refs** | `docs/12-DELIVERY-PLAN/05-RELEASE-CHECKLIST.md` · ADR-020 |
 | **Spec required** | no |

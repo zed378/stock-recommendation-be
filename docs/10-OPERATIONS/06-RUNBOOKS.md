@@ -153,3 +153,42 @@ be exposed to the network.
    - Run `deploy/trader/rollback_analysis_role.sql` as superuser `aidss` to return `public` object ownership to
      `aidss`.
    - Point `AIDSS_APP_DATABASE_URL` in `~/.aidss-trader.env` back to the superuser URL and re-run `docker compose up -d --no-build`.
+
+## R14 — Out-of-process liveness monitor and restore rehearsal (T6-03, T6-04)
+
+### Installing the host liveness monitor (`deploy/trader/check_liveness.py`, ADR-039)
+
+Do **not** enable the scheduled monitor until the Trader is intentionally running (while the Trader container is stopped or idle without a lease, a stale-heartbeat check will alert).
+
+1. As `root` on the host (`10.1.200.13`), create `/root/.aidss-monitor-telegram.env` with mode `0600`:
+   ```sh
+   install -m 0600 /dev/null /root/.aidss-monitor-telegram.env
+   cat <<'EOF' > /root/.aidss-monitor-telegram.env
+   TELEGRAM_BOT_TOKEN=<your-bot-token>
+   TELEGRAM_CHAT_ID=<your-chat-id>
+   EOF
+   ```
+2. Set a password for `trader_monitor` in PostgreSQL (`ALTER ROLE trader_monitor PASSWORD '...';`) and store
+   `AIDSS_MONITOR_DATABASE_URL` in `/root/.aidss-monitor-db.env` (mode `0600`).
+3. Test the check once manually (it exits `0` when the heartbeat in `trading.lease` is ≤ 15 s old, or `1` and sends
+   a Telegram message when stale):
+   ```sh
+   set -a; . /root/.aidss-monitor-db.env; set +a
+   python3 /path/to/deploy/trader/check_liveness.py \
+     --token-file /root/.aidss-monitor-telegram.env \
+     --state-file /var/run/aidss-trader-liveness.json \
+     --max-age-s 15 --cooldown-s 300
+   ```
+4. Schedule via root `crontab` (or a systemd timer) every minute once the Trader is running.
+
+### Running the non-destructive restore rehearsal (`deploy/trader/rehearse_restore.sh`, ADR-040)
+
+1. On the host (`10.1.200.13`), run:
+   ```sh
+   sh deploy/trader/rehearse_restore.sh stocks-postgres-1 aidss aidss
+   ```
+2. The script dumps `schema trading`, creates a temporary scratch database (`aidss_restore_rehearsal_<timestamp>`),
+   applies `bootstrap.sql`, restores the dump, verifies table counts and that `trader_rw` cannot `UPDATE`/`DELETE`
+   `trading.audit_log` or `trading.ledger_entry` while `trader_monitor` can only `SELECT` `trading.lease`, prints
+   the elapsed time in seconds, and drops the scratch database.
+3. Record the output and elapsed seconds in `MEMORY/records/` before checking the T6-03 box in `12-DELIVERY-PLAN/05`.

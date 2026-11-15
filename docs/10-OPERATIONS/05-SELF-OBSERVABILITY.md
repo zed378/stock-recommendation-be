@@ -35,11 +35,19 @@ unauthenticated liveness probe returns only up or down.
 The in-process watchdog (`05/09`) stops when the process stops, and so cannot report its own death. The
 failure that matters most, **the Trader being down with positions open**, is exactly the one it cannot
 announce. Therefore a **separate component outside the Trader's process** must alert on a stale heartbeat
-(ADR-039). **A scheduled script on the host** reads the heartbeat from the database with a read-only role
-(`trader_monitor`) and sends the alert **directly to Telegram**, without passing through the Trader. Its bot
-token is a root-only file on the host, separate from the Trader's database. **Known gap:** if the host itself is
-down, nothing alerts; the owner accepted this (ADR-039). An external heartbeat service remains a possible later
-addition.
+(ADR-039). **A scheduled script on the host** (`deploy/trader/check_liveness.py`) reads `trading.lease` from the
+database with the read-only role (`trader_monitor`, granted `SELECT ON trading.lease` only) and sends the alert
+**directly to Telegram**, without passing through the Trader:
+
+- **Token file:** `/root/.aidss-monitor-telegram.env` (root-only, mode `0600` or `0400`), defining
+  `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, separate from the Trader's database and never stored in the
+  repository.
+- **Threshold:** `15` seconds by default (`--max-age-s 15`, matching the ADR-043 lease TTL renewed every 5 s).
+- **Cooldown:** `--state-file /var/run/aidss-trader-liveness.json --cooldown-s 300` prevents duplicate alerts
+  within a 5-minute window while re-alerting if the Trader stays down, and clears automatically once a fresh
+  heartbeat is observed.
+- **Known gap:** if the host itself is down, nothing alerts; the owner accepted this (ADR-039). An external
+  heartbeat service remains a possible later addition.
 
 ## Alerts
 
@@ -57,7 +65,9 @@ owner's existing monitoring; the Trader makes no assumption about which.
 Given a `correlation_id`, an operator can follow signal, intent, risk checks, order, events, fills, ledger
 entries, and audit rows. This is the main diagnostic tool.
 
-## Tests (planned)
+## Tests
 
-The liveness metric stops advancing when the loop is blocked; a stale heartbeat triggers the external check;
-logs contain no sentinel secrets; the health endpoint distinguishes degraded from down.
+The liveness metric stops advancing when the loop is blocked; a stale or missing heartbeat triggers the
+out-of-process check (`tests/trader/test_liveness_monitor.py`, including `Acceptance A13` against a local fake
+Telegram server); logs contain no sentinel secrets (`tests/trader/test_security_s1_s17.py`); the health endpoint
+distinguishes degraded from down.
