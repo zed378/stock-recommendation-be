@@ -125,3 +125,25 @@ are served 200 `application/javascript`; frontend container healthy; Trader heal
 Not verified: a browser pass over the lazy loading (navigation between Trader pages, the loading fallback, a failed
 chunk load). Rollback: set the frontend image back to `aidss-frontend:75bc905` in the override and run the same
 `up -d --no-build` (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of commit f08e3af (2026-11-15), frontend only
+
+Image `aidss-frontend:f08e3af`, built from a clean `git archive HEAD` export. Since `ab5a9ab` the frontend gained:
+a `ChunkErrorBoundary` around lazy routes (Task N, after the Playwright pass showed that, on `ab5a9ab`, a lazy chunk that
+failed to load left a blank screen), and all thirteen signed-in pages as lazy chunks behind the same boundary
+(`frontend/src/lazyPages.ts`; main chunk 635 kB to 248 kB, gzip 145 kB to 72 kB). `nginx -t` passed in the image and the
+routes were checked on a local container before the push. On the VM only the frontend container was recreated
+(`up -d --no-build`, override on stdin); `aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database were not touched,
+no migration ran.
+
+Verified after (`curl` and one SSH session): `/`, `/login`, `/watchlist`, `/trader`, `/trader/approvals`,
+`/trader/limits` answer 200 `text/html`; `/trader/v1/status` answers 401 JSON; the production main chunk is
+`index-X8GmafIB.js`, identical to the local build, and the page chunks checked (`Watchlist`, `AssetDetail`, `Admin`,
+`Monitoring`, `Trader`) are served 200; frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
+
+Not verified: any of the new behaviour in a browser, that is, moving between pages, the loading state, and the reload
+prompt when a chunk fails (the abort and offline scenarios were run only against `ab5a9ab`, which has no boundary).
+Rollback: set the frontend image back to `aidss-frontend:ab5a9ab` in the override and run the same `up -d --no-build`
+(not rehearsed, no timing measured).
