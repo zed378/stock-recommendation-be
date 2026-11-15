@@ -45,3 +45,20 @@ def test_rehearse_restore_supports_full_flag() -> None:
     text = REHEARSE_RESTORE.read_text(encoding="utf-8")
     assert "--full" in text
     assert "-n trading" in text
+
+
+def test_rehearsal_scripts_restrict_dump_permissions() -> None:
+    """The dump of a full database must not be readable by other users on a shared host."""
+    for script in (REHEARSE_ISOLATION, REHEARSE_RESTORE):
+        text = script.read_text(encoding="utf-8")
+        assert re.search(r"^umask 077$", text, re.MULTILINE), f"{script.name} must set umask 077"
+        assert text.index("umask 077") < text.index("docker exec \"$CONTAINER\" pg_dump"), (
+            f"{script.name} must set umask before the first pg_dump"
+        )
+
+
+def test_isolation_denial_check_requires_permission_denied() -> None:
+    """A generic psql failure (bad connection, missing table) must not count as a refusal."""
+    text = REHEARSE_ISOLATION.read_text(encoding="utf-8")
+    assert "permission denied" in text
+    assert re.search(r"\*\"permission denied\"\*\)", text), "denial must be matched on the message"

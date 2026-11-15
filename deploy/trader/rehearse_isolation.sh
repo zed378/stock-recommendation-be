@@ -12,6 +12,9 @@
 #   sh deploy/trader/rehearse_isolation.sh [postgres-container] [db-user] [source-db]
 
 set -eu
+# The dump holds the whole database (password hashes, encrypted credentials). Owner-only files,
+# so no other user on the shared host can read it while the script runs.
+umask 077
 
 CONTAINER="${1:-stocks-postgres-1}"
 PG_USER="${2:-aidss}"
@@ -77,15 +80,21 @@ CREATE TABLE public._rehearsal_probe (id int);
 DROP TABLE public._rehearsal_probe;
 COMMIT;
 " >/dev/null
-if docker exec "$CONTAINER" psql -U "$PG_USER" -d "$SCRATCH_DB" -v ON_ERROR_STOP=1 -c "
+# Only an explicit "permission denied" counts as a refusal. Any other failure (a bad
+# connection, a missing table) would also make psql exit non-zero and must not pass.
+DENY_OUT="$(docker exec "$CONTAINER" psql -U "$PG_USER" -d "$SCRATCH_DB" -v ON_ERROR_STOP=1 -c "
 BEGIN;
 SET LOCAL ROLE aidss_app;
 SELECT 1 FROM trading.audit_log LIMIT 1;
 ROLLBACK;
-" >/dev/null 2>&1; then
-  echo "ERROR: aidss_app was able to read trading.audit_log!" >&2
-  exit 1
-fi
+" 2>&1 >/dev/null || true)"
+case "$DENY_OUT" in
+  *"permission denied"*) ;;
+  *)
+    echo "ERROR: expected 'permission denied' for aidss_app on trading.audit_log, got: ${DENY_OUT:-<success>}" >&2
+    exit 1
+    ;;
+esac
 echo "  Verified: public DDL ok, trading.audit_log denied for aidss_app."
 
 echo "[6/6] Running and timing deploy/trader/rollback_analysis_role.sql..."

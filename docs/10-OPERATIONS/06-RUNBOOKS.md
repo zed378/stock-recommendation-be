@@ -140,6 +140,9 @@ be exposed to the network.
    sh deploy/trader/rehearse_isolation.sh stocks-postgres-1 aidss aidss
    ```
    The script clones `aidss` into a temporary scratch database via `pg_dump | psql`, applies `deploy/trader/isolate_analysis_role.sql`, assigns a random temporary password via stdin, verifies `aidss_app` attributes and `schema trading` denial, times `deploy/trader/rollback_analysis_role.sql`, and drops both the scratch database and `aidss_app` on exit.
+   The rehearsal scripts read `deploy/trader/*.sql` by relative path and the VM has no repository checkout, so run them from a
+   copy of `deploy/trader/` placed by the owner (or the main agent) for the duration of the run, and delete it afterwards. Do not leave
+   dumps on the host: the scripts use `umask 077` and remove their dump on exit.
 3. **Apply to `aidss`** after owner approval and a fresh `pg_dump` backup:
    - Run `deploy/trader/isolate_analysis_role.sql` as superuser `aidss`.
    - Set random passwords for `aidss_app` and rotate the superuser `aidss` password (`ALTER ROLE ... PASSWORD`),

@@ -11,6 +11,9 @@
 #   sh deploy/trader/rehearse_restore.sh [--full] [postgres-container] [db-user] [source-db]
 
 set -eu
+# The dump holds the whole database (password hashes, encrypted credentials). Owner-only files,
+# so no other user on the shared host can read it while the script runs.
+umask 077
 
 FULL_MODE=0
 if [ "${1:-}" = "--full" ]; then
