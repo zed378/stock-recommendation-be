@@ -44,6 +44,7 @@ from aidss_trader.db.models import (
     BacktestRunRow,
     EquitySnapshot,
     Fill,
+    IdempotencyRecord,
     LedgerEntry,
     OrderIntentRow,
     OrderRow,
@@ -534,13 +535,13 @@ class _Replays:
     """Remembers the successful answer to a mutation, so a retried or double-clicked request with
     the same Idempotency-Key has one effect (S7).
 
-    Held in memory: one Trader process serves the API (the lease guarantees one), so this covers a
-    double click and a client retry. It does not survive a restart, which is stated rather than
-    hidden: a key reused after a restart executes again. The approval and kill paths are
-    idempotent by their own design, so the cases that matter most do not depend on this.
+    Answers are written to `trading.idempotency_key` (ADR-051), so a replay survives a restart.
+    The in-memory copy is only a fallback for when the table cannot be reached (for example an
+    older schema); the per-key lock is always in memory because one Trader process serves the API.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, session_factory: Callable[[], Session] | None = None) -> None:
+        self._factory = session_factory
         self._items: dict[str, tuple[float, str, int, bytes, str]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -548,6 +549,25 @@ class _Replays:
         return self._locks.setdefault(key, asyncio.Lock())
 
     def get(self, key: str) -> tuple[float, str, int, bytes, str] | None:
+        if self._factory is not None:
+            try:
+                with self._factory() as s:
+                    row = s.get(IdempotencyRecord, key)
+                    if row is not None:
+                        created = row.created_at
+                        if created.tzinfo is None:
+                            created = created.replace(tzinfo=UTC)
+                        if (datetime.now(UTC) - created).total_seconds() > REPLAY_TTL_S:
+                            return None
+                        return (
+                            0.0,
+                            row.body_hash,
+                            row.status_code,
+                            row.response_body.encode(),
+                            row.media_type,
+                        )
+            except Exception:  # noqa: BLE001 - fall back to the in-memory copy
+                pass
         hit = self._items.get(key)
         if hit is not None and time.monotonic() - hit[0] > REPLAY_TTL_S:
             self._items.pop(key, None)
@@ -560,11 +580,27 @@ class _Replays:
             self._items.pop(oldest, None)
             self._locks.pop(oldest, None)
         self._items[key] = (time.monotonic(), body_hash, status, body, media)
-
+        if self._factory is None:
+            return
+        try:
+            with self._factory() as s:
+                s.merge(
+                    IdempotencyRecord(
+                        key_hash=key,
+                        body_hash=body_hash,
+                        status_code=status,
+                        response_body=body.decode("utf-8", errors="replace"),
+                        media_type=media[:64],
+                        created_at=datetime.now(UTC),
+                    )
+                )
+                s.commit()
+        except Exception:  # noqa: BLE001 - the memory copy still covers a double click
+            pass
 
 def create_app(ctx: ApiContext) -> FastAPI:
     app = FastAPI(title="AIDSS Trader API", docs_url=None, redoc_url=None)
-    replays = _Replays()
+    replays = _Replays(ctx.session_factory)
 
     @app.middleware("http")
     async def _idempotency_and_headers(request: Request, call_next):
@@ -717,11 +753,12 @@ def create_app(ctx: ApiContext) -> FastAPI:
 
     @app.get(f"{r}/dashboard", response_model=Envelope[DashboardData])
     def dashboard(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
-        live = [
-            o
-            for o in s.scalars(select(OrderRow).where(OrderRow.origin == "LIVE"))
-            if o.state in {"OPEN", "PARTIALLY_FILLED", "CANCEL_REQUESTED", "UNKNOWN"}
-        ]
+        live = s.scalars(
+            select(OrderRow).where(
+                OrderRow.origin == "LIVE",
+                OrderRow.state.in_(("OPEN", "PARTIALLY_FILLED", "CANCEL_REQUESTED", "UNKNOWN")),
+            )
+        ).all()
         pending = s.scalars(select(ApprovalRow).where(ApprovalRow.state == "AWAITING")).all()
         return envelope(
             {
@@ -780,11 +817,14 @@ def create_app(ctx: ApiContext) -> FastAPI:
             "state",
             "created_at",
         )
-        approvals = {a.intent_identity: a for a in s.scalars(select(ApprovalRow))}
-        out = []
-        for row in s.scalars(
+        recent = s.scalars(
             select(OrderIntentRow).order_by(OrderIntentRow.created_at.desc()).limit(200)
-        ):
+        ).all()
+        identities = [x.identity for x in recent]
+        wanted = select(ApprovalRow).where(ApprovalRow.intent_identity.in_(identities))
+        approvals = {a.intent_identity: a for a in s.scalars(wanted)}
+        out = []
+        for row in recent:
             item = _row(row, cols)
             card = approvals.get(row.identity)
             # The hash is what an approval is bound to: the card shows this exact order and the

@@ -1040,3 +1040,52 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 
 **Implications:** No code change is made to `EmaAdxStrategy` or `settings_store.get_strategy` until the owner chooses between Alternative 1 (keep single set for MVP) and the proposed design (per-pair override with per-pair or composite version reset to `PAPER`).
 
+
+---
+
+### ADR-050 - Dependency pinning for the Trader image (S13)
+
+**Date:** 2026-11-15
+**Status:** proposed (no dependency has been changed; `test_s13_dependencies_are_pinned` stays a strict `xfail` until the owner chooses)
+
+**Decision:** Not yet taken. The Trader image installs ranges from `pyproject.toml`, so two builds of the same commit can contain different dependency versions. Options:
+1. **Lockfile with hashes** (`pip-compile --generate-hashes` or `uv pip compile`), installed with `--require-hashes` in `Dockerfile.trader`. Strongest; every update is a reviewed diff.
+2. **Exact `==` pins in a requirements file**, no hashes. Simpler; does not stop a tampered upload of a pinned version.
+3. **Keep ranges, pin only the base image digest.** Smallest change; leaves transitive drift.
+
+**Rationale:** The Trader holds a key that can trade; an unreviewed transitive upgrade is a supply-chain path to it.
+
+**Implications:** Options 1 and 2 add a routine for security updates that someone must own. Nothing in the repository changes until the owner picks one.
+
+---
+
+### ADR-051 - Durable Idempotency-Key replay table
+
+**Date:** 2026-11-15
+**Status:** proposed (implemented additively in migration `0008_indexes_idempotency`; the owner may reject it, in which case the table is unused and harmless)
+
+**Decision:** Store each successful mutation answer in `trading.idempotency_key` (`key_hash` primary key, `body_hash`, `status_code`, `response_body`, `media_type`, `created_at`). `key_hash` is a SHA-256 over token, method, path, and key, so neither the token nor the key is stored. Entries older than 24 hours are ignored. `trader_rw` has `SELECT, INSERT, DELETE` only. If the table cannot be reached, the API falls back to the in-memory copy rather than failing the request.
+
+**Rationale:** The in-memory cache lost every key on restart, so a client retry after a restart executed twice (a gap named in the S7 record). The approval and kill paths are idempotent by design; this closes the gap for the rest.
+
+**Alternatives considered:** Keep memory only (documented gap); use Redis (new service for one table); fail the request when the table is unreachable (stricter, but turns a database blip into refused HALT calls).
+
+**Implications:** `response_body` can contain whatever the API returns; credential responses never include secrets (S1), and the body is still operator-visible data. Nothing prunes old rows yet; a pruning job (`DELETE`, already granted) is a follow-up. Not verified on real PostgreSQL by this change.
+
+---
+
+### ADR-052 - Frozen price-feed detection (R5)
+
+**Date:** 2026-11-15
+**Status:** proposed (design only; nothing is implemented)
+
+**Decision:** Not yet taken. A feed that returns a fresh timestamp with an unchanged price passes the freshness check. Options:
+1. **Identical price for N consecutive cycles** on pairs the owner marks liquid; N is the owner's number.
+2. **Compare the ticker against the latest closed candle** and halt when they diverge beyond an owner-set tolerance.
+3. **Both**, halting on either.
+
+**Rationale:** Acting on a frozen price can place orders at a level the market has left.
+
+**Risks:** Option 1 false-positives on thin pairs and quiet hours (a real price can repeat), which would HALT trading for no cause; option 2 false-positives around candle boundaries and gaps. Both thresholds are owner numbers (limits that gate loss); none is chosen here.
+
+**Implications:** No behavior changes until the owner picks an option and supplies the values through `TASKS/BACKLOG.md`.

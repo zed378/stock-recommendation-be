@@ -26,7 +26,7 @@ def _load(name: str = "0001_foundation.py"):
 
 
 def test_upgrades_create_exactly_the_declared_tables() -> None:
-    first, second, third, fourth, fifth, sixth, seventh = (
+    first, second, third, fourth, fifth, sixth, seventh, eighth = (
         _load("0001_foundation.py"),
         _load("0002_market_data.py"),
         _load("0003_trading_core.py"),
@@ -34,11 +34,13 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
         _load("0005_runtime.py"),
         _load("0006_paper_lifecycle.py"),
         _load("0007_backtest_runs.py"),
+        _load("0008_indexes_idempotency.py"),
     )
     assert second.down_revision == first.revision and third.down_revision == second.revision
     assert fourth.down_revision == third.revision and fifth.down_revision == fourth.revision
     assert sixth.down_revision == fifth.revision
     assert seventh.down_revision == sixth.revision
+    assert eighth.down_revision == seventh.revision
     engine = create_engine("sqlite+pysqlite://", poolclass=StaticPool).execution_options(
         schema_translate_map={"trading": None}
     )
@@ -51,6 +53,7 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
             fifth.upgrade()
             sixth.upgrade()
             seventh.upgrade()
+            eighth.upgrade()
         built = set(inspect(conn).get_table_names())
         declared = {t.name for t in Base.metadata.tables.values()}
         assert (
@@ -63,6 +66,7 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
             | set(fifth._TABLES)
             | set(sixth._TABLES)
             | set(seventh._TABLES)
+            | {"idempotency_key"}
         )
         columns = {c["name"] for c in inspect(conn).get_columns("audit_log")}
         assert {"seq", "prev_hash", "hash", "before", "after"} <= columns

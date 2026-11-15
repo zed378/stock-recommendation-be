@@ -19,6 +19,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -56,7 +57,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     seq: Mapped[int] = mapped_column(_SEQ, primary_key=True, autoincrement=True)
-    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     actor: Mapped[str] = mapped_column(String(64))
     action: Mapped[str] = mapped_column(String(64), index=True)
     subject_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -151,6 +152,15 @@ class OrderIntentRow(Base):
     """A sized, priced proposal that passed (or failed) the Risk Engine."""
 
     __tablename__ = "order_intent"
+    __table_args__ = (
+        Index(
+            "ix_order_intent_origin_pair_side_created_at",
+            "origin",
+            "pair",
+            "side",
+            "created_at",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     #: Deterministic identity from (strategy version, pair, signal candle, side), so
@@ -166,7 +176,7 @@ class OrderIntentRow(Base):
     risk_amount_idr: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
     rule_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     state: Mapped[str] = mapped_column(String(20))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class RiskCheckResult(Base):
@@ -188,6 +198,7 @@ class OrderRow(Base):
     """An order sent to Indodax, or simulated. The row exists BEFORE the request (ADR-026)."""
 
     __tablename__ = "order"
+    __table_args__ = (Index("ix_order_origin_state", "origin", "state"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     intent_identity: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
@@ -210,7 +221,7 @@ class OrderRow(Base):
     #: ENTRY, EXIT_TARGET, EXIT_STOP, KILL_CANCEL, KILL_FLATTEN
     purpose: Mapped[str] = mapped_column(String(16))
     reprices: Mapped[int] = mapped_column(Integer, default=0)
-    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -233,7 +244,10 @@ class Fill(Base):
     """An execution. Append-only; `exchange_trade_id` makes ingestion idempotent."""
 
     __tablename__ = "fill"
-    __table_args__ = (UniqueConstraint("origin", "exchange_trade_id", name="uq_fill_trade"),)
+    __table_args__ = (
+        UniqueConstraint("origin", "exchange_trade_id", name="uq_fill_trade"),
+        Index("ix_fill_origin_executed_at", "origin", "executed_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(f"{SCHEMA}.order.id"), index=True)
@@ -258,6 +272,7 @@ class LedgerEntry(Base):
     """Append-only. A correction is a new ADJUSTMENT row with a reason, never an edit."""
 
     __tablename__ = "ledger_entry"
+    __table_args__ = (Index("ix_ledger_entry_origin_at", "origin", "at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     origin: Mapped[str] = mapped_column(String(10))
@@ -268,7 +283,7 @@ class LedgerEntry(Base):
     asset: Mapped[str] = mapped_column(String(12))
     amount: Mapped[Decimal] = mapped_column(Money)  # signed
     reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class PositionStop(Base):
@@ -339,7 +354,7 @@ class ReconciliationRun(Base):
     __tablename__ = "reconciliation_run"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     differences: Mapped[int] = mapped_column(Integer, default=0)
     result: Mapped[str] = mapped_column(String(12))  # clean | differences | failed
@@ -358,7 +373,9 @@ class ReconciliationDifference(Base):
     reference: Mapped[str] = mapped_column(String(80))
     local_value: Mapped[str | None] = mapped_column(String(80), nullable=True)
     exchange_value: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     resolution_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
@@ -394,7 +411,9 @@ class ApprovalRow(Base):
         String(160), unique=True
     )  # one decision per intent
     intent_hash: Mapped[str] = mapped_column(String(64))
-    state: Mapped[str] = mapped_column(String(12))  # AWAITING | APPROVED | DENIED | EXPIRED
+    state: Mapped[str] = mapped_column(
+        String(12), index=True
+    )  # AWAITING | APPROVED | DENIED | EXPIRED
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -413,7 +432,7 @@ class TradingEvent(Base):
     severity: Mapped[str] = mapped_column(String(8))  # INFO | WARN | CRITICAL
     message: Mapped[str] = mapped_column(String(400))
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     mobile: Mapped[str] = mapped_column(String(12))  # none | pending | sent | failed
@@ -491,4 +510,18 @@ class BacktestRunRow(Base):
     data_fingerprint: Mapped[str] = mapped_column(String(64))
     ran_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     ran_by: Mapped[str] = mapped_column(String(64))
+
+
+class IdempotencyRecord(Base):
+    """Durable replay record for mutating Trader API requests (ADR-051)."""
+
+    __tablename__ = "idempotency_key"
+
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    body_hash: Mapped[str] = mapped_column(String(64))
+    status_code: Mapped[int] = mapped_column(Integer)
+    response_body: Mapped[str] = mapped_column(Text)
+    media_type: Mapped[str] = mapped_column(String(64), default="application/json")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
 
