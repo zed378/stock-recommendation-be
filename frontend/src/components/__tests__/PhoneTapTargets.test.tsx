@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { Button, inlineControlClass, inputClass } from "@/components/primitives";
+import { Button, inlineControlClass, inputClass, tickerLinkHitArea } from "@/components/primitives";
 
 afterEach(cleanup);
 
@@ -23,5 +23,15 @@ describe("phone tap targets", () => {
   it("gives form and toolbar controls the same minimum", () => {
     expect(inputClass).toContain("max-sm:min-h-11");
     expect(inlineControlClass).toContain("max-sm:min-h-11");
+  });
+});
+
+describe("ticker links in lists", () => {
+  // Padding grows the link, the negative margin gives the space back: a row keeps its height.
+  it("grow below sm and are given back by the margin", () => {
+    expect(tickerLinkHitArea).toContain("max-sm:py-3");
+    expect(tickerLinkHitArea).toContain("max-sm:-my-3");
+    expect(tickerLinkHitArea).toContain("max-sm:px-2");
+    expect(tickerLinkHitArea).toContain("max-sm:-mx-2");
   });
 });

@@ -85,11 +85,11 @@ export function Layout() {
 
       <div className="flex min-h-screen w-full min-w-0 flex-col">
         <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
-          <div className="flex items-center gap-3 px-4 py-3">
+          <div className="flex items-center gap-3 px-4 py-3 max-sm:gap-1 max-sm:py-1.5">
             <button
               onClick={() => setDrawerOpen(true)}
               aria-label={t("nav.openMenu")}
-              className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink lg:hidden"
+              className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink max-sm:inline-flex max-sm:size-11 max-sm:shrink-0 max-sm:items-center max-sm:justify-center lg:hidden"
             >
               {/* Drawn rather than imported: one glyph is not worth an icon
                   dependency, and an emoji would inherit the platform's idea of
@@ -127,7 +127,7 @@ export function Layout() {
 
             <NavLink
               to="/"
-              className={`flex items-center gap-2 text-sm font-semibold tracking-tight text-ink ${
+              className={`flex items-center gap-2 text-sm font-semibold tracking-tight text-ink max-sm:min-h-11 max-[23rem]:hidden ${
                 sidebar.visible ? "lg:hidden" : ""
               }`}
             >
@@ -135,7 +135,7 @@ export function Layout() {
               {t("app.shortName")}
             </NavLink>
 
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-3 max-sm:gap-1">
               {user && <NotificationBell />}
               <LocaleSwitch
                 locale={locale}
@@ -149,7 +149,7 @@ export function Layout() {
                   </span>
                   <button
                     onClick={signOut}
-                    className="rounded-md px-2.5 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-ink"
+                    className="rounded-md px-2.5 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-ink max-sm:min-h-11 max-sm:whitespace-nowrap"
                   >
                     {t("nav.signOut")}
                   </button>
@@ -201,7 +201,7 @@ function LocaleSwitch({
           key={option}
           onClick={() => onChange(option)}
           aria-pressed={locale === option}
-          className={`px-2 py-1 text-xs uppercase transition-colors ${
+          className={`px-2 py-1 text-xs uppercase transition-colors max-sm:min-h-11 max-sm:min-w-11 ${
             locale === option
               ? "bg-hover text-ink"
               : "text-faint hover:text-muted"

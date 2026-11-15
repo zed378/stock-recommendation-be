@@ -67,7 +67,7 @@ export function StateBar() {
         <span className="ml-auto flex items-center gap-2">
           <Link
             to="/trader"
-            className="rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-ink"
+            className="rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-ink max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
           >
             {t("trader.bar.openControls")}
           </Link>

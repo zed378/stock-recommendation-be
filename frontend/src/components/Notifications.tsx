@@ -143,7 +143,7 @@ export function NotificationBell() {
         onClick={() => setOpen((was) => !was)}
         aria-label={count > 0 ? t("notif.unread", { count }) : t("notif.open")}
         aria-expanded={open}
-        className={`relative rounded-md px-2 py-1.5 transition-colors ${
+        className={`relative rounded-md px-2 py-1.5 transition-colors max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center ${
           open ? "bg-hover text-ink" : "text-muted hover:bg-hover/60 hover:text-ink"
         }`}
       >
@@ -158,7 +158,7 @@ export function NotificationBell() {
             // theme already means something - green is a rise, amber is a
             // `watchlist` stance - and a badge borrowing one would say
             // something about the contents it has not read.
-            className="absolute -right-0.5 -top-0.5 min-w-[1.05rem] rounded-full bg-ink px-1 text-[0.625rem] font-semibold leading-[1.05rem] text-surface"
+            className="absolute -right-0.5 -top-0.5 max-sm:right-1 max-sm:top-1 min-w-[1.05rem] rounded-full bg-ink px-1 text-[0.625rem] font-semibold leading-[1.05rem] text-surface"
           >
             {count > 99 ? "99+" : count}
           </span>

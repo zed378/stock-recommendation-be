@@ -4,7 +4,7 @@ import { MarketScan } from "@/components/MarketScan";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n } from "@/i18n/context";
-import { Card, Caveat, Empty, ErrorNote, Loading } from "@/components/primitives";
+import { Card, Caveat, Empty, ErrorNote, Loading, tickerLinkHitArea } from "@/components/primitives";
 
 const HORIZONS = ["1d", "7d", "14d", "30d"] as const;
 type Horizon = (typeof HORIZONS)[number];
@@ -153,7 +153,7 @@ export function StockPicks() {
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                     <Link
                       to={`/assets/${pick.ticker}`}
-                      className="font-mono text-base font-semibold text-ink hover:text-rise"
+                      className={`font-mono text-base font-semibold text-ink hover:text-rise ${tickerLinkHitArea}`}
                     >
                       {pick.ticker}
                     </Link>

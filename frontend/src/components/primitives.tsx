@@ -246,6 +246,16 @@ export function Field({
   );
 }
 
+/**
+ * The hit area of a ticker link inside a list, on phones.
+ *
+ * The link is a few characters of inline text (about 31x20). Padding grows it to a 44px target and the
+ * matching negative margin gives the space back, so a row keeps its height and its baseline; measured on
+ * `/picks` at 375px, the links go from 31x20 to 47x44 and no row or page height changes. From `sm` up
+ * nothing applies.
+ */
+export const tickerLinkHitArea = "max-sm:-mx-2 max-sm:-my-3 max-sm:px-2 max-sm:py-3";
+
 export const inputClass =
   "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink max-sm:min-h-11 " +
   "placeholder:text-faint focus:border-rise/50 focus:outline-none";

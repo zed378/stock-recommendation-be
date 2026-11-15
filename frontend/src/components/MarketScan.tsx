@@ -5,7 +5,7 @@ import { api, errorMessage } from "@/api/client";
 import { useI18n, type MessageKey } from "@/i18n/context";
 import { Pager, type PageState } from "@/components/Pager";
 import { MultiSelect } from "@/components/MultiSelect";
-import { Card, Empty, ErrorNote, Loading } from "@/components/primitives";
+import { Card, Empty, ErrorNote, Loading, tickerLinkHitArea } from "@/components/primitives";
 
 /**
  * Today's criteria matches across the exchange, optionally narrowed to a
@@ -119,7 +119,7 @@ export function MarketScan({
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <Link
                   to={`/assets/${row.ticker}`}
-                  className="font-mono text-sm font-medium text-ink hover:text-rise"
+                  className={`font-mono text-sm font-medium text-ink hover:text-rise ${tickerLinkHitArea}`}
                 >
                   {row.ticker}
                 </Link>

@@ -117,3 +117,25 @@ describe("collapsible desktop sidebar", () => {
     expect(screen.getByRole("button", { name: "Hide menu" })).toHaveAttribute("aria-expanded", "true");
   });
 });
+
+// 44px is the touch-target minimum. The header's controls are written by hand (not the shared Button), so
+// each one carries the phone height itself. jsdom has no layout: this pins the classes; the sizes were
+// measured in a browser at 375, 360 and 320px.
+describe("header tap targets on phones", () => {
+  it("gives the menu, language, and sign-out controls a 44px minimum below sm", () => {
+    renderShell();
+    const menu = screen.getAllByRole("button", { name: "Open menu" })[0];
+    expect(menu).toHaveClass("max-sm:size-11", "max-sm:shrink-0");
+    for (const name of ["id", "en"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass("max-sm:min-h-11", "max-sm:min-w-11");
+    }
+    const signOut = screen.getByRole("button", { name: "Sign out" });
+    expect(signOut).toHaveClass("max-sm:min-h-11", "max-sm:whitespace-nowrap");
+  });
+
+  it("hides the brand text on very narrow phones so the larger controls still fit", () => {
+    const { container } = renderShell();
+    const brand = container.querySelector<HTMLAnchorElement>("header a[href='/']");
+    expect(brand).toHaveClass("max-sm:min-h-11", "max-[23rem]:hidden");
+  });
+});
