@@ -120,3 +120,90 @@ export function effect(field: LimitField, from: string | null, to: string): Effe
 export function needsStepUp(e: Effect): boolean {
   return e === "looser" || e === "enabled";
 }
+
+/** Whether any field change across the limit set loosens risk (mirrors `loosens` in `api/app.py`). */
+export function limitsLoosen(
+  before: Record<string, string | null>,
+  after: Record<string, string>,
+): boolean {
+  return ALL_FIELDS.some((field) => needsStepUp(effect(field, before[field.name] ?? null, after[field.name] ?? "")));
+}
+
+export const PAIR = /^[A-Z0-9]{2,12}IDR$/;
+
+export function parsePairs(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).map((p) => p.trim().toUpperCase()).filter(Boolean))].sort();
+}
+
+export interface AllowlistSnapshot {
+  pairs: readonly string[];
+  minVolume: string | null;
+  maxSpread: string | null;
+}
+
+/**
+ * Mirrors `allowlist_loosens` in `aidss_trader/api/app.py`:
+ * true when `next` can trade something `prev` could not (a new pair, a newly
+ * configured liquidity filter, a lower volume floor, or a wider spread cap).
+ */
+export function allowlistLoosens(prev: AllowlistSnapshot, next: AllowlistSnapshot): boolean {
+  if (next.pairs.some((p) => !prev.pairs.includes(p))) return true;
+  const prevConfigured = prev.minVolume !== null && prev.maxSpread !== null;
+  const nextConfigured = next.minVolume !== null && next.maxSpread !== null;
+  if (!nextConfigured) return false;
+  if (!prevConfigured) return true;
+  return (
+    compareDecimals(next.minVolume!, prev.minVolume!) < 0 ||
+    compareDecimals(next.maxSpread!, prev.maxSpread!) > 0
+  );
+}
+
+/** Per-row effect badges for the allowlist review dialog. */
+export function allowlistEffects(
+  prev: AllowlistSnapshot,
+  next: AllowlistSnapshot,
+): { pairs: Effect; minVolume: Effect; maxSpread: Effect } {
+  const prevSet = new Set(prev.pairs);
+  const nextSet = new Set(next.pairs);
+  const added = next.pairs.some((p) => !prevSet.has(p));
+  const removed = prev.pairs.some((p) => !nextSet.has(p));
+  const pairsEffect: Effect =
+    next.pairs.length === 0 && prev.pairs.length > 0
+      ? "cleared"
+      : prev.pairs.length === 0 && next.pairs.length > 0
+        ? "enabled"
+        : added
+          ? "looser"
+          : removed
+            ? "tighter"
+            : "neutral";
+
+  const minVolumeEffect: Effect =
+    next.minVolume === null
+      ? prev.minVolume === null
+        ? "neutral"
+        : "cleared"
+      : prev.minVolume === null
+        ? "enabled"
+        : compareDecimals(next.minVolume, prev.minVolume) < 0
+          ? "looser"
+          : compareDecimals(next.minVolume, prev.minVolume) > 0
+            ? "tighter"
+            : "neutral";
+
+  const maxSpreadEffect: Effect =
+    next.maxSpread === null
+      ? prev.maxSpread === null
+        ? "neutral"
+        : "cleared"
+      : prev.maxSpread === null
+        ? "enabled"
+        : compareDecimals(next.maxSpread, prev.maxSpread) > 0
+          ? "looser"
+          : compareDecimals(next.maxSpread, prev.maxSpread) < 0
+            ? "tighter"
+            : "neutral";
+
+  return { pairs: pairsEffect, minVolume: minVolumeEffect, maxSpread: maxSpreadEffect };
+}
+

@@ -13,7 +13,7 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 | T2 | Exchange connector | 🚧 built, in review (2026-11-14) | Mock-verified only. **T2-07 (live Read-only check) is owner-led and not done**; every Indodax shape is documented, not observed |
 | T3 | Strategy, backtest, paper | 🚧 built, in review (2026-11-14) | Mechanism only; OQ-5 and OQ-11 values unset, tests use their own numbers. AI context deferred (ADR-032) |
 | T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; now wired into the run loop (mock-tested only); a fresh install starts `HALTED`. OQ-9 values unset |
-| T5 | Operator surface and `APPROVAL` | 🚧 built, unwired, UI never seen in a browser (2026-11-14) | T5-01, 02, 03, 05, the T5-04 API and a first front end exist (typecheck, lint, build pass). **Wired into the run loop and the API is served (mock-tested only, see the runtime record); the screens were never rendered.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
+| T5 | Operator surface and `APPROVAL` | 🚧 built, component-tested, live browser check pending (2026-11-15) | T5-01, 02, 03, 05, the T5-04 API and front end exist with 28 Vitest + Testing Library tests (`MEMORY/records/2026-11-15-t5-04-frontend-tests-and-ui-audit.md`). **Live browser click-through on `aidss.zedth.my.id` awaits owner test account.** T5-06 is owner-led and not started; needs OQ-12, OQ-16 |
 | T6 | Hardening and release | ⏳ TODO | No open question blocks T6 (ADR-037, ADR-039, ADR-040) |
 
 ## What Exists Today

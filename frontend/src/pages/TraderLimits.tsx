@@ -7,9 +7,13 @@ import { useTraderQuery } from "@/trader/hooks";
 import { compareDecimals, DECIMAL, groupDigits } from "@/trader/format";
 import {
   ALL_FIELDS,
+  allowlistEffects,
+  allowlistLoosens,
   effect,
   GROUPS,
   needsStepUp,
+  PAIR,
+  parsePairs,
   problem,
   type Effect,
   type LimitField,
@@ -325,12 +329,6 @@ function ReviewLine({
 
 // ---------------------------------------------------------------- allowlist
 
-const PAIR = /^[A-Z0-9]{2,12}IDR$/;
-
-function parsePairs(text: string): string[] {
-  return [...new Set(text.split(/[\s,]+/).map((p) => p.trim().toUpperCase()).filter(Boolean))].sort();
-}
-
 function AllowlistEditor() {
   const { t } = useI18n();
   const query = useTraderQuery<Allowlist>(["allowlist"], () => traderApi.GET("/trader/v1/allowlist"), {
@@ -368,15 +366,10 @@ function AllowlistForm({ data }: { data: Allowlist }) {
   const changed =
     pairs.join(",") !== [...before.pairs].sort().join(",") || next.vol !== before.vol || next.spread !== before.spread;
 
-  // Mirrors `allowlist_loosens` on the server: it can trade something it could not before.
-  const filterSetNow = next.vol !== null && next.spread !== null;
-  const filterSetBefore = before.vol !== null && before.spread !== null;
-  const loosens =
-    pairs.some((p) => !before.pairs.includes(p)) ||
-    (filterSetNow &&
-      (!filterSetBefore ||
-        compareDecimals(next.vol!, before.vol!) < 0 ||
-        compareDecimals(next.spread!, before.spread!) > 0));
+  const prevSnap = { pairs: before.pairs, minVolume: before.vol, maxSpread: before.spread };
+  const nextSnap = { pairs, minVolume: next.vol, maxSpread: next.spread };
+  const loosens = allowlistLoosens(prevSnap, nextSnap);
+  const rowEffects = allowlistEffects(prevSnap, nextSnap);
 
   const send = (grant?: string) =>
     save.mutate(
@@ -452,9 +445,14 @@ function AllowlistForm({ data }: { data: Allowlist }) {
           />
         </Field>
       </div>
-      {(volBad || spreadBad) && (
+      {volBad && (
         <p role="alert" className="text-xs text-fall">
           {t("trader.limits.invalid.number")}
+        </p>
+      )}
+      {spreadBad && (
+        <p role="alert" className="text-xs text-fall">
+          {t("trader.limits.invalid.pct")}
         </p>
       )}
 
@@ -485,9 +483,9 @@ function AllowlistForm({ data }: { data: Allowlist }) {
           }
         >
           <ul className="space-y-3">
-            <ReviewLine label={t("trader.allow.pairs")} from={list(before.pairs)} to={list(pairs)} effect="neutral" />
-            <ReviewLine label={t("trader.allow.minVolume")} from={num(before.vol)} to={num(next.vol)} effect="neutral" />
-            <ReviewLine label={t("trader.allow.maxSpread")} from={num(before.spread)} to={num(next.spread)} effect="neutral" />
+            <ReviewLine label={t("trader.allow.pairs")} from={list(before.pairs)} to={list(pairs)} effect={rowEffects.pairs} />
+            <ReviewLine label={t("trader.allow.minVolume")} from={num(before.vol)} to={num(next.vol)} effect={rowEffects.minVolume} />
+            <ReviewLine label={t("trader.allow.maxSpread")} from={num(before.spread)} to={num(next.spread)} effect={rowEffects.maxSpread} />
           </ul>
           {loosens && <p className="mt-4 text-sm text-watch">{t("trader.allow.review.loosens")}</p>}
           {save.error && (

@@ -4,58 +4,18 @@ import { Button, Card, inputClass, Modal } from "@/components/primitives";
 import { OriginBadge, PanelBody } from "@/trader/components";
 import { traderApi } from "@/trader/client";
 import { useTraderQuery } from "@/trader/hooks";
-import { compareDecimals, DECIMAL, groupDigits } from "@/trader/format";
+import { groupDigits } from "@/trader/format";
 import { useSavePaper, type PaperValues } from "@/trader/mutations";
 import { StepUpDialog } from "@/trader/StepUpDialog";
+import {
+  PAPER_FIELDS as FIELDS,
+  paperEffect as effect,
+  paperProblem as problem,
+  type PaperEffect as Effect,
+  type PaperField as Field,
+  type PaperName as Name,
+} from "@/trader/validators";
 import type { PaperConfig } from "@/trader/types";
-
-type Kind = "pct" | "fraction" | "idr";
-type Name = keyof PaperValues;
-
-interface Field {
-  name: Name;
-  kind: Kind;
-  unit: MessageKey | null;
-  label: MessageKey;
-  hint: MessageKey;
-  /** Which way flatters the simulated results: lower costs, or more of an order filled. */
-  flatters: "lower" | "higher" | null;
-}
-
-const FIELDS: Field[] = [
-  { name: "start_equity_idr", kind: "idr", unit: "trader.unit.idr", label: "trader.paper.start.label", hint: "trader.paper.start.hint", flatters: null },
-  { name: "slippage_pct", kind: "pct", unit: "trader.unit.pct", label: "trader.paper.slippage.label", hint: "trader.paper.slippage.hint", flatters: "lower" },
-  { name: "partial_fill_fraction", kind: "fraction", unit: null, label: "trader.paper.fraction.label", hint: "trader.paper.fraction.hint", flatters: "higher" },
-  { name: "maker_fee_pct", kind: "pct", unit: "trader.unit.pct", label: "trader.paper.maker.label", hint: "trader.paper.maker.hint", flatters: "lower" },
-  { name: "taker_fee_pct", kind: "pct", unit: "trader.unit.pct", label: "trader.paper.taker.label", hint: "trader.paper.taker.hint", flatters: "lower" },
-  { name: "tax_pct", kind: "pct", unit: "trader.unit.pct", label: "trader.paper.tax.label", hint: "trader.paper.tax.hint", flatters: "lower" },
-  { name: "clearing_pct", kind: "pct", unit: "trader.unit.pct", label: "trader.paper.clearing.label", hint: "trader.paper.clearing.hint", flatters: "lower" },
-];
-
-/** Mirrors `set_paper_settings` on the server, which answers last. Empty is reported once. */
-function problem(kind: Kind, text: string): MessageKey | null {
-  const v = text.trim();
-  if (v === "") return null;
-  if (!DECIMAL.test(v)) return kind === "idr" ? "trader.paper.invalid.idr" : kind === "pct" ? "trader.paper.invalid.pct" : "trader.paper.invalid.fraction";
-  switch (kind) {
-    case "pct":
-      return compareDecimals(v, "100") <= 0 ? null : "trader.paper.invalid.pct";
-    case "fraction":
-      return compareDecimals(v, "0") > 0 && compareDecimals(v, "1") <= 0 ? null : "trader.paper.invalid.fraction";
-    case "idr":
-      return compareDecimals(v, "0") > 0 ? null : "trader.paper.invalid.idr";
-  }
-}
-
-type Effect = "flatters" | "harsher" | "neutral";
-
-/** Whether a change makes simulated results look better; mirrors `paper_flatters` on the server. */
-function effect(field: Field, from: string, to: string): Effect {
-  if (field.flatters === null || from === "" || !DECIMAL.test(to.trim())) return "neutral";
-  const c = compareDecimals(to.trim(), from);
-  if (c === 0) return "neutral";
-  return (c > 0) === (field.flatters === "higher") ? "flatters" : "harsher";
-}
 
 /**
  * The assumptions behind every simulated trade.

@@ -4,57 +4,15 @@ import { Button, Card, inputClass, Modal } from "@/components/primitives";
 import { OriginBadge, PanelBody } from "@/trader/components";
 import { traderApi } from "@/trader/client";
 import { useTraderQuery } from "@/trader/hooks";
-import { compareDecimals, DECIMAL } from "@/trader/format";
 import { useSaveParameters } from "@/trader/mutations";
+import {
+  emaOrderBad,
+  neededHistory,
+  PARAM_FIELDS as FIELDS,
+  paramProblem as problem,
+  type ParamField as Field,
+} from "@/trader/validators";
 import type { StrategyParams } from "@/trader/types";
-
-type Kind = "int" | "int0" | "threshold" | "multiple";
-
-interface Field {
-  name: string;
-  kind: Kind;
-  unit: MessageKey | null;
-  label: MessageKey;
-  hint: MessageKey;
-}
-
-const FIELDS: Field[] = [
-  { name: "ema_fast", kind: "int", unit: null, label: "trader.params.field.ema_fast.label", hint: "trader.params.field.ema_fast.hint" },
-  { name: "ema_slow", kind: "int", unit: null, label: "trader.params.field.ema_slow.label", hint: "trader.params.field.ema_slow.hint" },
-  { name: "adx_period", kind: "int", unit: null, label: "trader.params.field.adx_period.label", hint: "trader.params.field.adx_period.hint" },
-  { name: "adx_threshold", kind: "threshold", unit: null, label: "trader.params.field.adx_threshold.label", hint: "trader.params.field.adx_threshold.hint" },
-  { name: "atr_period", kind: "int", unit: null, label: "trader.params.field.atr_period.label", hint: "trader.params.field.atr_period.hint" },
-  { name: "atr_stop_multiple", kind: "multiple", unit: null, label: "trader.params.field.atr_stop_multiple.label", hint: "trader.params.field.atr_stop_multiple.hint" },
-  { name: "cooldown_s", kind: "int0", unit: "trader.unit.seconds", label: "trader.params.field.cooldown_s.label", hint: "trader.params.field.cooldown_s.hint" },
-];
-
-/** Mirrors `EmaAdxParams` validation on the server, which answers last. */
-function problem(kind: Kind, text: string): MessageKey | null {
-  const v = text.trim();
-  if (v === "") return null; // reported once, as "fill in every number"
-  switch (kind) {
-    case "int":
-      return /^\d+$/.test(v) && Number(v) >= 1 ? null : "trader.params.invalid.int";
-    case "int0":
-      return /^\d+$/.test(v) ? null : "trader.params.invalid.int0";
-    case "threshold":
-      return DECIMAL.test(v) && compareDecimals(v, "0") > 0 && compareDecimals(v, "100") <= 0
-        ? null
-        : "trader.params.invalid.threshold";
-    case "multiple":
-      return DECIMAL.test(v) && compareDecimals(v, "0") > 0 ? null : "trader.params.invalid.number";
-  }
-}
-
-/** Candles of history the strategy needs: the longest of its look-backs (see `min_history`). */
-function neededHistory(values: Record<string, string>): number | null {
-  const n = (k: string) => (/^\d+$/.test(values[k]?.trim() ?? "") ? Number(values[k].trim()) : null);
-  const slow = n("ema_slow");
-  const adx = n("adx_period");
-  const atr = n("atr_period");
-  if (slow === null || adx === null || atr === null) return null;
-  return Math.max(slow, 2 * adx + 1, atr + 1);
-}
 
 /**
  * The strategy's numbers, edited as a new version.
@@ -124,10 +82,7 @@ function ParametersForm({ data }: { data: StrategyParams }) {
   );
 
   const empty = rows.some((r) => r.text.trim() === "");
-  const orderBad =
-    /^\d+$/.test(values.ema_fast?.trim() ?? "") &&
-    /^\d+$/.test(values.ema_slow?.trim() ?? "") &&
-    Number(values.ema_fast) >= Number(values.ema_slow);
+  const orderBad = emaOrderBad(values.ema_fast, values.ema_slow);
   const needed = neededHistory(values);
   const tooLong = needed !== null && needed > data.max_history_bars;
   const invalid = rows.some((r) => r.error !== null) || orderBad || tooLong;
