@@ -66,3 +66,26 @@ Verified after the swap: all kontainers healthy; the Trader holds the lease and 
 headers are present on a response proxied through the front end; the Trader log shows an authenticated
 `GET /auth/me` answered 200, so a signed-in user reached the Trader through the proxy. Still unverified: what the
 screens look like, and anything beyond that one authenticated call.
+
+---
+
+## Redeploy of commit e410ab7 (2026-11-15), migrations 0007 and 0008
+
+Built from a clean `git archive HEAD` export (the working tree held unrelated, uncommitted landing-page work, which
+is not in the images). New: backtest evidence, thresholds editor, portfolio panels, CSV export, dashboard indexes,
+durable `Idempotency-Key` replay, the liveness monitor scripts, the collapsible sidebar, and the contrast fixes.
+Images: `aidss-trader:e410ab7`, `aidss-frontend:e410ab7`; the analysis image is unchanged (`aidss-api:e7b3da3`).
+
+Order of work: tests on HEAD (496 passed, 1 xfail) -> push -> push images -> **rehearsal on a throwaway database**
+(migrations 0001 to 0008 and the privilege tests: 3 passed, 2 skipped because they need the `aidss_app` role
+that does not exist yet; the scratch database was dropped) -> a fresh dump (`~/aidss-pre-0007-0008-*.sql.gz`,
+71 MB, same disk) -> migrations as `trader_owner` -> compose override on stdin.
+
+Verified after: all kontainers healthy; migrations at `0008_indexes_idempotency` (30 tables in `trading`); the
+Trader holds the lease and is still `HALTED`; `backtest_run` and `idempotency_key` exist and are empty; security
+headers on a proxied response; healthcheck exit 0.
+
+Not verified: the idempotency replay and the new indexes under real use (no request was made); `EXPLAIN` plans;
+the `GRANT DELETE` on `idempotency_key` beyond the migration succeeding; pruning of that table; every screen in a
+browser. Still open on the host: Postgres published on 5432, no `aidss_app` role, SSH password not rotated,
+liveness monitor not installed.
