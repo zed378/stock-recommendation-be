@@ -52,7 +52,7 @@ export function TraderApprovals() {
                         <span className="font-mono">{i.pair}</span>
                         <span>{i.side}</span>
                         <span className="text-muted">{t(`trader.approval.${i.approval!.state}`)}</span>
-                        {i.approval?.reason && <span className="text-xs text-faint">{i.approval.reason}</span>}
+                        {i.approval?.reason && <span className="text-xs text-muted">{i.approval.reason}</span>}
                       </li>
                     ))}
                   </ul>
@@ -110,10 +110,10 @@ function ApprovalCard({ intent, origin }: { intent: Intent; origin: "LIVE" | "PA
         {intent.risk_amount_idr && <Item label={t("trader.card.risk")} value={num(intent.risk_amount_idr)} />}
       </dl>
 
-      <p className="mt-4 border-l-2 border-watch/40 pl-2.5 text-xs leading-relaxed text-faint">
+      <p className="mt-4 border-l-2 border-watch/40 pl-2.5 text-xs leading-relaxed text-muted">
         {t("trader.card.exact")}
       </p>
-      <p className="mt-2 text-xs text-faint">{t("trader.card.missing")}</p>
+      <p className="mt-2 text-xs text-muted">{t("trader.card.missing")}</p>
 
       <div className="mt-4 space-y-3">
         <Field label={t("trader.card.reason")}>
@@ -159,7 +159,7 @@ function ApprovalCard({ intent, origin }: { intent: Intent; origin: "LIVE" | "PA
 function Item({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs text-faint">{label}</dt>
+      <dt className="text-xs text-muted">{label}</dt>
       <dd className="mt-0.5 font-mono text-sm tnum text-ink">{value}</dd>
     </div>
   );

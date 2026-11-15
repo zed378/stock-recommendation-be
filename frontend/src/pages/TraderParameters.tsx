@@ -148,7 +148,7 @@ function ParametersForm({ data }: { data: StrategyParams }) {
         </p>
       )}
 
-      <p className="max-w-prose border-l-2 border-watch/40 pl-2.5 text-xs leading-relaxed text-faint">
+      <p className="max-w-prose border-l-2 border-watch/40 pl-2.5 text-xs leading-relaxed text-muted">
         {t("trader.params.resets")}
       </p>
       {live && <p className="text-sm text-watch">{t("trader.params.resetsLive", { mode: data.mode ?? "" })}</p>}
@@ -234,7 +234,7 @@ function ParamRow({
         <label htmlFor={id} className="text-sm font-medium text-ink">
           {t(field.label)}
         </label>
-        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-faint">
+        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-muted">
           {t(field.hint)}
         </p>
       </div>
@@ -253,7 +253,7 @@ function ParamRow({
           />
           {field.unit && <span className="shrink-0 text-xs text-muted">{t(field.unit)}</span>}
         </div>
-        <p className="mt-1 text-xs text-faint">
+        <p className="mt-1 text-xs text-muted">
           {stored === "" ? t("trader.limits.currentUnset") : t("trader.limits.current", { value: stored })}
           {changed && <span className="ml-2 font-medium text-watch">{t("trader.limits.changed")}</span>}
         </p>

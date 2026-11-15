@@ -130,7 +130,7 @@ function LimitsForm({ data }: { data: Limits }) {
     >
       {GROUPS.map((group) => (
         <fieldset key={group.title} className="space-y-4">
-          <legend className="mb-1 text-xs font-medium uppercase tracking-wider text-faint">
+          <legend className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
             {t(group.title)}
           </legend>
           {group.fields.map((field) => {
@@ -153,7 +153,7 @@ function LimitsForm({ data }: { data: Limits }) {
         </fieldset>
       ))}
 
-      <p className="text-xs text-faint">
+      <p className="text-xs text-muted">
         {t("trader.limit.daily_loss_day_boundary.label")}: {t("trader.limits.readOnly")}
       </p>
 
@@ -265,7 +265,7 @@ function LimitRow({
         <label htmlFor={id} className="text-sm font-medium text-ink">
           {t(field.label)}
         </label>
-        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-faint">
+        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-muted">
           {t(field.hint)} {field.optional ? t("trader.limits.emptyOptional") : t("trader.limits.emptyMeans")}
         </p>
       </div>
@@ -285,7 +285,7 @@ function LimitRow({
           />
           {field.unit && <span className="shrink-0 text-xs text-muted">{t(field.unit)}</span>}
         </div>
-        <p id={`${id}-now`} className="mt-1 text-xs text-faint">
+        <p id={`${id}-now`} className="mt-1 text-xs text-muted">
           {before === null ? t("trader.limits.currentUnset") : t("trader.limits.current", { value: shown(before) })}
           {changed && <span className="ml-2 font-medium text-watch">{t("trader.limits.changed")}</span>}
         </p>
@@ -420,7 +420,7 @@ function AllowlistForm({ data }: { data: Allowlist }) {
         </p>
       )}
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label={t("trader.allow.minVolume")} hint={t("trader.limits.emptyMeans")}>
+        <Field label={t("trader.allow.minVolume")}>
           <input
             className={`${inputClass} font-mono tnum`}
             inputMode="decimal"
@@ -431,8 +431,9 @@ function AllowlistForm({ data }: { data: Allowlist }) {
               setMinVolume(e.target.value);
             }}
           />
+          <span className="mt-1 block text-xs text-muted">{t("trader.limits.emptyMeans")}</span>
         </Field>
-        <Field label={t("trader.allow.maxSpread")} hint={t("trader.limits.emptyMeans")}>
+        <Field label={t("trader.allow.maxSpread")}>
           <input
             className={`${inputClass} font-mono tnum`}
             inputMode="decimal"
@@ -443,6 +444,7 @@ function AllowlistForm({ data }: { data: Allowlist }) {
               setMaxSpread(e.target.value);
             }}
           />
+          <span className="mt-1 block text-xs text-muted">{t("trader.limits.emptyMeans")}</span>
         </Field>
       </div>
       {volBad && (

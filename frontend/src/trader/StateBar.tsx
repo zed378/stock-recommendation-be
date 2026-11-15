@@ -39,7 +39,7 @@ export function StateBar() {
       }`}
     >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1.5">
-        <span className="text-xs font-medium uppercase tracking-wider text-faint">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted">
           {t("trader.bar.label")}
         </span>
         {status.isPending ? (

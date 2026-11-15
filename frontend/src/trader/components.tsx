@@ -27,7 +27,7 @@ export function Freshness({
   if (!meta) return null;
   const seconds = ageSeconds(fetchedAt, now);
   return (
-    <p className="flex flex-wrap items-center gap-x-2 text-xs text-faint">
+    <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
       <span>{t("trader.fresh.updated", { age: age(seconds), source: meta.source })}</span>
       {(meta.stale || failed) && (
         <span className="rounded border border-watch/40 px-1.5 py-0.5 font-medium text-watch">
@@ -88,10 +88,10 @@ export function TraderErrorNote({
       <p className="text-sm font-medium text-fall">{t("trader.unavailable", { cls })}</p>
       <p className="text-sm text-muted">{t(ERR_KEYS[cls])}</p>
       {e?.message && e.cls !== "NETWORK" && (
-        <p className="text-xs text-faint">{e.message}</p>
+        <p className="text-xs text-muted">{e.message}</p>
       )}
       {e?.correlationId && (
-        <p className="font-mono text-xs text-faint">
+        <p className="font-mono text-xs text-muted">
           {t("trader.unavailable.ref", { id: e.correlationId })}
         </p>
       )}

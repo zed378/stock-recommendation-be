@@ -7,8 +7,13 @@ import { AuthContext, type Auth } from "@/auth/context";
 import { ToastContext } from "@/components/toastContext";
 import { I18nContext, type I18n } from "@/i18n/context";
 import { locales, type Locale, type MessageKey } from "@/i18n/messages";
-import { OriginPortfolioBlock } from "@/pages/Trader";
+import { OriginPortfolioBlock, Trader } from "@/pages/Trader";
+import { TraderApprovals } from "@/pages/TraderApprovals";
 import { TraderCredentials } from "@/pages/TraderCredentials";
+import { TraderLimits } from "@/pages/TraderLimits";
+import { TraderPaper } from "@/pages/TraderPaper";
+import { TraderParameters } from "@/pages/TraderParameters";
+import { TraderStrategies } from "@/pages/TraderStrategies";
 import { OriginBadge, PanelBody, TraderErrorNote } from "@/trader/components";
 import { TraderError, traderApi } from "@/trader/client";
 import { HaltButton, KillControls } from "@/trader/KillControls";
@@ -302,5 +307,360 @@ describe("Trader UI key components and safety invariants", () => {
 
     expect(screen.getByText("BTCIDR")).toBeTruthy();
     expect(screen.getAllByText("PAPER, not real trades").length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("renders all 7 Trader pages with populated tables in ID and EN, localizes ledger headers, and never uses low-contrast text-faint", async () => {
+    vi.spyOn(traderApi, "GET").mockImplementation(async (url: string) => {
+      const meta = {
+        source: "trader",
+        origin: "LIVE",
+        as_of: "2026-11-15T00:00:00Z",
+        stale: false,
+      };
+      if (url === "/trader/v1/dashboard") {
+        return {
+          data: {
+            data: {
+              state: "HALTED",
+              state_reason: "manual",
+              state_since: "2026-11-15T00:00:00Z",
+              balances: [
+                {
+                  origin: "LIVE",
+                  asset: "IDR",
+                  free: "10000000",
+                  locked: "0",
+                  updated_at: "2026-11-15T00:00:00Z",
+                },
+              ],
+              positions: [],
+              open_orders: [
+                {
+                  client_order_id: "ord-1",
+                  intent_identity: "int-1",
+                  exchange_order_id: "ex-1",
+                  origin: "LIVE",
+                  pair: "BTCIDR",
+                  side: "BUY",
+                  order_type: "LIMIT",
+                  price: "1500000000",
+                  quantity: "0.001",
+                  filled_quantity: "0",
+                  state: "OPEN",
+                  submitted_at: "2026-11-15T00:00:00Z",
+                },
+              ],
+              approvals_pending: [],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/reconciliation") {
+        return {
+          data: {
+            data: {
+              runs: [
+                {
+                  started_at: "2026-11-15T00:00:00Z",
+                  result: "clean",
+                  differences: 0,
+                },
+              ],
+              unresolved: [],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/events") {
+        return {
+          data: {
+            data: [
+              {
+                id: 1,
+                severity: "INFO",
+                message: "halted by operator",
+                created_at: "2026-11-15T00:00:00Z",
+                acked_at: null,
+              },
+            ],
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/portfolio") {
+        return {
+          data: {
+            data: {
+              live: {
+                origin: "LIVE",
+                configured: true,
+                start_equity_idr: "10000000",
+                latest_equity_idr: "10000000",
+                realised_pnl_idr: "0",
+                daily_loss_idr: "0",
+                drawdown_pct: "0",
+                trades_closed: 0,
+                positions: [],
+              },
+              paper: {
+                origin: "PAPER",
+                configured: true,
+                start_equity_idr: "50000000",
+                latest_equity_idr: "51000000",
+                realised_pnl_idr: "1000000",
+                daily_loss_idr: "0",
+                drawdown_pct: "0.5",
+                trades_closed: 2,
+                positions: [],
+              },
+              backtests: [
+                {
+                  id: "bt-1",
+                  origin: "BACKTEST",
+                  strategy_id: "strat-1",
+                  strategy_version: "v-1-2026-11-15",
+                  pair: "BTCIDR",
+                  trades: 5,
+                  win_rate_pct: "60.0",
+                  total_return_pct: "4.5",
+                  max_drawdown_pct: "3.2",
+                  ran_at: "2026-11-15T00:00:00Z",
+                },
+              ],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/ledger") {
+        return {
+          data: {
+            data: [
+              {
+                at: "2026-11-15T00:00:00Z",
+                origin: "PAPER",
+                entry_type: "DEPOSIT",
+                asset: "IDR",
+                amount: "50000000",
+                reason: "initial paper capital",
+              },
+            ],
+            meta: { ...meta, origin: "PAPER" },
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/intents") {
+        return {
+          data: {
+            data: [
+              {
+                identity: "int-1",
+                strategy_id: "ema_adx",
+                pair: "BTCIDR",
+                side: "BUY",
+                entry_price: "1500000000",
+                quantity: "0.001",
+                stop_price: "1450000000",
+                risk_amount_idr: "50000",
+                approval: {
+                  state: "AWAITING",
+                  expires_at: "2026-11-15T01:00:00Z",
+                  card_hash: "hash-1",
+                  reason: null,
+                },
+              },
+            ],
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/strategies") {
+        return {
+          data: {
+            data: [
+              {
+                strategy_id: "ema_adx",
+                mode: "PAPER",
+                version: "v-1",
+                since: "2026-11-15T00:00:00Z",
+              },
+            ],
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/strategies/{strategy_id}/promotion") {
+        return {
+          data: {
+            data: {
+              strategy_id: "ema_adx",
+              mode: "PAPER",
+              next: "APPROVAL",
+              gates: [
+                {
+                  name: "duration",
+                  passed: false,
+                  measured: "14",
+                  threshold: null,
+                  reason: "threshold unset",
+                },
+              ],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/strategies/{strategy_id}/parameters") {
+        return {
+          data: {
+            data: {
+              strategy_id: "ema_adx",
+              version: "v-1",
+              mode: "PAPER",
+              max_history_bars: 500,
+              params: {
+                ema_fast: "12",
+                ema_slow: "26",
+                adx_period: "14",
+                adx_threshold: "25",
+                atr_period: "14",
+                atr_stop_multiple: "2",
+                cooldown_s: "60",
+              },
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/paper-config") {
+        return {
+          data: {
+            data: {
+              configured: true,
+              paper_fills: 2,
+              starting_capital_idr: "50000000",
+              maker_fee_pct: "0.1",
+              taker_fee_pct: "0.2",
+              slippage_bps: "5",
+            },
+            meta: { ...meta, origin: "PAPER" },
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/promotion-thresholds") {
+        return {
+          data: {
+            data: {
+              thresholds: {
+                min_paper_trades: null,
+                max_paper_drawdown_pct: null,
+                backtest_min_return_pct: null,
+                max_live_capital_idr: null,
+                max_slippage_pct: null,
+              },
+              unset: ["min_paper_trades"],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/limits") {
+        return {
+          data: {
+            data: {
+              version: 1,
+              limits: {
+                max_order_notional_idr: null,
+              },
+              unset: ["max_order_notional_idr"],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/allowlist") {
+        return {
+          data: {
+            data: {
+              active: false,
+              pairs: ["BTCIDR"],
+              min_quote_volume_24h_idr: null,
+              max_spread_pct: null,
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      if (url === "/trader/v1/credentials") {
+        return {
+          data: {
+            data: {
+              available: true,
+              items: [
+                { kind: "indodax", configured: false, readable: true },
+                { kind: "telegram", configured: false, readable: true },
+              ],
+            },
+            meta,
+          },
+          response: new Response(null, { status: 200 }),
+        } as never;
+      }
+      return {
+        data: { data: [], meta },
+        response: new Response(null, { status: 200 }),
+      } as never;
+    });
+
+    const pages = [
+      <Trader key="trader" />,
+      <TraderApprovals key="approvals" />,
+      <TraderStrategies key="strategies" />,
+      <TraderParameters key="parameters" />,
+      <TraderPaper key="paper" />,
+      <TraderLimits key="limits" />,
+      <TraderCredentials key="credentials" />,
+    ];
+
+    // Check Indonesian rendering
+    const { container: idContainer, unmount: unmountId } = renderWithProviders(<div>{pages}</div>, {
+      locale: "id",
+    });
+    await waitFor(() => {
+      expect(screen.getByText("initial paper capital")).toBeTruthy();
+      expect(screen.getByText("Waktu")).toBeTruthy();
+      expect(screen.getByText("Alasan")).toBeTruthy();
+      expect(screen.getAllByText("BACKTEST, simulasi historis").length).toBeGreaterThanOrEqual(2);
+    });
+    expect(idContainer.querySelectorAll(".text-faint").length).toBe(0);
+    expect(idContainer.querySelectorAll(".overflow-x-auto").length).toBeGreaterThanOrEqual(3);
+    unmountId();
+
+    // Check English rendering
+    const { container: enContainer, unmount: unmountEn } = renderWithProviders(<div>{pages}</div>, {
+      locale: "en",
+    });
+    await waitFor(() => {
+      expect(screen.getByText("initial paper capital")).toBeTruthy();
+      expect(screen.getByText("Reason")).toBeTruthy();
+      expect(screen.getAllByText("BACKTEST, historical simulation").length).toBeGreaterThanOrEqual(2);
+    });
+    expect(enContainer.querySelectorAll(".text-faint").length).toBe(0);
+    unmountEn();
   });
 });

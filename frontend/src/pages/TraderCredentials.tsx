@@ -100,7 +100,7 @@ function CredentialCard({ item }: { item: CredentialItem }) {
   return (
     <Card title={<h2 className="text-sm font-medium text-ink">{t(copy.title)}</h2>}>
       <div className="space-y-5">
-        <p className="max-w-prose text-xs leading-relaxed text-faint">{t(copy.rules)}</p>
+        <p className="max-w-prose text-xs leading-relaxed text-muted">{t(copy.rules)}</p>
 
         <div className="space-y-1 text-sm">
           {item.configured ? (
@@ -160,7 +160,7 @@ function CredentialCard({ item }: { item: CredentialItem }) {
               />
             </Field>
           </div>
-          <p className="max-w-prose text-xs text-faint">
+          <p className="max-w-prose text-xs text-muted">
             {t("trader.cred.saveHint")} {t("trader.cred.fieldsNote")}
           </p>
           <Button type="submit" busy={store.isPending} disabled={!key.trim() || !secret.trim()}>
@@ -194,7 +194,7 @@ function CredentialCard({ item }: { item: CredentialItem }) {
             <Button variant="danger" onClick={() => setConfirmRemove(true)} disabled={remove.isPending}>
               {t("trader.cred.remove")}
             </Button>
-            <p id={`test-${item.kind}`} className="text-xs text-faint">
+            <p id={`test-${item.kind}`} className="text-xs text-muted">
               {t("trader.cred.testing")}
             </p>
             <div role="status" aria-live="polite" className="w-full">

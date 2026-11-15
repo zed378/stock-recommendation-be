@@ -150,7 +150,7 @@ function PaperForm({ data }: { data: PaperConfig }) {
         ))}
       </div>
 
-      <p className="max-w-prose border-l-2 border-watch/40 pl-2.5 text-xs leading-relaxed text-faint">
+      <p className="max-w-prose border-l-2 border-watch/40 pl-2.5 text-xs leading-relaxed text-muted">
         {t("trader.paper.honest")}
         {data.paper_fills > 0 && ` ${t("trader.paper.flatterNote")}`}
       </p>
@@ -237,7 +237,7 @@ function PaperRow({
         <label htmlFor={id} className="text-sm font-medium text-ink">
           {t(field.label)}
         </label>
-        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-faint">
+        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-muted">
           {t(field.hint)}
         </p>
       </div>
@@ -256,7 +256,7 @@ function PaperRow({
           />
           {field.unit && <span className="shrink-0 text-xs text-muted">{t(field.unit)}</span>}
         </div>
-        <p className="mt-1 text-xs text-faint">
+        <p className="mt-1 text-xs text-muted">
           {before === "" ? t("trader.limits.currentUnset") : t("trader.limits.current", { value: display(before) })}
           {changed && <span className="ml-2 font-medium text-watch">{t("trader.limits.changed")}</span>}
         </p>

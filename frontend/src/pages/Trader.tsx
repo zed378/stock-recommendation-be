@@ -70,7 +70,7 @@ export function OriginPortfolioBlock({ data }: { data: OriginPortfolio }) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
         {data.start_equity_idr !== null && (
           <div>
-            <dt className="text-xs text-faint">{t("trader.portfolio.startEquity")}</dt>
+            <dt className="text-xs text-muted">{t("trader.portfolio.startEquity")}</dt>
             <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
               {idr(data.start_equity_idr)}
               <OriginBadge origin={data.origin} />
@@ -78,35 +78,35 @@ export function OriginPortfolioBlock({ data }: { data: OriginPortfolio }) {
           </div>
         )}
         <div>
-          <dt className="text-xs text-faint">{t("trader.portfolio.latestEquity")}</dt>
+          <dt className="text-xs text-muted">{t("trader.portfolio.latestEquity")}</dt>
           <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
             {idr(data.latest_equity_idr)}
             <OriginBadge origin={data.origin} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-faint">{t("trader.portfolio.realisedPnl")}</dt>
+          <dt className="text-xs text-muted">{t("trader.portfolio.realisedPnl")}</dt>
           <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
             {idr(data.realised_pnl_idr)}
             <OriginBadge origin={data.origin} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-faint">{t("trader.portfolio.drawdown")}</dt>
+          <dt className="text-xs text-muted">{t("trader.portfolio.drawdown")}</dt>
           <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
             {data.drawdown_pct === null ? "-" : `${data.drawdown_pct}%`}
             <OriginBadge origin={data.origin} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-faint">{t("trader.portfolio.dailyLoss")}</dt>
+          <dt className="text-xs text-muted">{t("trader.portfolio.dailyLoss")}</dt>
           <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
             {idr(data.daily_loss_idr)}
             <OriginBadge origin={data.origin} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-faint">{t("trader.portfolio.closedTrades")}</dt>
+          <dt className="text-xs text-muted">{t("trader.portfolio.closedTrades")}</dt>
           <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
             {data.trades_closed}
             <OriginBadge origin={data.origin} />
@@ -115,11 +115,11 @@ export function OriginPortfolioBlock({ data }: { data: OriginPortfolio }) {
       </dl>
 
       {data.positions.length === 0 ? (
-        <p className="text-xs text-faint">{t("trader.portfolio.noPositions")}</p>
+        <p className="text-xs text-muted">{t("trader.portfolio.noPositions")}</p>
       ) : (
         <div className="-mx-4 overflow-x-auto px-4">
           <table className="w-full min-w-[32rem] text-left text-sm">
-            <thead className="text-xs text-faint">
+            <thead className="text-xs text-muted">
               <tr>
                 <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.pair")}</th>
                 <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.qty")}</th>
@@ -157,7 +157,7 @@ function PortfolioPanels() {
   );
   return (
     <div className="space-y-2">
-      <p className="text-xs text-faint">{t("trader.portfolio.noMixNote")}</p>
+      <p className="text-xs text-muted">{t("trader.portfolio.noMixNote")}</p>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card
           title={
@@ -261,20 +261,20 @@ function LedgerAndExportPanel() {
           ) : (
             <div className="-mx-4 overflow-x-auto px-4">
               <table className="w-full min-w-[32rem] text-left text-sm">
-                <thead className="text-xs text-faint">
+                <thead className="text-xs text-muted">
                   <tr>
-                    <th className="pb-2 pr-3 font-medium">At</th>
-                    <th className="pb-2 pr-3 font-medium">Origin</th>
-                    <th className="pb-2 pr-3 font-medium">Type</th>
-                    <th className="pb-2 pr-3 font-medium">Asset</th>
-                    <th className="pb-2 pr-3 font-medium">Amount</th>
-                    <th className="pb-2 font-medium">Reason</th>
+                    <th className="pb-2 pr-3 font-medium">{locale === "id" ? "Waktu" : "At"}</th>
+                    <th className="pb-2 pr-3 font-medium">{locale === "id" ? "Asal" : "Origin"}</th>
+                    <th className="pb-2 pr-3 font-medium">{locale === "id" ? "Jenis" : "Type"}</th>
+                    <th className="pb-2 pr-3 font-medium">{locale === "id" ? "Aset" : "Asset"}</th>
+                    <th className="pb-2 pr-3 font-medium">{locale === "id" ? "Jumlah" : "Amount"}</th>
+                    <th className="pb-2 font-medium">{locale === "id" ? "Alasan" : "Reason"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {entries.slice(0, 15).map((e, idx) => (
                     <tr key={`${e.at}-${e.asset}-${idx}`}>
-                      <td className="py-1.5 pr-3 text-xs text-faint">{dateTime(e.at)}</td>
+                      <td className="py-1.5 pr-3 text-xs text-muted">{dateTime(e.at)}</td>
                       <td className="py-1.5 pr-3">
                         <OriginBadge origin={e.origin === "PAPER" ? "PAPER" : "LIVE"} />
                       </td>
@@ -315,7 +315,7 @@ function OpenOrders({ query }: { query: ReturnType<typeof useTraderQuery<Dashboa
           ) : (
             <div className="-mx-4 overflow-x-auto px-4">
               <table className="w-full min-w-[32rem] text-left text-sm">
-                <thead className="text-xs text-faint">
+                <thead className="text-xs text-muted">
                   <tr>
                     <th className="pb-2 pr-3 font-medium">{t("trader.orders.pair")}</th>
                     <th className="pb-2 pr-3 font-medium">{t("trader.orders.side")}</th>
@@ -364,7 +364,7 @@ function LimitsPanel() {
       <PanelBody query={query}>
         {(data) => (
           <div className="space-y-3">
-            <p className="text-xs text-faint">{t("trader.limits.unsetNote")}</p>
+            <p className="text-xs text-muted">{t("trader.limits.unsetNote")}</p>
             {data.unset.length === 0 ? (
               <p className="text-sm text-muted">{t("trader.limits.allSet")}</p>
             ) : null}
@@ -406,7 +406,7 @@ function ReconciliationPanel() {
             <div className="space-y-3 text-sm">
               <p className={data.runs[0].result === "clean" ? "text-muted" : "font-medium text-fall"}>
                 {t("trader.recon.last", { result: data.runs[0].result, count: data.runs[0].differences })}
-                <span className="ml-2 text-xs text-faint">{dateTime(data.runs[0].started_at)}</span>
+                <span className="ml-2 text-xs text-muted">{dateTime(data.runs[0].started_at)}</span>
               </p>
               {data.unresolved.length > 0 && (
                 <div>
@@ -446,14 +446,14 @@ function EventsPanel() {
                   <li key={e.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2.5">
                     <span
                       className={`w-24 shrink-0 text-[0.65rem] font-semibold uppercase tracking-wide ${
-                        e.severity === "CRITICAL" ? "text-fall" : e.severity === "WARN" ? "text-watch" : "text-faint"
+                        e.severity === "CRITICAL" ? "text-fall" : e.severity === "WARN" ? "text-watch" : "text-muted"
                       }`}
                     >
                       {t(`trader.sev.${e.severity}`)}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-ink">{e.message}</p>
-                      <p className="text-xs text-faint">
+                      <p className="text-xs text-muted">
                         {dateTime(e.created_at)}
                         {e.severity === "CRITICAL" && (
                           <span className="ml-2">{e.acked_at ? t("trader.events.acked") : t("trader.events.needsAck")}</span>

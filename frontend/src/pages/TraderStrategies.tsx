@@ -104,12 +104,12 @@ function StrategyCard({ strategy }: { strategy: Strategy }) {
         </h2>
       }
       action={
-        <span className="text-xs text-faint">
+        <span className="text-xs text-muted">
           {t("trader.strategies.version", { version: strategy.version, when: dateTime(strategy.since) })}
         </span>
       }
     >
-      <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-faint">
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
         {t("trader.promotion.title")}
       </h3>
       <PanelBody query={promotion}>
@@ -140,7 +140,7 @@ function StrategyCard({ strategy }: { strategy: Strategy }) {
                   );
                 })}
               </ul>
-              <p className="text-xs text-faint">{t("trader.promotion.evidenceNote")}</p>
+              <p className="text-xs text-muted">{t("trader.promotion.evidenceNote")}</p>
               <Field label={t("trader.promotion.note")}>
                 <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
@@ -168,7 +168,7 @@ function StrategyCard({ strategy }: { strategy: Strategy }) {
 
       {lower.length > 0 && (
         <div className="mt-6 border-t border-line pt-4">
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-faint">
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
             {t("trader.demote.title")}
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -233,7 +233,7 @@ function BacktestRunsCard() {
           ) : (
             <div className="-mx-4 overflow-x-auto px-4">
               <table className="w-full min-w-[36rem] text-left text-sm">
-                <thead className="text-xs text-faint">
+                <thead className="text-xs text-muted">
                   <tr>
                     <th className="pb-2 pr-3 font-medium">{t("trader.backtests.col.pair")}</th>
                     <th className="pb-2 pr-3 font-medium">{t("trader.backtests.col.version")}</th>
@@ -255,7 +255,7 @@ function BacktestRunsCard() {
                       <td className="py-2 pr-3 font-mono tnum">{b.win_rate_pct}%</td>
                       <td className="py-2 pr-3 font-mono tnum">{b.total_return_pct}%</td>
                       <td className="py-2 pr-3 font-mono tnum">{b.max_drawdown_pct}%</td>
-                      <td className="py-2 text-xs text-faint">{dateTime(b.ran_at)}</td>
+                      <td className="py-2 text-xs text-muted">{dateTime(b.ran_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -505,7 +505,7 @@ function ThresholdRow({
         <label htmlFor={id} className="text-sm font-medium text-ink">
           {t(field.label)}
         </label>
-        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-faint">
+        <p id={`${id}-hint`} className="mt-0.5 max-w-prose text-xs text-muted">
           {t(field.hint)}
         </p>
       </div>
@@ -524,7 +524,7 @@ function ThresholdRow({
           />
           {field.unit && <span className="shrink-0 text-xs text-muted">{t(field.unit)}</span>}
         </div>
-        <p className="mt-1 text-xs text-faint">
+        <p className="mt-1 text-xs text-muted">
           {before === null
             ? t("trader.limits.currentUnset")
             : t("trader.limits.current", { value: display(before) })}
