@@ -1018,3 +1018,25 @@ and read the audit log. `investor` and `viewer` stay read-only. Step-up authenti
 granting `admin` is granting control of the money. The analysis API's role management is therefore part of the
 trading threat model: an `admin` account takeover is a trading takeover, and the step-up is the only extra barrier.
 The password is the weakest point; a second factor is worth considering (ADR-046 alternatives).
+
+---
+
+### ADR-049 — Per-pair strategy parameter overrides and version tracking
+
+**Date:** 2026-11-15
+**Status:** proposed (design only; the strategy implementation still uses a single parameter set across all allowlisted pairs until the owner decides)
+
+**Decision:** Keep a strategy-level parameter set (`strategy_params:<strategy_id>`) as the shared baseline, and allow optional per-pair overrides stored under `strategy_params:<strategy_id>:<pair>` in `trading.trader_setting`. When a pair has an override:
+1. Its effective parameter hash is `EmaAdxStrategy(params).version_id()`, which differs from the baseline version id.
+2. Under ADR-020 ("a changed strategy version starts again in `PAPER`"), a pair whose effective version changes must not inherit an `APPROVAL` or `AUTO` promotion earned under different parameters. Therefore, if the owner enables per-pair overrides, `trading.strategy` (`StrategyRow`) either keys on `(strategy_id, pair)` or requires all allowlisted pairs to pass promotion gates under the composite version map before the strategy promotes.
+3. No default override values exist (OQ-11); an override is created only when the owner explicitly sets all seven `EmaAdxParams` fields for that pair, and deleting the override resets that pair to the shared baseline (and returns it to `PAPER`).
+
+**Rationale:** `BTCIDR` and `ETHIDR` (and thinner IDR pairs added later via the allowlist) can have different volatility and trend persistence on 4H candles, so a single ADX threshold or ATR stop multiple across every pair may be too tight for one and too loose for another. However, allowing silent per-pair parameter edits while keeping a single strategy-wide `APPROVAL`/`AUTO` mode would bypass ADR-020's promotion discipline.
+
+**Alternatives considered:**
+1. **Single parameter set for all pairs (current implementation):** simplest; one version id and one promotion state per `strategy_id`, at the cost of one-size-fits-all indicator periods across pairs.
+2. **Mandatory per-pair parameters with no shared baseline:** forces the owner to configure every pair separately before any pair can evaluate in `PAPER`, increasing setup friction without benefit when two pairs share parameters.
+3. **Per-pair parameter overrides without resetting mode:** rejected because changing indicator periods or ATR stop multiples on a live pair without returning to `PAPER` violates ADR-020.
+
+**Implications:** No code change is made to `EmaAdxStrategy` or `settings_store.get_strategy` until the owner chooses between Alternative 1 (keep single set for MVP) and the proposed design (per-pair override with per-pair or composite version reset to `PAPER`).
+

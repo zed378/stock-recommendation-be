@@ -7,6 +7,7 @@ import { AuthContext, type Auth } from "@/auth/context";
 import { ToastContext } from "@/components/toastContext";
 import { I18nContext, type I18n } from "@/i18n/context";
 import { locales, type Locale, type MessageKey } from "@/i18n/messages";
+import { OriginPortfolioBlock } from "@/pages/Trader";
 import { TraderCredentials } from "@/pages/TraderCredentials";
 import { OriginBadge, PanelBody, TraderErrorNote } from "@/trader/components";
 import { TraderError, traderApi } from "@/trader/client";
@@ -270,5 +271,36 @@ describe("Trader UI key components and safety invariants", () => {
     expect(screen.getByText("Reference: ref-1234")).toBeTruthy();
     expect(screen.getByText("Stale data")).toBeTruthy();
     expect(screen.getByText("panel-ok")).toBeTruthy();
+  });
+
+  it("OriginPortfolioBlock labels every figure and position with its origin badge", () => {
+    renderWithProviders(
+      <OriginPortfolioBlock
+        data={{
+          origin: "PAPER",
+          configured: true,
+          start_equity_idr: "100000000",
+          latest_equity_idr: "102500000",
+          realised_pnl_idr: "2500000",
+          daily_loss_idr: "0",
+          drawdown_pct: "1.2",
+          trades_closed: 4,
+          positions: [
+            {
+              origin: "PAPER",
+              pair: "BTCIDR",
+              quantity: "0.01",
+              avg_cost: "1000000000",
+              cost_basis_idr: "10000000",
+              stop_price: "950000000",
+              target_price: "1100000000",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("BTCIDR")).toBeTruthy();
+    expect(screen.getAllByText("PAPER, not real trades").length).toBeGreaterThanOrEqual(6);
   });
 });

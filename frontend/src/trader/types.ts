@@ -1,160 +1,43 @@
 /**
- * Response bodies of the Trader API, as the Python routes build them.
+ * Response bodies of the Trader API, derived from the OpenAPI schema generated
+ * by `python -m aidss_trader.api.openapi` and `openapi-typescript`.
  *
- * Declared by hand because the API does not declare response models yet; a
- * change in `aidss_trader/api/app.py` needs the matching change here, and the
- * `npm run typecheck` will not catch a drift. Money and quantities arrive as
- * strings (docs/07-API-CONTRACTS/00) and stay strings until they are shown, so
- * the UI never rounds a quantity differently from what will be sent.
+ * Money and quantities arrive as strings (docs/07-API-CONTRACTS/00) and stay
+ * strings until they are shown, so the UI never rounds a quantity differently
+ * from what will be sent.
  */
 
-export type TradingState = "RUNNING" | "HALTED" | "CANCELLING" | "FLATTENING";
-export type Mode = "PAPER" | "APPROVAL" | "AUTO";
+import type { components } from "@/api/trader-schema";
 
-export interface Status {
-  trading_state: TradingState;
-  unset_limits: string[];
-  modes: Record<string, Mode>;
-}
+type Schemas = components["schemas"];
 
-export interface OpenOrder {
-  pair: string;
-  side: "BUY" | "SELL";
-  type: "LIMIT" | "MARKET";
-  state: string;
-  client_order_id: string;
-}
+export type TradingState = Schemas["StatusData"]["trading_state"];
+export type Mode = Schemas["StrategyItem"]["mode"];
 
-export interface PendingApproval {
-  intent_identity: string;
-  expires_at: string;
-}
-
-export interface Dashboard {
-  trading_state: TradingState;
-  open_orders: OpenOrder[];
-  approvals_pending: PendingApproval[];
-}
-
-export interface Approval {
-  state: "AWAITING" | "APPROVED" | "DENIED" | "EXPIRED";
-  expires_at: string;
-  decided_by: string | null;
-  reason: string | null;
-}
-
-export interface Intent {
-  identity: string;
-  origin: string;
-  pair: string;
-  side: "BUY" | "SELL";
-  entry_price: string;
-  quantity: string;
-  stop_price: string | null;
-  risk_amount_idr: string | null;
-  state: string;
-  created_at: string;
-  intent_hash: string;
-  approval: Approval | null;
-}
-
-export interface Gate {
-  name: string;
-  measured: string | null;
-  threshold: string | null;
-  passed: boolean;
-  reason: string;
-}
-
-export interface Strategy {
-  strategy_id: string;
-  version: string;
-  mode: Mode;
-  since: string;
-}
-
-export interface Promotion {
-  mode: Mode;
-  next: Mode | null;
-  gates: Gate[];
-}
-
-export interface TradingEvent {
-  id: string;
-  kind: string;
-  severity: "INFO" | "WARN" | "CRITICAL";
-  message: string;
-  created_at: string;
-  acked_at: string | null;
-  mobile: string;
-}
-
-export interface Limits {
-  limits: Record<string, string | null> | null;
-  unset: string[];
-}
-
-export interface Reconciliation {
-  runs: { started_at: string; result: string; differences: number }[];
-  unresolved: {
-    kind: string;
-    reference: string;
-    local_value: string | null;
-    exchange_value: string | null;
-  }[];
-}
-
-export interface KillResult {
-  event_id: string;
-  tier: "HALT" | "CANCEL" | "FLATTEN";
-}
-
-export interface Allowlist {
-  pairs: string[];
-  min_quote_volume_24h_idr: string | null;
-  max_spread_pct: string | null;
-  /** On the allowlist and the liquidity filter fully set. */
-  active: boolean;
-}
-
-export interface StrategyParams {
-  configured: boolean;
-  /** Plain strings as stored, or null when never set. */
-  params: Record<string, string> | null;
-  version: string | null;
-  mode: Mode | null;
-  max_history_bars: number;
-}
-
-export interface PaperConfig {
-  configured: boolean;
-  slippage_pct?: string;
-  partial_fill_fraction?: string;
-  maker_fee_pct?: string;
-  taker_fee_pct?: string;
-  tax_pct?: string;
-  clearing_pct?: string;
-  start_equity_idr?: string;
-  /** Simulated fills already recorded; they keep the numbers they were made with. */
-  paper_fills: number;
-}
-
-export type CredentialKind = "indodax" | "telegram";
-
-export interface CredentialItem {
-  kind: CredentialKind;
-  configured: boolean;
-  /** The last four characters: enough to recognise a key, never to use it. */
-  hint?: string;
-  created_at?: string;
-  last_test_at?: string | null;
-  last_test_ok?: boolean | null;
-  /** False when the master key can no longer decrypt what is stored. */
-  readable?: boolean;
-  reason?: string | null;
-}
-
-export interface Credentials {
-  available: boolean;
-  items: CredentialItem[];
-}
+export type Status = Schemas["StatusData"];
+export type OpenOrder = Schemas["OpenOrderModel"];
+export type PendingApproval = Schemas["PendingApprovalModel"];
+export type Dashboard = Schemas["DashboardData"];
+export type Approval = Schemas["ApprovalCardModel"];
+export type Intent = Schemas["IntentItem"];
+export type Gate = Schemas["GateModel"];
+export type Strategy = Schemas["StrategyItem"];
+export type Promotion = Schemas["PromotionData"];
+export type TradingEvent = Schemas["TradingEventItem"];
+export type Limits = Schemas["LimitsData"];
+export type Reconciliation = Schemas["ReconciliationData"];
+export type KillResult = Schemas["KillData"];
+export type Allowlist = Schemas["AllowlistData"];
+export type StrategyParams = Schemas["StrategyParamsData"];
+export type PaperConfig = Schemas["PaperConfigData"];
+export type CredentialKind = Schemas["CredentialItemModel"]["kind"];
+export type CredentialItem = Schemas["CredentialItemModel"];
+export type Credentials = Schemas["CredentialsData"];
+export type PromotionThresholds = Schemas["PromotionThresholdsData"];
+export type PositionItem = Schemas["PositionItemModel"];
+export type OriginPortfolio = Schemas["OriginPortfolioModel"];
+export type BacktestRun = Schemas["BacktestRunItem"];
+export type Portfolio = Schemas["PortfolioData"];
+export type Order = Schemas["OrderItem"];
+export type LedgerEntry = Schemas["LedgerItem"];
+export type AuditEntry = Schemas["AuditItem"];

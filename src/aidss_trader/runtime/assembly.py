@@ -27,6 +27,7 @@ from aidss_trader.killswitch import KillSwitch
 from aidss_trader.notify import Channel, Notifier, TelegramChannel
 from aidss_trader.promotion import Thresholds
 from aidss_trader.runtime.loop import Runtime
+from aidss_trader.runtime.settings_store import get_promotion_thresholds
 
 logger = logging.getLogger("aidss_trader.runtime")
 
@@ -125,9 +126,7 @@ def build_api(
             notifier=notifier or (lambda s: Notifier(s, None)),
             killswitch=lambda s: KillSwitch(s, client),
             submit_approved=runtime.submit_approved,
-            # Promotion thresholds are the owner's numbers (OQ-12) and are not stored yet, so
-            # every one is unset and promotion stays blocked.
-            thresholds=lambda: Thresholds(),
+            thresholds=lambda: _load_thresholds(factory),
             freshness=runtime.freshness,
             # Without the master key no credential can be read or changed; the routes say so.
             credentials=lambda s: CredentialStore(s, fernet) if fernet is not None else None,
@@ -136,6 +135,11 @@ def build_api(
             telegram_send=lambda token, chat, text: TelegramChannel(token, chat).send(text),
         )
     )
+
+
+def _load_thresholds(factory: sessionmaker[Session]) -> Thresholds:
+    with factory() as s:
+        return get_promotion_thresholds(s)
 
 
 def serve_in_thread(app: FastAPI, host: str, port: int) -> threading.Thread:

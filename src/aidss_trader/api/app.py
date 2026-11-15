@@ -20,7 +20,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Generic, Literal, TypeVar
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
@@ -41,10 +41,13 @@ from aidss_trader.credentials.admin import check_account
 from aidss_trader.db.models import (
     ApprovalRow,
     AuditLog,
+    BacktestRunRow,
+    EquitySnapshot,
     Fill,
     LedgerEntry,
     OrderIntentRow,
     OrderRow,
+    PaperEquitySnapshot,
     ReconciliationDifference,
     ReconciliationRun,
     StrategyRow,
@@ -56,19 +59,30 @@ from aidss_trader.killswitch import KillSwitch, KillSwitchRefused
 from aidss_trader.notify import Notifier
 from aidss_trader.paper import CostModel, PaperConfig
 from aidss_trader.promotion import Promotion, PromotionRefused, SuppliedEvidence, Thresholds
-from aidss_trader.runtime.accounting import paper_drawdown_pct
+from aidss_trader.runtime.accounting import (
+    ZERO,
+    daily_loss,
+    drawdown_pct,
+    paper_drawdown_pct,
+    replay_origin,
+)
 from aidss_trader.runtime.settings_store import (
     MAX_HISTORY_BARS,
+    THRESHOLD_FIELDS,
     Allowlist,
     LiquidityFilter,
     PaperSettings,
     get_allowlist,
     get_paper_settings,
+    get_promotion_thresholds,
     get_strategy_params,
     paper_flatters,
     set_allowlist,
     set_paper_settings,
+    set_promotion_thresholds,
     set_strategy_params,
+    threshold_problem,
+    thresholds_loosen,
 )
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 
@@ -194,6 +208,314 @@ class PaperBody(BaseModel):
 
 class LimitsBody(BaseModel):
     limits: dict[str, str | int | None]
+
+
+class PromotionThresholdsBody(BaseModel):
+    min_paper_trades: int | None = None
+    max_paper_drawdown_pct: str | None = None
+    backtest_min_return_pct: str | None = None
+    max_live_capital_idr: str | None = None
+    max_slippage_pct: str | None = None
+
+
+T = TypeVar("T")
+TradingStateLiteral = Literal["RUNNING", "HALTED", "CANCELLING", "FLATTENING"]
+ModeLiteral = Literal["PAPER", "APPROVAL", "AUTO"]
+OriginLiteral = Literal["LIVE", "PAPER", "BACKTEST"]
+
+
+class MetaModel(BaseModel):
+    source: str
+    origin: str
+    as_of: str
+    stale: bool
+
+
+class Envelope(BaseModel, Generic[T]):
+    data: T
+    meta: MetaModel
+
+
+class StatusData(BaseModel):
+    trading_state: TradingStateLiteral
+    unset_limits: list[str]
+    modes: dict[str, ModeLiteral]
+
+
+class OpenOrderModel(BaseModel):
+    pair: str
+    side: Literal["BUY", "SELL"]
+    type: Literal["LIMIT", "MARKET"]
+    state: str
+    client_order_id: str
+
+
+class PendingApprovalModel(BaseModel):
+    intent_identity: str
+    expires_at: str
+
+
+class DashboardData(BaseModel):
+    trading_state: TradingStateLiteral
+    open_orders: list[OpenOrderModel]
+    approvals_pending: list[PendingApprovalModel]
+
+
+class StrategyItem(BaseModel):
+    strategy_id: str
+    version: str
+    mode: ModeLiteral
+    since: str
+
+
+class GateModel(BaseModel):
+    name: str
+    measured: str | None
+    threshold: str | None
+    passed: bool
+    reason: str
+
+
+class PromotionData(BaseModel):
+    mode: ModeLiteral
+    next: ModeLiteral | None
+    gates: list[GateModel]
+
+
+class ApprovalCardModel(BaseModel):
+    state: Literal["AWAITING", "APPROVED", "DENIED", "EXPIRED"]
+    expires_at: str
+    decided_by: str | None
+    reason: str | None
+
+
+class IntentItem(BaseModel):
+    identity: str
+    origin: str
+    pair: str
+    side: Literal["BUY", "SELL"]
+    entry_price: str
+    quantity: str
+    stop_price: str | None
+    risk_amount_idr: str | None
+    state: str
+    created_at: str
+    intent_hash: str
+    approval: ApprovalCardModel | None
+
+
+class OrderItem(BaseModel):
+    origin: str
+    pair: str
+    side: str
+    type: str
+    price: str | None
+    quantity: str
+    executed_qty: str
+    state: str
+    purpose: str
+    submitted_at: str
+
+
+class LedgerItem(BaseModel):
+    at: str
+    origin: str
+    entry_type: str
+    asset: str
+    amount: str
+    reason: str | None
+
+
+class TradingEventItem(BaseModel):
+    id: str
+    kind: str
+    severity: Literal["INFO", "WARN", "CRITICAL"]
+    message: str
+    created_at: str
+    acked_at: str | None
+    mobile: str
+
+
+class LimitsData(BaseModel):
+    limits: dict[str, str | None] | None
+    unset: list[str]
+
+
+class ReconciliationRunItem(BaseModel):
+    started_at: str
+    result: str
+    differences: int
+
+
+class ReconciliationDiffItem(BaseModel):
+    kind: str
+    reference: str
+    local_value: str | None
+    exchange_value: str | None
+
+
+class ReconciliationData(BaseModel):
+    runs: list[ReconciliationRunItem]
+    unresolved: list[ReconciliationDiffItem]
+
+
+class AuditItem(BaseModel):
+    seq: int
+    at: str
+    actor: str
+    action: str
+    subject_type: str | None
+    subject_id: str | None
+
+
+class StepUpData(BaseModel):
+    grant: str
+    valid_for_s: int
+
+
+class ApproveData(BaseModel):
+    state: str
+    sent: bool
+    detail: str | None
+    already_decided: bool
+
+
+class DenyData(BaseModel):
+    state: str
+    already_decided: bool
+
+
+class ModeData(BaseModel):
+    mode: ModeLiteral
+
+
+class KillData(BaseModel):
+    event_id: str
+    tier: Literal["HALT", "CANCEL", "FLATTEN"]
+
+
+class ResumeData(BaseModel):
+    trading_state: TradingStateLiteral
+
+
+class PutLimitsData(BaseModel):
+    version: int
+    unset: list[str]
+
+
+class AllowlistData(BaseModel):
+    pairs: list[str]
+    min_quote_volume_24h_idr: str | None
+    max_spread_pct: str | None
+    active: bool
+
+
+class PutAllowlistData(BaseModel):
+    pairs: list[str]
+    active: bool
+
+
+class StrategyParamsData(BaseModel):
+    configured: bool
+    params: dict[str, str] | None
+    version: str | None
+    mode: ModeLiteral | None
+    max_history_bars: int
+
+
+class PutParametersData(BaseModel):
+    version: str
+    mode: ModeLiteral
+
+
+class CredentialItemModel(BaseModel):
+    kind: Literal["indodax", "telegram"]
+    configured: bool
+    hint: str | None = None
+    created_at: str | None = None
+    last_test_at: str | None = None
+    last_test_ok: bool | None = None
+    readable: bool | None = None
+    reason: str | None = None
+
+
+class CredentialsData(BaseModel):
+    available: bool
+    items: list[CredentialItemModel]
+
+
+class PaperConfigData(BaseModel):
+    configured: bool
+    slippage_pct: str | None = None
+    partial_fill_fraction: str | None = None
+    maker_fee_pct: str | None = None
+    taker_fee_pct: str | None = None
+    tax_pct: str | None = None
+    clearing_pct: str | None = None
+    start_equity_idr: str | None = None
+    paper_fills: int
+
+
+class PutPaperData(BaseModel):
+    configured: bool
+
+
+class AckData(BaseModel):
+    acked: bool
+
+
+class PromotionThresholdsData(BaseModel):
+    thresholds: dict[str, str | int | None]
+    unset: list[str]
+
+
+class PositionItemModel(BaseModel):
+    origin: Literal["LIVE", "PAPER"]
+    pair: str
+    quantity: str
+    avg_cost: str
+    cost_basis_idr: str
+    stop_price: str | None
+    target_price: str | None
+
+
+class OriginPortfolioModel(BaseModel):
+    origin: Literal["LIVE", "PAPER"]
+    configured: bool
+    start_equity_idr: str | None
+    latest_equity_idr: str | None
+    realised_pnl_idr: str
+    daily_loss_idr: str
+    drawdown_pct: str | None
+    trades_closed: int
+    positions: list[PositionItemModel]
+
+
+class BacktestRunItem(BaseModel):
+    id: str
+    origin: Literal["BACKTEST"]
+    strategy_id: str
+    strategy_version: str
+    pair: str
+    timeframe: str
+    candles_used: int
+    trades: int
+    wins: int
+    win_rate_pct: str
+    total_return_pct: str
+    max_drawdown_pct: str
+    profit_factor: str
+    start_equity_idr: str
+    final_equity_idr: str
+    data_fingerprint: str
+    ran_at: str
+    ran_by: str
+
+
+class PortfolioData(BaseModel):
+    live: OriginPortfolioModel
+    paper: OriginPortfolioModel
+    backtests: list[BacktestRunItem]
 
 
 SECURITY_HEADERS = {
@@ -374,11 +696,17 @@ def create_app(ctx: ApiContext) -> FastAPI:
     def envelope(data: Any, origin: str = "LIVE", source: str = "local") -> dict[str, Any]:
         return {"data": data, "meta": _meta(ctx, origin, source)}
 
+    def active_thresholds(s: Session) -> Thresholds:
+        # Stored thresholds take effect when set; otherwise fall back to ctx.thresholds()
+        # (so tests that inject thresholds via ApiContext continue to work seamlessly).
+        stored = get_promotion_thresholds(s)
+        return stored if stored != Thresholds() else ctx.thresholds()
+
     r = PREFIX
 
     # ----------------------------------------------------------------- reads
 
-    @app.get(f"{r}/status")
+    @app.get(f"{r}/status", response_model=Envelope[StatusData])
     def status(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         state = ctx.killswitch(s).state()
         limits = load_risk_limits(s)
@@ -387,7 +715,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             {"trading_state": state, "unset_limits": unset_risk_fields(limits), "modes": modes}
         )
 
-    @app.get(f"{r}/dashboard")
+    @app.get(f"{r}/dashboard", response_model=Envelope[DashboardData])
     def dashboard(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         live = [
             o
@@ -405,7 +733,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             }
         )
 
-    @app.get(f"{r}/strategies")
+    @app.get(f"{r}/strategies", response_model=Envelope[list[StrategyItem]])
     def strategies(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         return envelope(
             [
@@ -415,7 +743,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             origin="PAPER",
         )
 
-    @app.get(f"{r}/strategies/{{strategy_id}}/promotion")
+    @app.get(f"{r}/strategies/{{strategy_id}}/promotion", response_model=Envelope[PromotionData])
     def promotion(
         strategy_id: str, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
     ):
@@ -429,7 +757,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
                 for g in Promotion(s).gates(
                     strategy_id,
                     nxt,
-                    ctx.thresholds(),
+                    active_thresholds(s),
                     SuppliedEvidence(paper_drawdown_pct=paper_drawdown_pct(s, row.since)),
                 )
             ]
@@ -438,7 +766,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         )
         return envelope({"mode": row.mode, "next": nxt, "gates": gates})
 
-    @app.get(f"{r}/intents")
+    @app.get(f"{r}/intents", response_model=Envelope[list[IntentItem]])
     def intents(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         cols = (
             "identity",
@@ -475,7 +803,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             out.append(item)
         return envelope(out)
 
-    @app.get(f"{r}/orders")
+    @app.get(f"{r}/orders", response_model=Envelope[list[OrderItem]])
     def orders(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         cols = (
             "origin",
@@ -498,7 +826,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             ]
         )
 
-    @app.get(f"{r}/ledger")
+    @app.get(f"{r}/ledger", response_model=Envelope[list[LedgerItem]])
     def ledger(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         return envelope(
             [
@@ -507,7 +835,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             ]
         )
 
-    @app.get(f"{r}/events")
+    @app.get(f"{r}/events", response_model=Envelope[list[TradingEventItem]])
     def events(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         cols = ("id", "kind", "severity", "message", "created_at", "acked_at", "mobile")
         return envelope(
@@ -519,13 +847,13 @@ def create_app(ctx: ApiContext) -> FastAPI:
             ]
         )
 
-    @app.get(f"{r}/limits")
+    @app.get(f"{r}/limits", response_model=Envelope[LimitsData])
     def limits(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         cur = load_risk_limits(s)
         data = None if cur is None else {k: _plain_limit(v) for k, v in asdict(cur).items()}
         return envelope({"limits": data, "unset": unset_risk_fields(cur)})  # unset shown as null
 
-    @app.get(f"{r}/reconciliation")
+    @app.get(f"{r}/reconciliation", response_model=Envelope[ReconciliationData])
     def reconciliation(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         runs = s.scalars(
             select(ReconciliationRun).order_by(ReconciliationRun.started_at.desc()).limit(50)
@@ -542,7 +870,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             }
         )
 
-    @app.get(f"{r}/audit")
+    @app.get(f"{r}/audit", response_model=Envelope[list[AuditItem]])
     def audit(_: Principal = Depends(need(perm.READ_AUDIT)), s: Session = Depends(db)):
         cols = ("seq", "at", "actor", "action", "subject_type", "subject_id")
         return envelope(
@@ -570,7 +898,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
 
     # ---------------------------------------------------------------- writes
 
-    @app.post(f"{r}/stepup")
+    @app.post(f"{r}/stepup", response_model=Envelope[StepUpData])
     def stepup(
         body: StepUpBody,
         who: Principal = Depends(need(perm.VIEW)),
@@ -587,7 +915,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         # Approved means it may be sent: the mode on the rebuilt intent is AUTO.
         return intent_from_row(row, mode="AUTO")
 
-    @app.post(f"{r}/intents/{{identity}}/approve")
+    @app.post(f"{r}/intents/{{identity}}/approve", response_model=Envelope[ApproveData])
     def approve(
         identity: str,
         body: DecisionBody,
@@ -621,7 +949,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             }
         )
 
-    @app.post(f"{r}/intents/{{identity}}/deny")
+    @app.post(f"{r}/intents/{{identity}}/deny", response_model=Envelope[DenyData])
     def deny(
         identity: str,
         body: DecisionBody,
@@ -635,7 +963,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(404, "NOT_FOUND", "no_approval", str(exc)) from None
         return envelope({"state": out.state, "already_decided": out.already_decided})
 
-    @app.post(f"{r}/strategies/{{strategy_id}}/promote")
+    @app.post(f"{r}/strategies/{{strategy_id}}/promote", response_model=Envelope[ModeData])
     def promote(
         strategy_id: str,
         body: PromoteBody,
@@ -668,7 +996,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             out = Promotion(s, ctx.notifier(s)).promote(
                 strategy_id,
                 who.user_id,
-                ctx.thresholds(),
+                active_thresholds(s),
                 supplied,
                 body.note,
                 step_up_ok=needs_step,
@@ -677,7 +1005,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(409, "CONFLICT", "promotion_refused", str(exc)) from None
         return envelope({"mode": out.mode})
 
-    @app.post(f"{r}/strategies/{{strategy_id}}/demote")
+    @app.post(f"{r}/strategies/{{strategy_id}}/demote", response_model=Envelope[ModeData])
     def demote(
         strategy_id: str,
         body: DemoteBody,
@@ -693,7 +1021,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(409, "CONFLICT", "demotion_refused", str(exc)) from None
         return envelope({"mode": out.mode})
 
-    @app.post(f"{r}/kill")
+    @app.post(f"{r}/kill", response_model=Envelope[KillData])
     def kill(
         body: KillBody,
         who: Principal = Depends(need(perm.HALT)),
@@ -726,7 +1054,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         )
         return envelope({"event_id": str(event.id), "tier": event.tier})
 
-    @app.post(f"{r}/resume")
+    @app.post(f"{r}/resume", response_model=Envelope[ResumeData])
     def resume(
         body: ResumeBody,
         who: Principal = Depends(need(perm.RESUME)),
@@ -739,7 +1067,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(409, "CONFLICT", "resume_refused", str(exc)) from None
         return envelope({"trading_state": "RUNNING"})
 
-    @app.put(f"{r}/limits")
+    @app.put(f"{r}/limits", response_model=Envelope[PutLimitsData])
     def put_limits(
         body: LimitsBody,
         who: Principal = Depends(need(perm.CONFIGURE_RISK)),
@@ -786,7 +1114,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         ctx.notifier(s).emit("limit_changed", "a risk limit changed", {"version": version})
         return envelope({"version": version, "unset": unset_risk_fields(new)})
 
-    @app.get(f"{r}/allowlist")
+    @app.get(f"{r}/allowlist", response_model=Envelope[AllowlistData])
     def get_allow(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         a = get_allowlist(s)
         return envelope(
@@ -802,7 +1130,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             }
         )
 
-    @app.put(f"{r}/allowlist")
+    @app.put(f"{r}/allowlist", response_model=Envelope[PutAllowlistData])
     def put_allow(
         body: AllowlistBody,
         who: Principal = Depends(need(perm.CONFIGURE_RISK)),
@@ -847,7 +1175,10 @@ def create_app(ctx: ApiContext) -> FastAPI:
             {"pairs": list(new.pairs), "active": new.liquidity.configured and bool(new.pairs)}
         )
 
-    @app.get(f"{r}/strategies/{{strategy_id}}/parameters")
+    @app.get(
+        f"{r}/strategies/{{strategy_id}}/parameters",
+        response_model=Envelope[StrategyParamsData],
+    )
     def get_params(
         strategy_id: str, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
     ):
@@ -866,7 +1197,10 @@ def create_app(ctx: ApiContext) -> FastAPI:
             origin="PAPER",
         )
 
-    @app.put(f"{r}/strategies/{{strategy_id}}/parameters")
+    @app.put(
+        f"{r}/strategies/{{strategy_id}}/parameters",
+        response_model=Envelope[PutParametersData],
+    )
     def put_params(
         strategy_id: str,
         body: ParametersBody,
@@ -962,14 +1296,14 @@ def create_app(ctx: ApiContext) -> FastAPI:
         ok = re.fullmatch(r"\d{5,}:[A-Za-z0-9_-]{20,}", k) and re.fullmatch(r"-?\d+|@\w{5,}", sec)
         return None if ok else "enter the bot token and the chat id"
 
-    @app.get(f"{r}/credentials")
+    @app.get(f"{r}/credentials", response_model=Envelope[CredentialsData])
     def list_credentials(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         store = ctx.credentials(s)
         if store is None:
             return envelope({"available": False, "items": []})
         return envelope({"available": True, "items": [cred_view(store, k) for k in kinds]})
 
-    @app.put(f"{r}/credentials/{{kind}}")
+    @app.put(f"{r}/credentials/{{kind}}", response_model=Envelope[CredentialItemModel])
     def put_credential(
         kind: str,
         body: CredentialBody,
@@ -1009,7 +1343,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         ctx.notifier(s).emit("credential_changed", f"the {kind} credential changed", {"kind": kind})
         return envelope(cred_view(store, kind))
 
-    @app.post(f"{r}/credentials/{{kind}}/test")
+    @app.post(f"{r}/credentials/{{kind}}/test", response_model=Envelope[CredentialItemModel])
     def test_credential(
         kind: str,
         who: Principal = Depends(need(perm.MANAGE_CREDENTIALS)),
@@ -1047,7 +1381,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         s.commit()
         return envelope({**cred_view(store, kind), "reason": reason})
 
-    @app.delete(f"{r}/credentials/{{kind}}")
+    @app.delete(f"{r}/credentials/{{kind}}", response_model=Envelope[CredentialItemModel])
     def delete_credential(
         kind: str,
         who: Principal = Depends(need(perm.MANAGE_CREDENTIALS)),
@@ -1076,7 +1410,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         )
         return envelope({"kind": kind, "configured": False})
 
-    @app.get(f"{r}/paper-config")
+    @app.get(f"{r}/paper-config", response_model=Envelope[PaperConfigData])
     def get_paper(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         ps = get_paper_settings(s)
         history = (
@@ -1102,7 +1436,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             origin="PAPER",
         )
 
-    @app.put(f"{r}/paper-config")
+    @app.put(f"{r}/paper-config", response_model=Envelope[PutPaperData])
     def put_paper(
         body: PaperBody,
         who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
@@ -1142,7 +1476,179 @@ def create_app(ctx: ApiContext) -> FastAPI:
         s.commit()
         return envelope({"configured": True}, origin="PAPER")
 
-    @app.post(f"{r}/events/{{event_id}}/ack")
+    @app.get(f"{r}/promotion-thresholds", response_model=Envelope[PromotionThresholdsData])
+    def get_thresholds(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        cur = get_promotion_thresholds(s)
+        raw = {k: _plain_limit(getattr(cur, k)) for k in THRESHOLD_FIELDS}
+        if cur.min_paper_trades is not None:
+            raw["min_paper_trades"] = cur.min_paper_trades
+        unset = [k for k in THRESHOLD_FIELDS if getattr(cur, k) is None]
+        return envelope({"thresholds": raw, "unset": unset})
+
+    @app.put(f"{r}/promotion-thresholds", response_model=Envelope[PromotionThresholdsData])
+    def put_thresholds(
+        body: PromotionThresholdsBody,
+        who: Principal = Depends(need(perm.PROMOTE)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+        x_step_up: str | None = Header(default=None),
+    ):
+        from decimal import Decimal, InvalidOperation
+
+        old = get_promotion_thresholds(s)
+
+        def _parse_dec(name: str, val: str | None) -> Decimal | None:
+            if val is None or val == "":
+                return None
+            try:
+                parsed = Decimal(str(val))
+            except (InvalidOperation, ValueError):
+                raise ApiError(400, "VALIDATION", "bad_value", f"bad value for {name}") from None
+            if (problem := threshold_problem(name, parsed)) is not None:
+                raise ApiError(400, "VALIDATION", "bad_value", f"{name}: {problem}")
+            return parsed
+
+        if body.min_paper_trades is not None:
+            prob = threshold_problem("min_paper_trades", body.min_paper_trades)
+            if prob is not None:
+                raise ApiError(400, "VALIDATION", "bad_value", f"min_paper_trades: {prob}")
+        new = Thresholds(
+            min_paper_trades=body.min_paper_trades,
+            max_paper_drawdown_pct=_parse_dec(
+                "max_paper_drawdown_pct", body.max_paper_drawdown_pct
+            ),
+            backtest_min_return_pct=_parse_dec(
+                "backtest_min_return_pct", body.backtest_min_return_pct
+            ),
+            max_live_capital_idr=_parse_dec("max_live_capital_idr", body.max_live_capital_idr),
+            max_slippage_pct=_parse_dec("max_slippage_pct", body.max_slippage_pct),
+        )
+        if thresholds_loosen(old, new):
+            step_up(s, who, "RAISE_LIMIT", x_step_up)
+        set_promotion_thresholds(s, new, by=who.user_id)
+        s.commit()
+        ctx.notifier(s).emit(
+            "limit_changed",
+            "a promotion threshold changed",
+            {"actor": who.user_id},
+        )
+        raw = {k: _plain_limit(getattr(new, k)) for k in THRESHOLD_FIELDS}
+        if new.min_paper_trades is not None:
+            raw["min_paper_trades"] = new.min_paper_trades
+        unset = [k for k in THRESHOLD_FIELDS if getattr(new, k) is None]
+        return envelope({"thresholds": raw, "unset": unset})
+
+    def _origin_portfolio(s: Session, origin: Literal["LIVE", "PAPER"]) -> dict[str, Any]:
+        positions, events = replay_origin(s, origin)
+        realised = sum((e.pnl for e in events), ZERO)
+        as_of, _ = ctx.freshness()
+        loss_today = daily_loss(events, as_of)
+        pos_items = []
+        for pair in sorted(positions):
+            pos = positions[pair]
+            latest_intent = s.scalar(
+                select(OrderIntentRow)
+                .where(
+                    OrderIntentRow.origin == origin,
+                    OrderIntentRow.pair == pair,
+                    OrderIntentRow.side == "BUY",
+                )
+                .order_by(OrderIntentRow.created_at.desc())
+                .limit(1)
+            )
+            snap = (
+                latest_intent.rule_snapshot
+                if latest_intent and isinstance(latest_intent.rule_snapshot, dict)
+                else {}
+            )
+            target = snap.get("target_price")
+            pos_items.append(
+                {
+                    "origin": origin,
+                    "pair": pair,
+                    "quantity": _cell(pos.quantity),
+                    "avg_cost": _cell(pos.avg_cost),
+                    "cost_basis_idr": _cell(pos.quantity * pos.avg_cost),
+                    "stop_price": (
+                        None
+                        if latest_intent is None or latest_intent.stop_price is None
+                        else _cell(latest_intent.stop_price)
+                    ),
+                    "target_price": None if target is None else str(target),
+                }
+            )
+        if origin == "LIVE":
+            latest_eq = s.scalar(
+                select(EquitySnapshot.equity_idr).order_by(EquitySnapshot.at.desc()).limit(1)
+            )
+            dd = None if latest_eq is None else drawdown_pct(s, latest_eq)
+            return {
+                "origin": "LIVE",
+                "configured": True,
+                "start_equity_idr": None,
+                "latest_equity_idr": None if latest_eq is None else _cell(latest_eq),
+                "realised_pnl_idr": _cell(realised),
+                "daily_loss_idr": _cell(loss_today),
+                "drawdown_pct": None if dd is None else _cell(dd),
+                "trades_closed": len(events),
+                "positions": pos_items,
+            }
+        ps = get_paper_settings(s)
+        latest_peq = s.scalar(
+            select(PaperEquitySnapshot.equity_idr)
+            .order_by(PaperEquitySnapshot.at.desc())
+            .limit(1)
+        )
+        # With no snapshot yet, show cost-marked paper equity if paper is configured.
+        if latest_peq is None and ps is not None:
+            latest_peq = ps.start_equity_idr + realised
+        earliest_at = datetime(1970, 1, 1, tzinfo=UTC)
+        pdd = paper_drawdown_pct(s, earliest_at)
+        return {
+            "origin": "PAPER",
+            "configured": ps is not None,
+            "start_equity_idr": None if ps is None else _cell(ps.start_equity_idr),
+            "latest_equity_idr": None if latest_peq is None else _cell(latest_peq),
+            "realised_pnl_idr": _cell(realised),
+            "daily_loss_idr": _cell(loss_today),
+            "drawdown_pct": None if pdd is None else _cell(pdd),
+            "trades_closed": len(events),
+            "positions": pos_items,
+        }
+
+    @app.get(f"{r}/portfolio", response_model=Envelope[PortfolioData])
+    def portfolio(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        bt_cols = (
+            "id",
+            "origin",
+            "strategy_id",
+            "strategy_version",
+            "pair",
+            "timeframe",
+            "candles_used",
+            "trades",
+            "wins",
+            "win_rate_pct",
+            "total_return_pct",
+            "max_drawdown_pct",
+            "profit_factor",
+            "start_equity_idr",
+            "final_equity_idr",
+            "data_fingerprint",
+            "ran_at",
+            "ran_by",
+        )
+        bt_query = select(BacktestRunRow).order_by(BacktestRunRow.ran_at.desc()).limit(50)
+        bt_rows = [_row(b, bt_cols) for b in s.scalars(bt_query)]
+        return envelope(
+            {
+                "live": _origin_portfolio(s, "LIVE"),
+                "paper": _origin_portfolio(s, "PAPER"),
+                "backtests": bt_rows,
+            }
+        )
+
+    @app.post(f"{r}/events/{{event_id}}/ack", response_model=Envelope[AckData])
     def ack(
         event_id: str,
         who: Principal = Depends(need(perm.VIEW)),

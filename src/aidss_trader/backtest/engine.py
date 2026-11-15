@@ -22,12 +22,17 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from aidss_trader.audit import AuditLogger
 from aidss_trader.config.limits import RiskLimits
 from aidss_trader.connector.types import Candle
+from aidss_trader.db.models import BacktestRunRow
 from aidss_trader.intents.builder import build_entry_intent
 from aidss_trader.ledger.position import Position, apply_fill
 from aidss_trader.market_data.pairs import PairRules
@@ -204,3 +209,89 @@ def _metrics(result: BacktestResult, start: Decimal) -> dict[str, Decimal | int]
         "max_drawdown_pct": max_dd,
         "profit_factor": (sum(wins, ZERO) / gross_loss) if gross_loss > 0 else Decimal(-1),
     }
+
+
+def _json_safe(value: object) -> object:
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def record_backtest(
+    session: Session,
+    result: BacktestResult,
+    config: BacktestConfig,
+    *,
+    strategy_id: str | None = None,
+    timeframe: str = "4H",
+    by: str = "system",
+    now: datetime | None = None,
+) -> BacktestRunRow:
+    """Persist a reproducible backtest run as promotion-gate evidence (labelled BACKTEST)."""
+    at = now or datetime.now(UTC)
+    sid = strategy_id or getattr(config.strategy, "strategy_id", "ema_adx")
+    parameters = _json_safe(asdict(config.strategy.params))
+    cost_model = _json_safe(asdict(config.paper))
+    assert isinstance(parameters, dict)
+    assert isinstance(cost_model, dict)
+    row = BacktestRunRow(
+        origin=result.origin,
+        strategy_id=sid,
+        strategy_version=config.strategy.version_id(),
+        pair=config.pair,
+        timeframe=timeframe,
+        candles_used=result.candles_used,
+        trades=int(result.metrics.get("trades", 0)),
+        wins=int(result.metrics.get("wins", 0)),
+        win_rate_pct=Decimal(str(result.metrics.get("win_rate_pct", ZERO))),
+        total_return_pct=Decimal(str(result.metrics.get("total_return_pct", ZERO))),
+        max_drawdown_pct=Decimal(str(result.metrics.get("max_drawdown_pct", ZERO))),
+        profit_factor=Decimal(str(result.metrics.get("profit_factor", Decimal(-1)))),
+        start_equity_idr=config.start_equity_idr,
+        final_equity_idr=result.final_equity,
+        cost_model=cost_model,
+        parameters=parameters,
+        data_fingerprint=result.data_fingerprint,
+        ran_at=at,
+        ran_by=by,
+    )
+    session.add(row)
+    session.flush()
+    AuditLogger(session).record(
+        actor=by,
+        action="backtest.recorded",
+        subject_type="backtest_run",
+        subject_id=str(row.id),
+        after={
+            "origin": row.origin,
+            "strategy_id": row.strategy_id,
+            "strategy_version": row.strategy_version,
+            "pair": row.pair,
+            "total_return_pct": str(row.total_return_pct),
+            "trades": row.trades,
+            "data_fingerprint": row.data_fingerprint,
+        },
+    )
+    session.commit()
+    return row
+
+
+def latest_backtest_return_pct(
+    session: Session, strategy_id: str, strategy_version: str
+) -> Decimal | None:
+    """Return the latest stored backtest total_return_pct for the given strategy & version."""
+    row = session.scalar(
+        select(BacktestRunRow)
+        .where(
+            BacktestRunRow.strategy_id == strategy_id,
+            BacktestRunRow.strategy_version == strategy_version,
+        )
+        .order_by(BacktestRunRow.ran_at.desc())
+        .limit(1)
+    )
+    return None if row is None else Decimal(str(row.total_return_pct))
+

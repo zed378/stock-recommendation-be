@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { idempotencyKey, traderApi, unwrap, TraderError } from "@/trader/client";
-import type { CredentialKind, KillResult } from "@/trader/types";
+import type { CredentialKind, KillResult, PromotionThresholds } from "@/trader/types";
 
 /**
  * What the API requires the confirmation field to say, word for word.
@@ -356,3 +356,70 @@ export function useRemoveCredential() {
     onSettled: () => void refresh(),
   });
 }
+
+export interface PromotionThresholdsBodyValues {
+  min_paper_trades: number | null;
+  max_paper_drawdown_pct: string | null;
+  backtest_min_return_pct: string | null;
+  max_live_capital_idr: string | null;
+  max_slippage_pct: string | null;
+}
+
+export function useSaveThresholds() {
+  const refresh = useAfterMutation();
+  return useMutation<
+    PromotionThresholds,
+    TraderError,
+    { values: PromotionThresholdsBodyValues; stepUp?: string }
+  >({
+    mutationFn: async ({ values, stepUp }) => {
+      const out = await unwrap<PromotionThresholds>(
+        traderApi.PUT("/trader/v1/promotion-thresholds", {
+          params: {
+            header: {
+              "Idempotency-Key": idempotencyKey(),
+              ...(stepUp ? { "x-step-up": stepUp } : {}),
+            },
+          },
+          body: values,
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export function countCsvDataRows(csv: string): number {
+  const lines = csv
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => line.length > 0);
+  return Math.max(0, lines.length - 1);
+}
+
+export async function exportTraderCsv(
+  kind: "ledger" | "audit",
+  start: string,
+  end: string,
+): Promise<{ csv: string; rowCount: number; headerCount: number }> {
+  const result = await traderApi.GET("/trader/v1/export", {
+    params: { query: { kind, start, end } },
+    parseAs: "text",
+  });
+  if (!result.response.ok || typeof result.data !== "string") {
+    throw new TraderError(
+      `Export failed (${result.response.status}).`,
+      result.response.status === 403 ? "FORBIDDEN" : "UNKNOWN",
+      null,
+      null,
+      result.response.status,
+    );
+  }
+  const csv = result.data;
+  const dataRows = countCsvDataRows(csv);
+  const rawHeader = result.response.headers.get("X-Row-Count");
+  const headerCount = rawHeader !== null && /^\d+$/.test(rawHeader) ? Number(rawHeader) : dataRows;
+  return { csv, rowCount: dataRows, headerCount };
+}
+

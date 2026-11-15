@@ -15,7 +15,8 @@ import {
   type PaperField as Field,
   type PaperName as Name,
 } from "@/trader/validators";
-import type { PaperConfig } from "@/trader/types";
+import { OriginPortfolioBlock } from "@/pages/Trader";
+import type { PaperConfig, Portfolio } from "@/trader/types";
 
 /**
  * The assumptions behind every simulated trade.
@@ -34,12 +35,27 @@ export function TraderPaper() {
     () => traderApi.GET("/trader/v1/paper-config"),
     { interval: false },
   );
+  const portfolio = useTraderQuery<Portfolio>(["portfolio"], () =>
+    traderApi.GET("/trader/v1/portfolio"),
+  );
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-lg font-semibold text-ink">{t("trader.paper.title")}</h1>
         <p className="mt-1 max-w-prose text-sm text-muted">{t("trader.paper.intro")}</p>
       </header>
+      <Card
+        title={
+          <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
+            {t("trader.portfolio.paperTitle")}
+            <OriginBadge origin="PAPER" />
+          </h2>
+        }
+      >
+        <PanelBody query={portfolio}>
+          {(data) => <OriginPortfolioBlock data={data.paper} />}
+        </PanelBody>
+      </Card>
       <Card
         title={
           <h2 className="flex items-center gap-2 text-sm font-medium text-ink">

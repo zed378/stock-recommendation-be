@@ -297,6 +297,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Portfolio */
+        get: operations["portfolio_trader_v1_portfolio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/promotion-thresholds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Thresholds */
+        get: operations["get_thresholds_trader_v1_promotion_thresholds_get"];
+        /** Put Thresholds */
+        put: operations["put_thresholds_trader_v1_promotion_thresholds_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/reconciliation": {
         parameters: {
             query?: never;
@@ -455,6 +490,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AckData */
+        AckData: {
+            /** Acked */
+            acked: boolean;
+        };
         /** AllowlistBody */
         AllowlistBody: {
             /** Max Spread Pct */
@@ -463,6 +503,99 @@ export interface components {
             min_quote_volume_24h_idr?: string | null;
             /** Pairs */
             pairs: string[];
+        };
+        /** AllowlistData */
+        AllowlistData: {
+            /** Active */
+            active: boolean;
+            /** Max Spread Pct */
+            max_spread_pct: string | null;
+            /** Min Quote Volume 24H Idr */
+            min_quote_volume_24h_idr: string | null;
+            /** Pairs */
+            pairs: string[];
+        };
+        /** ApprovalCardModel */
+        ApprovalCardModel: {
+            /** Decided By */
+            decided_by: string | null;
+            /** Expires At */
+            expires_at: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "AWAITING" | "APPROVED" | "DENIED" | "EXPIRED";
+        };
+        /** ApproveData */
+        ApproveData: {
+            /** Already Decided */
+            already_decided: boolean;
+            /** Detail */
+            detail: string | null;
+            /** Sent */
+            sent: boolean;
+            /** State */
+            state: string;
+        };
+        /** AuditItem */
+        AuditItem: {
+            /** Action */
+            action: string;
+            /** Actor */
+            actor: string;
+            /** At */
+            at: string;
+            /** Seq */
+            seq: number;
+            /** Subject Id */
+            subject_id: string | null;
+            /** Subject Type */
+            subject_type: string | null;
+        };
+        /** BacktestRunItem */
+        BacktestRunItem: {
+            /** Candles Used */
+            candles_used: number;
+            /** Data Fingerprint */
+            data_fingerprint: string;
+            /** Final Equity Idr */
+            final_equity_idr: string;
+            /** Id */
+            id: string;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: string;
+            /**
+             * Origin
+             * @constant
+             */
+            origin: "BACKTEST";
+            /** Pair */
+            pair: string;
+            /** Profit Factor */
+            profit_factor: string;
+            /** Ran At */
+            ran_at: string;
+            /** Ran By */
+            ran_by: string;
+            /** Start Equity Idr */
+            start_equity_idr: string;
+            /** Strategy Id */
+            strategy_id: string;
+            /** Strategy Version */
+            strategy_version: string;
+            /** Timeframe */
+            timeframe: string;
+            /** Total Return Pct */
+            total_return_pct: string;
+            /** Trades */
+            trades: number;
+            /** Win Rate Pct */
+            win_rate_pct: string;
+            /** Wins */
+            wins: number;
         };
         /**
          * CredentialBody
@@ -476,6 +609,47 @@ export interface components {
              * @default
              */
             secret: string;
+        };
+        /** CredentialItemModel */
+        CredentialItemModel: {
+            /** Configured */
+            configured: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Hint */
+            hint?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "indodax" | "telegram";
+            /** Last Test At */
+            last_test_at?: string | null;
+            /** Last Test Ok */
+            last_test_ok?: boolean | null;
+            /** Readable */
+            readable?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** CredentialsData */
+        CredentialsData: {
+            /** Available */
+            available: boolean;
+            /** Items */
+            items: components["schemas"]["CredentialItemModel"][];
+        };
+        /** DashboardData */
+        DashboardData: {
+            /** Approvals Pending */
+            approvals_pending: components["schemas"]["PendingApprovalModel"][];
+            /** Open Orders */
+            open_orders: components["schemas"]["OpenOrderModel"][];
+            /**
+             * Trading State
+             * @enum {string}
+             */
+            trading_state: "RUNNING" | "HALTED" | "CANCELLING" | "FLATTENING";
         };
         /** DecisionBody */
         DecisionBody: {
@@ -491,10 +665,210 @@ export interface components {
             /** To Mode */
             to_mode: string;
         };
+        /** DenyData */
+        DenyData: {
+            /** Already Decided */
+            already_decided: boolean;
+            /** State */
+            state: string;
+        };
+        /** Envelope[AckData] */
+        Envelope_AckData_: {
+            data: components["schemas"]["AckData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[AllowlistData] */
+        Envelope_AllowlistData_: {
+            data: components["schemas"]["AllowlistData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[ApproveData] */
+        Envelope_ApproveData_: {
+            data: components["schemas"]["ApproveData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[CredentialItemModel] */
+        Envelope_CredentialItemModel_: {
+            data: components["schemas"]["CredentialItemModel"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[CredentialsData] */
+        Envelope_CredentialsData_: {
+            data: components["schemas"]["CredentialsData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[DashboardData] */
+        Envelope_DashboardData_: {
+            data: components["schemas"]["DashboardData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[DenyData] */
+        Envelope_DenyData_: {
+            data: components["schemas"]["DenyData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[KillData] */
+        Envelope_KillData_: {
+            data: components["schemas"]["KillData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[LimitsData] */
+        Envelope_LimitsData_: {
+            data: components["schemas"]["LimitsData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[ModeData] */
+        Envelope_ModeData_: {
+            data: components["schemas"]["ModeData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PaperConfigData] */
+        Envelope_PaperConfigData_: {
+            data: components["schemas"]["PaperConfigData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PortfolioData] */
+        Envelope_PortfolioData_: {
+            data: components["schemas"]["PortfolioData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PromotionData] */
+        Envelope_PromotionData_: {
+            data: components["schemas"]["PromotionData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PromotionThresholdsData] */
+        Envelope_PromotionThresholdsData_: {
+            data: components["schemas"]["PromotionThresholdsData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PutAllowlistData] */
+        Envelope_PutAllowlistData_: {
+            data: components["schemas"]["PutAllowlistData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PutLimitsData] */
+        Envelope_PutLimitsData_: {
+            data: components["schemas"]["PutLimitsData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PutPaperData] */
+        Envelope_PutPaperData_: {
+            data: components["schemas"]["PutPaperData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PutParametersData] */
+        Envelope_PutParametersData_: {
+            data: components["schemas"]["PutParametersData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[ReconciliationData] */
+        Envelope_ReconciliationData_: {
+            data: components["schemas"]["ReconciliationData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[ResumeData] */
+        Envelope_ResumeData_: {
+            data: components["schemas"]["ResumeData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[StatusData] */
+        Envelope_StatusData_: {
+            data: components["schemas"]["StatusData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[StepUpData] */
+        Envelope_StepUpData_: {
+            data: components["schemas"]["StepUpData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[StrategyParamsData] */
+        Envelope_StrategyParamsData_: {
+            data: components["schemas"]["StrategyParamsData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[AuditItem]] */
+        Envelope_list_AuditItem__: {
+            /** Data */
+            data: components["schemas"]["AuditItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[IntentItem]] */
+        Envelope_list_IntentItem__: {
+            /** Data */
+            data: components["schemas"]["IntentItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[LedgerItem]] */
+        Envelope_list_LedgerItem__: {
+            /** Data */
+            data: components["schemas"]["LedgerItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[OrderItem]] */
+        Envelope_list_OrderItem__: {
+            /** Data */
+            data: components["schemas"]["OrderItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[StrategyItem]] */
+        Envelope_list_StrategyItem__: {
+            /** Data */
+            data: components["schemas"]["StrategyItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[TradingEventItem]] */
+        Envelope_list_TradingEventItem__: {
+            /** Data */
+            data: components["schemas"]["TradingEventItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** GateModel */
+        GateModel: {
+            /** Measured */
+            measured: string | null;
+            /** Name */
+            name: string;
+            /** Passed */
+            passed: boolean;
+            /** Reason */
+            reason: string;
+            /** Threshold */
+            threshold: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IntentItem */
+        IntentItem: {
+            approval: components["schemas"]["ApprovalCardModel"] | null;
+            /** Created At */
+            created_at: string;
+            /** Entry Price */
+            entry_price: string;
+            /** Identity */
+            identity: string;
+            /** Intent Hash */
+            intent_hash: string;
+            /** Origin */
+            origin: string;
+            /** Pair */
+            pair: string;
+            /** Quantity */
+            quantity: string;
+            /** Risk Amount Idr */
+            risk_amount_idr: string | null;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "BUY" | "SELL";
+            /** State */
+            state: string;
+            /** Stop Price */
+            stop_price: string | null;
         };
         /** KillBody */
         KillBody: {
@@ -503,12 +877,131 @@ export interface components {
             /** Tier */
             tier: string;
         };
+        /** KillData */
+        KillData: {
+            /** Event Id */
+            event_id: string;
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "HALT" | "CANCEL" | "FLATTEN";
+        };
+        /** LedgerItem */
+        LedgerItem: {
+            /** Amount */
+            amount: string;
+            /** Asset */
+            asset: string;
+            /** At */
+            at: string;
+            /** Entry Type */
+            entry_type: string;
+            /** Origin */
+            origin: string;
+            /** Reason */
+            reason: string | null;
+        };
         /** LimitsBody */
         LimitsBody: {
             /** Limits */
             limits: {
                 [key: string]: string | number | null;
             };
+        };
+        /** LimitsData */
+        LimitsData: {
+            /** Limits */
+            limits: {
+                [key: string]: string | null;
+            } | null;
+            /** Unset */
+            unset: string[];
+        };
+        /** MetaModel */
+        MetaModel: {
+            /** As Of */
+            as_of: string;
+            /** Origin */
+            origin: string;
+            /** Source */
+            source: string;
+            /** Stale */
+            stale: boolean;
+        };
+        /** ModeData */
+        ModeData: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "PAPER" | "APPROVAL" | "AUTO";
+        };
+        /** OpenOrderModel */
+        OpenOrderModel: {
+            /** Client Order Id */
+            client_order_id: string;
+            /** Pair */
+            pair: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "BUY" | "SELL";
+            /** State */
+            state: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "LIMIT" | "MARKET";
+        };
+        /** OrderItem */
+        OrderItem: {
+            /** Executed Qty */
+            executed_qty: string;
+            /** Origin */
+            origin: string;
+            /** Pair */
+            pair: string;
+            /** Price */
+            price: string | null;
+            /** Purpose */
+            purpose: string;
+            /** Quantity */
+            quantity: string;
+            /** Side */
+            side: string;
+            /** State */
+            state: string;
+            /** Submitted At */
+            submitted_at: string;
+            /** Type */
+            type: string;
+        };
+        /** OriginPortfolioModel */
+        OriginPortfolioModel: {
+            /** Configured */
+            configured: boolean;
+            /** Daily Loss Idr */
+            daily_loss_idr: string;
+            /** Drawdown Pct */
+            drawdown_pct: string | null;
+            /** Latest Equity Idr */
+            latest_equity_idr: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "LIVE" | "PAPER";
+            /** Positions */
+            positions: components["schemas"]["PositionItemModel"][];
+            /** Realised Pnl Idr */
+            realised_pnl_idr: string;
+            /** Start Equity Idr */
+            start_equity_idr: string | null;
+            /** Trades Closed */
+            trades_closed: number;
         };
         /** PaperBody */
         PaperBody: {
@@ -527,6 +1020,27 @@ export interface components {
             /** Tax Pct */
             tax_pct: string;
         };
+        /** PaperConfigData */
+        PaperConfigData: {
+            /** Clearing Pct */
+            clearing_pct?: string | null;
+            /** Configured */
+            configured: boolean;
+            /** Maker Fee Pct */
+            maker_fee_pct?: string | null;
+            /** Paper Fills */
+            paper_fills: number;
+            /** Partial Fill Fraction */
+            partial_fill_fraction?: string | null;
+            /** Slippage Pct */
+            slippage_pct?: string | null;
+            /** Start Equity Idr */
+            start_equity_idr?: string | null;
+            /** Taker Fee Pct */
+            taker_fee_pct?: string | null;
+            /** Tax Pct */
+            tax_pct?: string | null;
+        };
         /** ParametersBody */
         ParametersBody: {
             /** Adx Period */
@@ -544,6 +1058,40 @@ export interface components {
             /** Ema Slow */
             ema_slow: number;
         };
+        /** PendingApprovalModel */
+        PendingApprovalModel: {
+            /** Expires At */
+            expires_at: string;
+            /** Intent Identity */
+            intent_identity: string;
+        };
+        /** PortfolioData */
+        PortfolioData: {
+            /** Backtests */
+            backtests: components["schemas"]["BacktestRunItem"][];
+            live: components["schemas"]["OriginPortfolioModel"];
+            paper: components["schemas"]["OriginPortfolioModel"];
+        };
+        /** PositionItemModel */
+        PositionItemModel: {
+            /** Avg Cost */
+            avg_cost: string;
+            /** Cost Basis Idr */
+            cost_basis_idr: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "LIVE" | "PAPER";
+            /** Pair */
+            pair: string;
+            /** Quantity */
+            quantity: string;
+            /** Stop Price */
+            stop_price: string | null;
+            /** Target Price */
+            target_price: string | null;
+        };
         /** PromoteBody */
         PromoteBody: {
             /** Backtest Return Pct */
@@ -557,10 +1105,122 @@ export interface components {
             /** Slippage Vs Paper Pct */
             slippage_vs_paper_pct?: string | null;
         };
+        /** PromotionData */
+        PromotionData: {
+            /** Gates */
+            gates: components["schemas"]["GateModel"][];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "PAPER" | "APPROVAL" | "AUTO";
+            /** Next */
+            next: ("PAPER" | "APPROVAL" | "AUTO") | null;
+        };
+        /** PromotionThresholdsBody */
+        PromotionThresholdsBody: {
+            /** Backtest Min Return Pct */
+            backtest_min_return_pct?: string | null;
+            /** Max Live Capital Idr */
+            max_live_capital_idr?: string | null;
+            /** Max Paper Drawdown Pct */
+            max_paper_drawdown_pct?: string | null;
+            /** Max Slippage Pct */
+            max_slippage_pct?: string | null;
+            /** Min Paper Trades */
+            min_paper_trades?: number | null;
+        };
+        /** PromotionThresholdsData */
+        PromotionThresholdsData: {
+            /** Thresholds */
+            thresholds: {
+                [key: string]: string | number | null;
+            };
+            /** Unset */
+            unset: string[];
+        };
+        /** PutAllowlistData */
+        PutAllowlistData: {
+            /** Active */
+            active: boolean;
+            /** Pairs */
+            pairs: string[];
+        };
+        /** PutLimitsData */
+        PutLimitsData: {
+            /** Unset */
+            unset: string[];
+            /** Version */
+            version: number;
+        };
+        /** PutPaperData */
+        PutPaperData: {
+            /** Configured */
+            configured: boolean;
+        };
+        /** PutParametersData */
+        PutParametersData: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "PAPER" | "APPROVAL" | "AUTO";
+            /** Version */
+            version: string;
+        };
+        /** ReconciliationData */
+        ReconciliationData: {
+            /** Runs */
+            runs: components["schemas"]["ReconciliationRunItem"][];
+            /** Unresolved */
+            unresolved: components["schemas"]["ReconciliationDiffItem"][];
+        };
+        /** ReconciliationDiffItem */
+        ReconciliationDiffItem: {
+            /** Exchange Value */
+            exchange_value: string | null;
+            /** Kind */
+            kind: string;
+            /** Local Value */
+            local_value: string | null;
+            /** Reference */
+            reference: string;
+        };
+        /** ReconciliationRunItem */
+        ReconciliationRunItem: {
+            /** Differences */
+            differences: number;
+            /** Result */
+            result: string;
+            /** Started At */
+            started_at: string;
+        };
         /** ResumeBody */
         ResumeBody: {
             /** Note */
             note: string;
+        };
+        /** ResumeData */
+        ResumeData: {
+            /**
+             * Trading State
+             * @enum {string}
+             */
+            trading_state: "RUNNING" | "HALTED" | "CANCELLING" | "FLATTENING";
+        };
+        /** StatusData */
+        StatusData: {
+            /** Modes */
+            modes: {
+                [key: string]: "PAPER" | "APPROVAL" | "AUTO";
+            };
+            /**
+             * Trading State
+             * @enum {string}
+             */
+            trading_state: "RUNNING" | "HALTED" | "CANCELLING" | "FLATTENING";
+            /** Unset Limits */
+            unset_limits: string[];
         };
         /** StepUpBody */
         StepUpBody: {
@@ -570,6 +1230,62 @@ export interface components {
             password: string;
             /** Scope */
             scope: string;
+        };
+        /** StepUpData */
+        StepUpData: {
+            /** Grant */
+            grant: string;
+            /** Valid For S */
+            valid_for_s: number;
+        };
+        /** StrategyItem */
+        StrategyItem: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "PAPER" | "APPROVAL" | "AUTO";
+            /** Since */
+            since: string;
+            /** Strategy Id */
+            strategy_id: string;
+            /** Version */
+            version: string;
+        };
+        /** StrategyParamsData */
+        StrategyParamsData: {
+            /** Configured */
+            configured: boolean;
+            /** Max History Bars */
+            max_history_bars: number;
+            /** Mode */
+            mode: ("PAPER" | "APPROVAL" | "AUTO") | null;
+            /** Params */
+            params: {
+                [key: string]: string;
+            } | null;
+            /** Version */
+            version: string | null;
+        };
+        /** TradingEventItem */
+        TradingEventItem: {
+            /** Acked At */
+            acked_at: string | null;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Message */
+            message: string;
+            /** Mobile */
+            mobile: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "INFO" | "WARN" | "CRITICAL";
         };
         /** ValidationError */
         ValidationError: {
@@ -610,7 +1326,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_AllowlistData_"];
                 };
             };
             /** @description Validation Error */
@@ -647,7 +1363,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PutAllowlistData_"];
                 };
             };
             /** @description Validation Error */
@@ -678,7 +1394,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_list_AuditItem__"];
                 };
             };
             /** @description Validation Error */
@@ -709,7 +1425,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_CredentialsData_"];
                 };
             };
             /** @description Validation Error */
@@ -748,7 +1464,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_CredentialItemModel_"];
                 };
             };
             /** @description Validation Error */
@@ -783,7 +1499,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_CredentialItemModel_"];
                 };
             };
             /** @description Validation Error */
@@ -817,7 +1533,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_CredentialItemModel_"];
                 };
             };
             /** @description Validation Error */
@@ -848,7 +1564,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_DashboardData_"];
                 };
             };
             /** @description Validation Error */
@@ -879,7 +1595,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_list_TradingEventItem__"];
                 };
             };
             /** @description Validation Error */
@@ -913,7 +1629,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_AckData_"];
                 };
             };
             /** @description Validation Error */
@@ -979,7 +1695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_list_IntentItem__"];
                 };
             };
             /** @description Validation Error */
@@ -1017,7 +1733,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_ApproveData_"];
                 };
             };
             /** @description Validation Error */
@@ -1055,7 +1771,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_DenyData_"];
                 };
             };
             /** @description Validation Error */
@@ -1092,7 +1808,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_KillData_"];
                 };
             };
             /** @description Validation Error */
@@ -1123,7 +1839,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_list_LedgerItem__"];
                 };
             };
             /** @description Validation Error */
@@ -1154,7 +1870,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_LimitsData_"];
                 };
             };
             /** @description Validation Error */
@@ -1191,7 +1907,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PutLimitsData_"];
                 };
             };
             /** @description Validation Error */
@@ -1222,7 +1938,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_list_OrderItem__"];
                 };
             };
             /** @description Validation Error */
@@ -1253,7 +1969,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PaperConfigData_"];
                 };
             };
             /** @description Validation Error */
@@ -1290,7 +2006,106 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PutPaperData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portfolio_trader_v1_portfolio_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PortfolioData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thresholds_trader_v1_promotion_thresholds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PromotionThresholdsData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_thresholds_trader_v1_promotion_thresholds_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-step-up"?: string | null;
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromotionThresholdsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PromotionThresholdsData_"];
                 };
             };
             /** @description Validation Error */
@@ -1321,7 +2136,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_ReconciliationData_"];
                 };
             };
             /** @description Validation Error */
@@ -1357,7 +2172,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_ResumeData_"];
                 };
             };
             /** @description Validation Error */
@@ -1388,7 +2203,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_StatusData_"];
                 };
             };
             /** @description Validation Error */
@@ -1424,7 +2239,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_StepUpData_"];
                 };
             };
             /** @description Validation Error */
@@ -1455,7 +2270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_list_StrategyItem__"];
                 };
             };
             /** @description Validation Error */
@@ -1493,7 +2308,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_ModeData_"];
                 };
             };
             /** @description Validation Error */
@@ -1526,7 +2341,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_StrategyParamsData_"];
                 };
             };
             /** @description Validation Error */
@@ -1564,7 +2379,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PutParametersData_"];
                 };
             };
             /** @description Validation Error */
@@ -1603,7 +2418,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_ModeData_"];
                 };
             };
             /** @description Validation Error */
@@ -1636,7 +2451,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PromotionData_"];
                 };
             };
             /** @description Validation Error */

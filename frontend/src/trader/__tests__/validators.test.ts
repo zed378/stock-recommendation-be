@@ -6,9 +6,14 @@ import {
   paperEffect,
   paperFlatters,
   paperProblem,
-   paramProblem,
+  paramProblem,
+  THRESHOLD_FIELDS,
+  thresholdEffect,
+  thresholdProblem,
+  thresholdsLoosen,
   type PaperName,
 } from "@/trader/validators";
+import { countCsvDataRows } from "@/trader/mutations";
 
 describe("validators.ts — strategy parameters and paper simulation assumptions", () => {
   describe("strategy parameter validators (TraderParameters.tsx)", () => {
@@ -93,6 +98,53 @@ describe("validators.ts — strategy parameters and paper simulation assumptions
       const slipField = PAPER_FIELDS.find((f) => f.name === "slippage_pct")!;
       expect(paperEffect(slipField, "0.2", "0.1")).toBe("flatters");
       expect(paperEffect(slipField, "0.2", "0.3")).toBe("harsher");
+    });
+  });
+
+  describe("Promotion thresholds validators (OQ-12)", () => {
+    it("validates threshold kinds and allows empty (unset)", () => {
+      expect(thresholdProblem("int", "")).toBeNull();
+      expect(thresholdProblem("int", "0")).toBe("trader.limits.invalid.int");
+      expect(thresholdProblem("int", "5")).toBeNull();
+
+      expect(thresholdProblem("pct_pos", "0")).toBe("trader.limits.invalid.pct");
+      expect(thresholdProblem("pct_pos", "15.5")).toBeNull();
+
+      expect(thresholdProblem("return_pct", "-100")).toBe("trader.thresholds.invalid.return");
+      expect(thresholdProblem("return_pct", "-15.5")).toBeNull();
+      expect(thresholdProblem("return_pct", "12.5")).toBeNull();
+    });
+
+    it("detects loosening thresholds symmetrically with server thresholds_loosen", () => {
+      const tradesField = THRESHOLD_FIELDS.find((f) => f.name === "min_paper_trades")!;
+      const ddField = THRESHOLD_FIELDS.find((f) => f.name === "max_paper_drawdown_pct")!;
+      const retField = THRESHOLD_FIELDS.find((f) => f.name === "backtest_min_return_pct")!;
+
+      expect(thresholdEffect(tradesField, null, "5")).toBe("looser");
+      expect(thresholdEffect(tradesField, "10", null)).toBe("disables");
+      expect(thresholdEffect(tradesField, "10", "5")).toBe("looser");
+      expect(thresholdEffect(tradesField, "10", "15")).toBe("tighter");
+
+      expect(thresholdEffect(ddField, "10", "15")).toBe("looser");
+      expect(thresholdEffect(ddField, "10", "8")).toBe("tighter");
+
+      expect(thresholdEffect(retField, "5", "-2")).toBe("looser");
+      expect(thresholdEffect(retField, "-2", "5")).toBe("tighter");
+
+      const before = {
+        min_paper_trades: "10",
+        max_paper_drawdown_pct: "10",
+        backtest_min_return_pct: "5",
+        max_live_capital_idr: "20000000",
+        max_slippage_pct: "0.5",
+      };
+      expect(thresholdsLoosen(before, { ...before, min_paper_trades: "12" })).toBe(false);
+      expect(thresholdsLoosen(before, { ...before, min_paper_trades: "8" })).toBe(true);
+    });
+
+    it("counts CSV data rows excluding the header", () => {
+      expect(countCsvDataRows("a,b,c\n")).toBe(0);
+      expect(countCsvDataRows("a,b,c\n1,2,3\n4,5,6\n")).toBe(2);
     });
   });
 });

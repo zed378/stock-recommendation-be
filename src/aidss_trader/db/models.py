@@ -463,3 +463,32 @@ class PaperEquitySnapshot(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     equity_idr: Mapped[Decimal] = mapped_column(Money)
+
+
+class BacktestRunRow(Base):
+    """A reproducible backtest result, labelled BACKTEST and stored as evidence for the
+    PAPER -> APPROVAL promotion gate (`docs/05-MODULE-SPECIFICATIONS/06`, `11`)."""
+
+    __tablename__ = "backtest_run"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    origin: Mapped[str] = mapped_column(String(10), default="BACKTEST")
+    strategy_id: Mapped[str] = mapped_column(String(48), index=True)
+    strategy_version: Mapped[str] = mapped_column(String(64), index=True)
+    pair: Mapped[str] = mapped_column(String(24))
+    timeframe: Mapped[str] = mapped_column(String(8), default="4H")
+    candles_used: Mapped[int] = mapped_column(Integer)
+    trades: Mapped[int] = mapped_column(Integer)
+    wins: Mapped[int] = mapped_column(Integer)
+    win_rate_pct: Mapped[Decimal] = mapped_column(Money)
+    total_return_pct: Mapped[Decimal] = mapped_column(Money)
+    max_drawdown_pct: Mapped[Decimal] = mapped_column(Money)
+    profit_factor: Mapped[Decimal] = mapped_column(Money)
+    start_equity_idr: Mapped[Decimal] = mapped_column(Money)
+    final_equity_idr: Mapped[Decimal] = mapped_column(Money)
+    cost_model: Mapped[dict[str, Any]] = mapped_column(JSON)
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSON)
+    data_fingerprint: Mapped[str] = mapped_column(String(64))
+    ran_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ran_by: Mapped[str] = mapped_column(String(64))
+

@@ -115,3 +115,128 @@ export function paperFlatters(
 ): boolean {
   return PAPER_FIELDS.some((f) => paperEffect(f, before[f.name] ?? "", after[f.name] ?? "") === "flatters");
 }
+
+export type ThresholdName =
+  | "min_paper_trades"
+  | "max_paper_drawdown_pct"
+  | "backtest_min_return_pct"
+  | "max_live_capital_idr"
+  | "max_slippage_pct";
+
+export type ThresholdKind = "int" | "pct_pos" | "pct_ zero" | "return_pct" | "idr";
+export type ThresholdEffect = "looser" | "tighter" | "disables";
+
+export interface ThresholdField {
+  name: ThresholdName;
+  kind: ThresholdKind;
+  unit: MessageKey | null;
+  label: MessageKey;
+  hint: MessageKey;
+  looser: "higher" | "lower";
+}
+
+export const THRESHOLD_FIELDS: ThresholdField[] = [
+  {
+    name: "min_paper_trades",
+    kind: "int",
+    unit: null,
+    label: "trader.thresholds.field.min_paper_trades.label",
+    hint: "trader.thresholds.field.min_paper_trades.hint",
+    looser: "lower",
+  },
+  {
+    name: "max_paper_drawdown_pct",
+    kind: "pct_pos",
+    unit: "trader.unit.pct",
+    label: "trader.thresholds.field.max_paper_drawdown_pct.label",
+    hint: "trader.thresholds.field.max_paper_drawdown_pct.hint",
+    looser: "higher",
+  },
+  {
+    name: "backtest_min_return_pct",
+    kind: "return_pct",
+    unit: "trader.unit.pct",
+    label: "trader.thresholds.field.backtest_min_return_pct.label",
+    hint: "trader.thresholds.field.backtest_min_return_pct.hint",
+    looser: "lower",
+  },
+  {
+    name: "max_live_capital_idr",
+    kind: "idr",
+    unit: "trader.unit.idr",
+    label: "trader.thresholds.field.max_live_capital_idr.label",
+    hint: "trader.thresholds.field.max_live_capital_idr.hint",
+    looser: "higher",
+  },
+  {
+    name: "max_slippage_pct",
+    kind: "pct_ zero",
+    unit: "trader.unit.pct",
+    label: "trader.thresholds.field.max_slippage_pct.label",
+    hint: "trader.thresholds.field.max_slippage_pct.hint",
+    looser: "higher",
+  },
+];
+
+const SIGNED_DECIMAL = /^-?\d+(\.\d+)?$/;
+
+/** Mirrors `threshold_problem` in `src/aidss_trader/runtime/settings_store.py`. Empty (unset) is always valid and blocks the gate. */
+export function thresholdProblem(kind: ThresholdKind, raw: string): MessageKey | null {
+  const v = raw.trim();
+  if (v === "") return null;
+  switch (kind) {
+    case "int":
+      return /^\d+$/.test(v) && Number(v) >= 1 ? null : "trader.limits.invalid.int";
+    case "pct_pos":
+      return DECIMAL.test(v) && compareDecimals(v, "0") > 0 && compareDecimals(v, "100") <= 0
+        ? null
+        : "trader.limits.invalid.pct";
+    case "pct_ zero":
+      return DECIMAL.test(v) && compareDecimals(v, "0") >= 0 && compareDecimals(v, "100") <= 0
+        ? null
+        : "trader.paper.invalid.pct";
+    case "return_pct":
+      if (!SIGNED_DECIMAL.test(v)) return "trader.thresholds.invalid.return";
+      if (v.startsWith("-")) {
+        return compareDecimals(v.slice(1), "100") < 0 ? null : "trader.thresholds.invalid.return";
+      }
+      return null;
+    case "idr":
+      return DECIMAL.test(v) && compareDecimals(v, "0") > 0 ? null : "trader.paper.invalid.idr";
+  }
+}
+
+function compareSignedDecimals(a: string, b: string): number {
+  const na = a.startsWith("-");
+  const nb = b.startsWith("-");
+  if (na && !nb) return -1;
+  if (!na && nb) return 1;
+  if (na && nb) return -compareDecimals(a.slice(1), b.slice(1));
+  return compareDecimals(a, b);
+}
+
+/** Mirrors `thresholds_loosen` in `src/aidss_trader/runtime/settings_store.py`. */
+export function thresholdEffect(
+  field: ThresholdField,
+  from: string | null,
+  to: string | null,
+): ThresholdEffect {
+  if (to === null || to.trim() === "") return "disables";
+  if (from === null || from.trim() === "") return "looser";
+  const c = compareSignedDecimals(to.trim(), from.trim());
+  if (c === 0) return "tighter";
+  const higher = c > 0;
+  return (higher && field.looser === "higher") || (!higher && field.looser === "lower")
+    ? "looser"
+    : "tighter";
+}
+
+export function thresholdsLoosen(
+  before: Record<ThresholdName, string | null>,
+  after: Record<ThresholdName, string | null>,
+): boolean {
+  return THRESHOLD_FIELDS.some(
+    (f) => thresholdEffect(f, before[f.name] ?? null, after[f.name] ?? null) === "looser",
+  );
+}
+

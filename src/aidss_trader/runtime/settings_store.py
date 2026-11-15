@@ -17,10 +17,18 @@ from sqlalchemy.orm import Session
 from aidss_trader.audit import AuditLogger
 from aidss_trader.db.models import TraderSetting
 from aidss_trader.paper import CostModel, PaperConfig
-from aidss_trader.promotion import Promotion
+from aidss_trader.promotion import Promotion, Thresholds
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 
 PAPER_KEY = "paper_config"
+THRESHOLDS_KEY = "promotion_thresholds"
+THRESHOLD_FIELDS: tuple[str, ...] = (
+    "min_paper_trades",
+    "max_paper_drawdown_pct",
+    "backtest_min_return_pct",
+    "max_live_capital_idr",
+    "max_slippage_pct",
+)
 # Candles the runtime keeps per pair. A strategy that needs more history than this could never
 # evaluate, so the parameter API refuses it instead of letting it sit silently inert.
 MAX_HISTORY_BARS = 300
@@ -261,3 +269,122 @@ def paper_flatters(old: PaperSettings, new: PaperSettings) -> bool:
         or b.costs.tax_pct < a.costs.tax_pct
         or b.costs.clearing_pct < a.costs.clearing_pct
     )
+
+
+def threshold_problem(name: str, value: Any) -> str | None:
+    """Why a promotion threshold value is not acceptable, or None. `None` (unset) is always
+    acceptable: it blocks the corresponding promotion gate (`docs/05-MODULE-SPECIFICATIONS/11`)."""
+    if value is None:
+        return None
+    if name == "min_paper_trades":
+        ok = isinstance(value, int) and value >= 1
+        return None if ok else "must be a whole number of at least 1"
+    if name == "max_paper_drawdown_pct":
+        return None if 0 < value <= 100 else "must be above 0 and at most 100"
+    if name == "backtest_min_return_pct":
+        return None if value > -100 else "must be above -100"
+    if name == "max_live_capital_idr":
+        return None if value > 0 else "must be above 0"
+    if name == "max_slippage_pct":
+        return None if 0 <= value <= 100 else "must be between 0 and 100"
+    return None
+
+
+def get_promotion_thresholds(session: Session) -> Thresholds:
+    """Load stored owner promotion thresholds (OQ-12). Any unset or invalid field stays None
+    and blocks the gate that depends on it."""
+    row = session.get(TraderSetting, THRESHOLDS_KEY)
+    if row is None or not isinstance(row.value, dict):
+        return Thresholds()
+    raw = row.value
+
+    def _int_or_none(k: str) -> int | None:
+        v = raw.get(k)
+        if v is None or v == "":
+            return None
+        try:
+            parsed = int(str(v))
+            return parsed if threshold_problem(k, parsed) is None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _dec_or_none(k: str) -> Decimal | None:
+        v = raw.get(k)
+        if v is None or v == "":
+            return None
+        try:
+            parsed = _dec(v)
+            return parsed if threshold_problem(k, parsed) is None else None
+        except (TypeError, ValueError, InvalidOperation):
+            return None
+
+    return Thresholds(
+        min_paper_trades=_int_or_none("min_paper_trades"),
+        max_paper_drawdown_pct=_dec_or_none("max_paper_drawdown_pct"),
+        backtest_min_return_pct=_dec_or_none("backtest_min_return_pct"),
+        max_live_capital_idr=_dec_or_none("max_live_capital_idr"),
+        max_slippage_pct=_dec_or_none("max_slippage_pct"),
+    )
+
+
+def set_promotion_thresholds(
+    session: Session,
+    thresholds: Thresholds,
+    *,
+    by: str,
+    now: datetime | None = None,
+) -> None:
+    """Validate and persist owner promotion thresholds (OQ-12), writing an audit entry."""
+    for name in THRESHOLD_FIELDS:
+        val = getattr(thresholds, name)
+        prob = threshold_problem(name, val)
+        if prob is not None:
+            raise ValueError(f"{name}: {prob}")
+    payload: dict[str, str | int | None] = {
+        "min_paper_trades": thresholds.min_paper_trades,
+        "max_paper_drawdown_pct": (
+            None
+            if thresholds.max_paper_drawdown_pct is None
+            else _text(thresholds.max_paper_drawdown_pct)
+        ),
+        "backtest_min_return_pct": (
+            None
+            if thresholds.backtest_min_return_pct is None
+            else _text(thresholds.backtest_min_return_pct)
+        ),
+        "max_live_capital_idr": (
+            None
+            if thresholds.max_live_capital_idr is None
+            else _text(thresholds.max_live_capital_idr)
+        ),
+        "max_slippage_pct": (
+            None if thresholds.max_slippage_pct is None else _text(thresholds.max_slippage_pct)
+        ),
+    }
+    _put(session, THRESHOLDS_KEY, payload, by, now or datetime.now(UTC))
+
+
+_THRESHOLD_HIGHER_IS_LOOSER = (
+    "max_paper_drawdown_pct",
+    "max_live_capital_idr",
+    "max_slippage_pct",
+)
+_THRESHOLD_LOWER_IS_LOOSER = (
+    "min_paper_trades",
+    "backtest_min_return_pct",
+)
+
+
+def thresholds_loosen(old: Thresholds, new: Thresholds) -> bool:
+    """True if `new` makes promotion easier than `old`. Setting a threshold where none was set
+    also counts as loosening because it unblocks a gate that previously refused promotion."""
+    for name in _THRESHOLD_HIGHER_IS_LOOSER + _THRESHOLD_LOWER_IS_LOOSER:
+        a, b = getattr(old, name), getattr(new, name)
+        if b is None:
+            continue  # unsetting blocks the gate: tighter
+        if a is None:
+            return True
+        if (b > a) if name in _THRESHOLD_HIGHER_IS_LOOSER else (b < a):
+            return True
+    return False
+
