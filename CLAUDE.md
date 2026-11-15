@@ -12,7 +12,7 @@ This repository holds **two systems at two different maturity levels**:
 | System | State | Where |
 |---|---|---|
 | **AIDSS analysis platform** | Built and running. FastAPI + PostgreSQL + React. Decision support only: no order, no broker, no execution, enforced by tests. | `src/aidss/`, `frontend/`, `alembic/`, `tests/` |
-| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T4 built, in review.** `aidss_trader` has the foundation plus an Indodax connector, strategy, paper and backtest, Risk Engine, order manager, exit monitor, kill switch, and reconciler, all verified against a synthetic mock only, now assembled into the run loop. **Never run against a real exchange; a fresh install starts HALTED and every owner number is unset, so it trades nothing until the owner acts.** | `src/aidss_trader/`, `docs/`, `MEMORY/`, `TASKS/` |
+| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T5 built, T6 partial; deployed `HALTED` on the VM (`zed378/aidss-trader:e410ab7`, migrations `0001..0008`).** `aidss_trader` has the foundation, Indodax connector, strategy, paper/backtest, Risk Engine, order manager, exit monitor, kill switch, reconciler, and `/trader/v1` + `frontend/src/trader/` operator surface, verified against a synthetic mock and SQLite (plus local PostgreSQL 18 privilege/index/restore rehearsals). **Never run against a real exchange; the VM instance starts `HALTED` with no exchange URL, no keys, and every owner number unset, so it trades nothing until the owner acts.** | `src/aidss_trader/`, `frontend/src/trader/`, `docs/`, `MEMORY/`, `TASKS/` |
 
 If this file and `TASKS/PROGRESS.md` disagree about what exists, trust `PROGRESS.md` and fix this file. A
 stale instruction document produces confidently wrong work.
@@ -162,17 +162,17 @@ Windows paths shown (`.venv/Scripts/python`); on Linux and macOS use `.venv/bin/
 
 ### Trader
 
-Verified on 2026-11-14 (hermetic, SQLite; no exchange and no PostgreSQL needed):
+Verified on 2026-11-15 (`496 passed, 7 deselected, 1 xfailed` on SQLite + mock exchange; `7 passed` `-m postgres` on local PostgreSQL 18; `51` frontend Vitest tests; VM deployed at `zed378/aidss-trader:e410ab7` / `zed378/aidss-frontend:e410ab7` in `HALTED` state):
 
 | Command | Description |
 |---|---|
-| `python -m pytest tests/trader` | Trader tests (PostgreSQL privilege tests are `-m postgres`, opt-in; passed once on 2026-11-15 against a throwaway database on the VM) |
+| `python -m pytest tests/trader tests/test_architecture_constraints.py` | Trader + architecture tests (`-m postgres` opt-in; 7/7 passed on local PostgreSQL 18, and 3/3 `trader_rw` tests passed on a VM scratch DB on 2026-11-15) |
 | `python -m aidss_trader generate-master-key --out <path>` | Write a new random master key file; refuses to overwrite |
-| `python -m aidss_trader run` | The T1 loop: lease and heartbeat only, always `DISABLED`. Needs `AIDSS_TRADER_DATABASE_URL` |
+| `python -m aidss_trader run` | Run loop + `/trader/v1` API; starts `HALTED` on fresh install (ADR-047). Needs `AIDSS_TRADER_DATABASE_URL` |
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
-| `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); run on the VM's PostgreSQL on 2026-11-15 |
+| `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); applied through `0008_indexes_idempotency` on VM PostgreSQL (2026-11-15) |
 
-The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler exist (T2 to T4, mock-verified only), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and a first front end under `frontend/src/trader` (never rendered in a browser), and are wired into the run loop (`aidss_trader run`, mock-tested only, never against an exchange). A fresh install starts `HALTED`, every owner number is unset, and the Compose file passes no exchange URL, so a deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (T2-07 is owner-led).
+The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler (T2 to T4), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and operator UI (`frontend/src/trader/`, `frontend/src/pages/Trader*.tsx`, 33 Trader Vitest tests), are wired into `aidss_trader run` and deployed `HALTED` on the VM (`zed378/aidss-trader:e410ab7`, `zed378/aidss-frontend:e410ab7`, `zed378/aidss-api:e7b3da3`). Every owner number is unset and the Compose file passes no exchange URL, so the deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (`T2-07` is owner-led; `python -m aidss_trader live-check` is prepared). Live browser inspection of all 7 `/trader` screens was blocked locally (`DevToolsActivePort` missing).
 
 ## Code Style
 
@@ -183,14 +183,14 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 ## What Is Currently Failing
 
-Last full run on 2026-11-14 (after T4, with the known failure below deselected): 1,979 passed.
+Last Trader + architecture run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py`): **496 passed, 7 deselected, 1 intentional strict xfail** (`test_s13_dependencies_are_pinned`, awaiting ADR-050 decision), plus **7 passed** `-m postgres` on local PostgreSQL 18. Frontend Vitest: **51 passed**.
 
 - `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
   fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not
   related to the Trader.
 
 Open risks of the deployment (not code): `docker-compose.yml` on the server builds from source, so an
-`up --build` there reverts a deployed image; PostgreSQL backups and the server are the same host.
+`up --build` there reverts a deployed image; PostgreSQL backups and the server are the same host; PostgreSQL port 5432 is still published with superuser `aidss` until the owner approves Task B host hardening (`deploy/trader/isolate_analysis_role.sql`).
 
 ## If You Are Unsure
 

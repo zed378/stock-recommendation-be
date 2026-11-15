@@ -9,7 +9,7 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 | Phase | Name | Status | Notes |
 |---|---|---|---|
 | T0 | Specification | 🔎 in review (2026-11-14) | Documents written; **awaiting the owner's review**. See `MEMORY/records/2026-11-14-trader-docs-scaffolding.md`. 108 files in `docs/`, 45 ADRs, 8 open questions |
-| T1 | Foundation | 🚧 built, in review (2026-11-14) | Code and 40 tests exist. **Not verified:** PostgreSQL privileges (`-m postgres`, no PostgreSQL was available), the Docker image build, and the Compose override. See `MEMORY/records/2026-11-14-t1-foundation.md` |
+| T1 | Foundation | 🚧 built, deployed HALTED on VM, in review (2026-11-15) | Code and tests exist (`496` Trader+arch tests pass, `1` strict xfail S13). Trader image built and deployed on VM (`zed378/aidss-trader:e410ab7`, `zed378/aidss-frontend:e410ab7`), migrations `0001..0008` applied (`30` tables), lease held, authenticated `GET /auth/me` verified on VM (`MEMORY/records/2026-11-15-first-deploy.md`). `7/7` `-m postgres` privilege & index tests pass on local PostgreSQL 18 (`MEMORY/records/2026-11-15-d2-d3-d4-postgres-rehearsal-and-checklist.md`); VM host hardening (`aidss_app` role, port 5432 closure) awaits owner gate |
 | T2 | Exchange connector | 🚧 built, in review (2026-11-14) | Mock-verified only. **T2-07 (live Read-only check) is owner-led and not done**; every Indodax shape is documented, not observed |
 | T3 | Strategy, backtest, paper | 🚧 built, in review (2026-11-15) | Mechanism only; OQ-5 and OQ-11 values unset, tests use their own numbers. Backtest runs persist to `trading.backtest_run` (`0007_backtest_runs`) and feed the promotion `backtest` gate (`MEMORY/records/2026-11-15-j4-missing-features.md`). Per-pair parameter override schema proposed in ADR-049. AI context deferred (ADR-032) |
 | T4 | Execution core | 🚧 built, in review (2026-11-14) | Risk, order manager, exits, kill switch, reconciliation exist and are tested; now wired into the run loop (mock-tested only); a fresh install starts `HALTED`. OQ-9 values unset |
@@ -36,7 +36,7 @@ Deployed on the project's host as images `zed378/aidss-api` and `zed378/aidss-fr
 | Item | State |
 |---|---|
 | `aidss_trader` package | exists: T1 foundation plus connector, market data, strategy, intents, paper, backtest, risk, orders, exits, killswitch, reconcile |
-| `trading` schema, roles, migrations | three migrations; privileges unverified on PostgreSQL |
+| `trading` schema, roles, migrations | eight migrations (`0001..0008`, `30` tables) applied on VM PostgreSQL; `3` `trader_rw` privilege tests passed on VM scratch DB, `7/7` `-m postgres` tests passed on local PostgreSQL 18; `aidss_app` isolation on VM awaits owner gate |
 | Indodax connector, mock exchange | exist; mock is synthetic, the connector has never touched the real API |
 | Order code | exists and is wired into the run loop (mock-tested only); starts `HALTED`, every owner number unset, no exchange URL configured, so it trades nothing |
 | Documentation | exists (T0) |
@@ -62,14 +62,14 @@ Every Indodax detail in `docs/06-INTEGRATIONS/` is **documented, not yet observe
 
 | Task | Status | Notes |
 |---|---|---|
-| T1-01 Scaffold, `Dockerfile.trader`, Compose override | REVIEW | Image **not built** (Docker unavailable); the package runs under pytest only |
+| T1-01 Scaffold, `Dockerfile.trader`, Compose override | REVIEW | Image built from `git archive HEAD` and deployed on VM (`zed378/aidss-trader:813d9cd`, then `e410ab7`) with Compose stdin override; starts `HALTED` (`2026-11-15-first-deploy.md`) |
 | T1-02 Guard tests | REVIEW | Import boundary, no-withdrawal, no-float, tree-not-empty. The "architecture test unmodified" check is manual (the file is untouched); no CI step yet |
-| T1-03 Schema, roles, privileges, Alembic | REVIEW | Migration builds the models on SQLite. **Privileges unverified** (`tests/trader/test_privileges_postgres.py` never run) |
-| T1-04 Credential store | REVIEW | Fernet, key from a file; not derived from the JWT secret (tested) |
+| T1-03 Schema, roles, privileges, Alembic | REVIEW | Migrations `0001..0008` applied on VM PostgreSQL as `trader_owner` (`30` tables); `3/3` `trader_rw` privilege tests passed on VM scratch DB (`2026-11-15-first-deploy.md`) and `7/7` `-m postgres` tests passed on local PostgreSQL 18 (`2026-11-15-d2-d3-d4-postgres-rehearsal-and-checklist.md`). `aidss_app` isolation on VM awaits owner gate |
+| T1-04 Credential store | REVIEW | Fernet, key from a file (`~/.aidss-trader-master.key`, `0600`); not derived from the JWT secret (tested) |
 | T1-05 Audit log | REVIEW | Hash chain detects an altered or removed row (tested). Recording the head hash outside the database is **not built** |
-| T1-06 Configuration, unset means disabled | REVIEW | Risk-limit mechanism and tests. Loading operational settings from the database is **not built** |
-| T1-07 Lease | REVIEW | Tested on SQLite; the real PostgreSQL behaviour is untested |
-| T1-08 Token verification, `trader` role | WIP | Role added with viewer-level rights (tested). The Trader's `GET /auth/me` verification client is **not built** |
+| T1-06 Configuration, unset means disabled | REVIEW | Risk-limit mechanism and tests. Loading operational settings from the database is built (`runtime/settings_store.py`) and tested on SQLite |
+| T1-07 Lease | REVIEW | Tested on SQLite and observed held in VM PostgreSQL (`trading.lease`, `healthcheck` exit 0 in `2026-11-15-first-deploy.md`) |
+| T1-08 Token verification, `trader` role | REVIEW | `trader` role added (`viewer`-level platform rights) and `admin` holds all trader permissions (ADR-048); `TokenVerifier` (`GET /auth/me`) built and proved by one authenticated 200 call in VM Trader logs (`2026-11-15-first-deploy.md`) |
 
 ### T2 to T4
 
@@ -77,11 +77,11 @@ Built and in review; see `MEMORY/records/2026-11-14-t2-t4-connector-strategy-exe
 
 ### T5
 
-Backend and a first front end built, unwired and unrendered; see `MEMORY/records/2026-11-14-t5-operator-surface-backend.md`. T5-06 (real money) is owner-led and untouched.
+API and front end built, deployed on VM (`zed378/aidss-frontend:e410ab7`), and covered by 33 Trader Vitest tests (`51` total frontend tests, WCAG AA contrast + ID/EN ledger headers fixed in `1a07d95`). Live browser click-through on `https://aidss.zedth.my.id` was blocked locally (`DevToolsActivePort` missing). T5-06 (real money) is owner-led and untouched.
 
 ### T6
 
-All `TODO`. See the phase file.
+Partial: T6-01/T6-02 mock tests, T6-03 restore script (`3s` local PostgreSQL 18 rehearsal), T6-04 liveness script (`check_liveness.py`, awaiting VM cron approval), T6-05 release checklist (`05-RELEASE-CHECKLIST.md`), and `P5` PostgreSQL 18 `EXPLAIN (ANALYZE, BUFFERS)` index verification are done; `S13` (ADR-050), `R5` (ADR-052), VM host hardening, and owner-led drills remain open. See `TASKS/PHASE-T6-HARDENING-AND-RELEASE.md`.
 
 ## Open Risks (named, not fixed)
 
