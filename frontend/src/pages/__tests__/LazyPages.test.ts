@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LazyRoute, LazyTraderRoute } from "@/App";
 import { loaders } from "@/lazyPages";
 
 describe("signed-in pages are lazy chunks", () => {
@@ -14,5 +15,9 @@ describe("signed-in pages are lazy chunks", () => {
   it("keeps Landing and Login out of the lazy set", () => {
     expect(Object.keys(loaders)).not.toContain("Landing");
     expect(Object.keys(loaders)).not.toContain("Login");
+  });
+
+  it("keeps LazyTraderRoute as an alias of LazyRoute", () => {
+    expect(LazyTraderRoute).toBe(LazyRoute);
   });
 });
