@@ -107,3 +107,21 @@ frontend container healthy; Trader healthcheck exit 0; Trader state `HALTED`.
 
 Not verified: a browser pass over the screens after the change. Rollback: set the frontend image back to
 `aidss-frontend:e410ab7` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of commit ab5a9ab (2026-11-15), frontend only
+
+Image `aidss-frontend:ab5a9ab`, built from a clean `git archive HEAD` export. Since `75bc905` the frontend changed in
+two files only: `frontend/src/App.tsx` (the seven Trader pages are `React.lazy`, so they load as separate chunks;
+main chunk 699 kB to 635 kB) and one Vitest file. `nginx -t` passed in the image and the routes were checked on a
+local container before the push. On the VM only the frontend container was recreated (`up -d --no-build`, override on
+stdin); `aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database were not touched, no migration ran.
+
+Verified after (`curl` and one SSH session): `/`, `/trader`, `/trader/approvals`, `/trader/limits` answer 200
+`text/html`; `/trader/v1/status` answers 401 JSON; the seven Trader chunks (`Trader-*.js` to `TraderStrategies-*.js`)
+are served 200 `application/javascript`; frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
+
+Not verified: a browser pass over the lazy loading (navigation between Trader pages, the loading fallback, a failed
+chunk load). Rollback: set the frontend image back to `aidss-frontend:75bc905` in the override and run the same
+`up -d --no-build` (not rehearsed, no timing measured).
