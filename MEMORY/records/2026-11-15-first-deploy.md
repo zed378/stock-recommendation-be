@@ -167,3 +167,22 @@ old row (`flex gap-1 border-b border-line`); frontend container healthy; Trader 
 Not verified: the overflow itself in production. There is no login for me to open `/assets/BBCA`, so the 375px measurement exists only from a
 local browser run against a mocked API (document width equal to the viewport at 375, 360, 320, 768 and 1280). Rollback: set the frontend image
 back to `aidss-frontend:f08e3af` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of commit eba243c (2026-11-15), frontend only
+
+Image `aidss-frontend:eba243c`, built from a clean `git archive HEAD` export. Two small layout fixes since `dd2d776`, both from Task P's
+measurements on production: the `runButton` row on the Analysis tab of `/assets/:ticker` now wraps (`flex-wrap`), which overflowed 17px at 320px in
+Indonesian, and the `/picks` card grid is `grid-cols-1` below `lg`, which overflowed 5px at 375px; plus `MobileOverflowGuards.test.tsx` (2 tests).
+The same HEAD also holds non-frontend commits that do not ship in this image: the Trader dependency lock (ADR-050) and the trimmed 28-package lock (ADR-053).
+`nginx -t` passed in the image and the routes were checked on a local container before the push. On the VM only the frontend container was recreated
+(`up -d --no-build`, override on stdin); `aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database were not touched, no migration ran.
+
+Verified after (`curl` and one SSH session): `/`, `/login`, `/watchlist`, `/picks`, `/assets/BBCA`, `/trader`, `/trader/approvals` answer 200 `text/html`;
+`/trader/v1/status` answers 401 JSON; the production main chunk is `index-Bnemom8D.js`, identical to the local build and to the second agent's build;
+`AssetDetail-DYrC46ri.js` contains `flex flex-wrap items-center gap-2` and `StockPicks-DxQ7mxql.js` contains `grid grid-cols-1 gap-3 lg:grid-cols-2`;
+frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
+
+Not verified: the two overflows themselves in production (Playwright was not re-run at 320px and 375px after the deploy). Rollback: set the frontend image back to
+`aidss-frontend:dd2d776` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
