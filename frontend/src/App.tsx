@@ -10,19 +10,21 @@ import { Loading } from "@/components/primitives";
 import { ToastProvider } from "@/components/Toasts";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
-import { Watchlist } from "@/pages/Watchlist";
-import { AssetDetail } from "@/pages/AssetDetail";
-import { Portfolio } from "@/pages/Portfolio";
-import { Journal } from "@/pages/Journal";
-import { Chat } from "@/pages/Chat";
-import { Agenda } from "@/pages/Agenda";
-import { ScreenBuilder } from "@/pages/ScreenBuilder";
-import { MarketChat } from "@/pages/MarketChat";
-import { Shared } from "@/pages/Shared";
-import { Profile } from "@/pages/Profile";
-import { Admin } from "@/pages/Admin";
-import { StockPicks } from "@/pages/StockPicks";
-import { Monitoring } from "@/pages/Monitoring";
+import {
+  Watchlist,
+  AssetDetail,
+  Portfolio,
+  Journal,
+  Chat,
+  Agenda,
+  ScreenBuilder,
+  MarketChat,
+  Shared,
+  Profile,
+  Admin,
+  StockPicks,
+  Monitoring,
+} from "@/lazyPages";
 
 const Trader = lazy(() => import("@/pages/Trader").then((m) => ({ default: m.Trader })));
 const TraderApprovals = lazy(() => import("@/pages/TraderApprovals").then((m) => ({ default: m.TraderApprovals })));
@@ -70,7 +72,9 @@ class ChunkErrorBoundary extends Component<ChunkBoundaryProps, ChunkBoundaryStat
   }
 }
 
-export function LazyTraderRoute({
+// One boundary per route, inside the layout: the sidebar stays while a chunk loads, and a
+// chunk that fails to load shows a reload prompt instead of a blank screen.
+export function LazyRoute({
   children,
   onReload,
 }: {
@@ -91,6 +95,8 @@ export function LazyTraderRoute({
     </ChunkErrorBoundary>
   );
 }
+
+export const LazyTraderRoute = LazyRoute;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -130,35 +136,35 @@ export default function App() {
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Public />} />
               <Route element={<Protected />}>
-                <Route path="/watchlist" element={<Watchlist />} />
-                <Route path="/assets/:ticker" element={<AssetDetail />} />
-                <Route path="/portfolio" element={<Portfolio />} />
-                <Route path="/journal" element={<Journal />} />
-                <Route path="/picks" element={<StockPicks />} />
-                <Route path="/monitoring" element={<Monitoring />} />
+                <Route path="/watchlist" element={<LazyRoute><Watchlist /></LazyRoute>} />
+                <Route path="/assets/:ticker" element={<LazyRoute><AssetDetail /></LazyRoute>} />
+                <Route path="/portfolio" element={<LazyRoute><Portfolio /></LazyRoute>} />
+                <Route path="/journal" element={<LazyRoute><Journal /></LazyRoute>} />
+                <Route path="/picks" element={<LazyRoute><StockPicks /></LazyRoute>} />
+                <Route path="/monitoring" element={<LazyRoute><Monitoring /></LazyRoute>} />
                 {/* The Trader API enforces who may do what; the link is only hidden
                     for roles that cannot use it. */}
-                <Route path="/trader" element={<LazyTraderRoute><Trader /></LazyTraderRoute>} />
-                <Route path="/trader/approvals" element={<LazyTraderRoute><TraderApprovals /></LazyTraderRoute>} />
-                <Route path="/trader/strategies" element={<LazyTraderRoute><TraderStrategies /></LazyTraderRoute>} />
-                <Route path="/trader/limits" element={<LazyTraderRoute><TraderLimits /></LazyTraderRoute>} />
-                <Route path="/trader/parameters" element={<LazyTraderRoute><TraderParameters /></LazyTraderRoute>} />
-                <Route path="/trader/paper" element={<LazyTraderRoute><TraderPaper /></LazyTraderRoute>} />
-                <Route path="/trader/credentials" element={<LazyTraderRoute><TraderCredentials /></LazyTraderRoute>} />
-                <Route path="/chat" element={<Chat />} />
-                <Route path="/agenda" element={<Agenda />} />
-                <Route path="/screens" element={<ScreenBuilder />} />
-                <Route path="/market-chat" element={<MarketChat />} />
-                <Route path="/shared" element={<Shared />} />
-                <Route path="/profile" element={<Profile />} />
+                <Route path="/trader" element={<LazyRoute><Trader /></LazyRoute>} />
+                <Route path="/trader/approvals" element={<LazyRoute><TraderApprovals /></LazyRoute>} />
+                <Route path="/trader/strategies" element={<LazyRoute><TraderStrategies /></LazyRoute>} />
+                <Route path="/trader/limits" element={<LazyRoute><TraderLimits /></LazyRoute>} />
+                <Route path="/trader/parameters" element={<LazyRoute><TraderParameters /></LazyRoute>} />
+                <Route path="/trader/paper" element={<LazyRoute><TraderPaper /></LazyRoute>} />
+                <Route path="/trader/credentials" element={<LazyRoute><TraderCredentials /></LazyRoute>} />
+                <Route path="/chat" element={<LazyRoute><Chat /></LazyRoute>} />
+                <Route path="/agenda" element={<LazyRoute><Agenda /></LazyRoute>} />
+                <Route path="/screens" element={<LazyRoute><ScreenBuilder /></LazyRoute>} />
+                <Route path="/market-chat" element={<LazyRoute><MarketChat /></LazyRoute>} />
+                <Route path="/shared" element={<LazyRoute><Shared /></LazyRoute>} />
+                <Route path="/profile" element={<LazyRoute><Profile /></LazyRoute>} />
                 {/* Registered for everyone; the page itself explains the role
                     requirement. An unlinked route is still reachable by typing
                     it, so hiding the link is not the control - the backend is,
                     and this says why rather than 403ing every panel. */}
                 {/* The section is part of the address. As tab state, no admin
                     section could be bookmarked, linked, or survive a reload. */}
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/admin/:section" element={<Admin />} />
+                <Route path="/admin" element={<LazyRoute><Admin /></LazyRoute>} />
+                <Route path="/admin/:section" element={<LazyRoute><Admin /></LazyRoute>} />
               </Route>
               <Route path="*" element={<Navigate to="/watchlist" replace />} />
             </Routes>
