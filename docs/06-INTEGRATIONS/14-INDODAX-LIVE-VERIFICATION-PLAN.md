@@ -124,7 +124,7 @@ not promises, and are tested against the synthetic mock (`tests/trader/test_live
 Phase A (public, no key), from a scratch directory outside the repository:
 
 ```
-python -m aidss_trader live-check --phase A --raw-dir C:\scratchaw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
+python -m aidss_trader live-check --phase A --raw-dir C:\scratch\raw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
 ```
 
 Phase B (a Read-only key made for this check, set in **your own terminal session only**, never typed into a command
@@ -132,7 +132,7 @@ line or chat):
 
 ```
 $env:AIDSS_LIVECHECK_KEY = "<read-only key>"; $env:AIDSS_LIVECHECK_SECRET = "<its secret>"
-python -m aidss_trader live-check --phase B --raw-dir C:\scratchaw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
+python -m aidss_trader live-check --phase B --raw-dir C:\scratch\raw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
 Remove-Item Env:AIDSS_LIVECHECK_KEY, Env:AIDSS_LIVECHECK_SECRET
 ```
 
