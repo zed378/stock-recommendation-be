@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-15 — Task N: Live lazy-loading verification & `ChunkErrorBoundary` fix](records/2026-11-15-n-lazy-route-verification.md) — Playwright on `ab5a9ab` passed 1st/2nd SPA visits, direct `goto`+`reload`, 1.5s delay fallback, and 375/768/1280 widths; found blank screen on `route.abort()` and offline chunk load; fixed via `LazyTraderRoute` error boundary in `App.tsx` + `id`/`en` keys + Vitest (`59` passed, `oxlint` 0 warnings); awaiting `aidss-frontend` rebuild/deploy
+
 - [2026-11-15 — Task M: Doc sync and `React.lazy` code-splitting for Trader routes](records/2026-11-15-m-doc-sync-and-lazy-trader-routes.md) — updated `PROGRESS.md`, `CLAUDE.md`, `handoffs/INDEX.md`, I/J SHAs; lazy-loaded 7 Trader routes in `App.tsx` + `TraderLazyRoutes.test.tsx` (`58` Vitest passed, `tsc` + `oxlint` clean, `vite build` main chunk `635.03 kB`, `test_frontend_routing.py` `7 passed`)
 
 - [2026-11-15 — Task L: Repeatable host-hardening and `--full` restore rehearsal scripts](records/2026-11-15-l-rehearsal-scripts.md) — added `deploy/trader/rehearse_isolation.sh`, `--full` flag on `rehearse_restore.sh`, static tests `test_rehearsal_scripts.py`, R13/R14 runbook updates; verified on local PG 18 (isolate 1s, rollback 1s, intentional fail cleanup, full restore 4s)

@@ -1,8 +1,9 @@
 import { Suspense, lazy } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LazyTraderRoute } from "@/App";
 import { I18nProvider } from "@/i18n";
 
 afterEach(cleanup);
@@ -72,5 +73,26 @@ describe("Lazy-loaded Trader route modules", () => {
     );
     const heading = await within(container).findByRole("heading", { level: 1 });
     expect(heading.textContent?.trim().length).toBeGreaterThan(0);
+  });
+
+  it("renders i18n error fallback with reload button when lazy import() rejects", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onReload = vi.fn();
+    const BrokenLazy = lazy(() => Promise.reject(new TypeError("Failed to fetch dynamically imported module")));
+    const { container } = render(
+      <I18nProvider>
+        <MemoryRouter initialEntries={["/trader/paper"]}>
+          <LazyTraderRoute onReload={onReload}>
+            <BrokenLazy />
+          </LazyTraderRoute>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    const alert = await within(container).findByRole("alert");
+    expect(within(alert).getByRole("heading", { level: 1 }).textContent).toBeTruthy();
+    const btn = within(alert).getByRole("button");
+    fireEvent.click(btn);
+    expect(onReload).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

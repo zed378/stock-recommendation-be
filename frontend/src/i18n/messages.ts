@@ -1569,6 +1569,9 @@ export const id = {
   "trader.export.downloading": "Mengunduh…",
   "trader.export.done": "CSV {kind} diunduh ({count} baris data, cocok dengan X-Row-Count).",
   "trader.export.emptyLedger": "Belum ada entri buku besar.",
+  "trader.routeError.title": "Halaman gagal dimuat",
+  "trader.routeError.body": "Berkas halaman tidak dapat diambil dari server. Periksa koneksi lalu muat ulang.",
+  "trader.routeError.reload": "Muat ulang",
 } as const;
 
 export type MessageKey = keyof typeof id;
@@ -3088,6 +3091,9 @@ export const en: Record<MessageKey, string> = {
   "trader.export.downloading": "Downloading…",
   "trader.export.done": "{kind} CSV downloaded ({count} data rows, matched X-Row-Count).",
   "trader.export.emptyLedger": "No ledger entries yet.",
+  "trader.routeError.title": "Page failed to load",
+  "trader.routeError.body": "This page bundle could not be fetched from the server. Check your connection and reload.",
+  "trader.routeError.reload": "Reload",
 };
 
 export const locales = { id, en } as const;
