@@ -186,3 +186,24 @@ frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
 
 Not verified: the two overflows themselves in production (Playwright was not re-run at 320px and 375px after the deploy). Rollback: set the frontend image back to
 `aidss-frontend:dd2d776` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of commit 2fc6c0b (2026-11-15), frontend only
+
+Image `aidss-frontend:2fc6c0b`, built from a clean `git archive HEAD` export. One change since `eba243c`: a 44px minimum tap height below the `sm` breakpoint
+(`max-sm:min-h-11`) on both `Button` sizes, `inputClass`, `inlineControlClass`, the timeframe selector on `/assets/:ticker`, the horizon selector on `/picks`,
+and Monitoring's two tabs, which now use `TabStrip`. From `sm` up nothing changes. See `2026-11-15-phone-tap-targets.md`. The same HEAD holds documentation
+and the Runbook R15 commit, which do not ship in the image. `nginx -t` passed in the image and the routes were checked on a local container before the push.
+On the VM only the frontend container was recreated (`up -d --no-build`, override on stdin); `aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database
+were not touched, no migration ran.
+
+Verified after (`curl` and one SSH session): `/`, `/login`, `/watchlist`, `/monitoring`, `/picks`, `/assets/BBCA`, `/trader`, `/trader/approvals` answer 200
+`text/html`; `/trader/v1/status` answers 401 JSON; the production main chunk is `index-HvlgnJp2.js`, identical to the local build; `primitives-CpTPs67F.js`
+contains `max-sm:min-h-11` four times, `AssetDetail-DsVQA76H.js` and `StockPicks-CyBa0p3U.js` once each, and `Monitoring-CFlTyQIG.js` imports
+`TabStrip-qKVUDWzp.js`; frontend container healthy; Trader healthcheck exit 0; Trader `HALTED`.
+
+Not verified: the heights in production. The 375px measurements (controls under 44px in `<main>` falling from 5, 7 and 10 to 1, 1 and 2 on `/assets/BBCA`,
+`/monitoring` and `/picks`) come from a local browser on a mocked API. Controls outside the shared primitives (admin pages, the notifications panel, dialogs) and the
+native 13px checkboxes were not changed. Rollback: set the frontend image back to `aidss-frontend:eba243c` in the override and run the same `up -d --no-build`
+(not rehearsed, no timing measured).
