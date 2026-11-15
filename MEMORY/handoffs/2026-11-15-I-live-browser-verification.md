@@ -47,3 +47,6 @@ Menjalankan verifikasi browser langsung memakai Playwright Chromium (di luar rep
 
 ## 9. Risiko tersisa dan hal yang harus diperhatikan agen berikutnya
 - Pengguna yang melakukan refresh (F5) atau membuka bookmark `/trader/...` langsung akan melihat halaman error JSON 404 sampai konfigurasi reverse proxy VM diperbaiki.
+
+## Koreksi (agen utama, 2026-11-15)
+Diagnosis "reverse proxy VM" di bagian 1, 6, 7, dan 9 keliru: penyebabnya `location /trader/` di `frontend/nginx.conf` (di dalam image frontend). Diperbaiki di `75bc905` dan sudah di-deploy; lihat record `2026-11-15-i-live-browser-verification.md`, bagian "Correction". Izin SSH untuk ini tidak diperlukan.

@@ -19,7 +19,7 @@
 2. **Direct URL / Refresh Routing Defect (`page.goto`)**:
    - `GET https://aidss.zedth.my.id/trader` redirected to `http://aidss.zedth.my.id/trader/` and returned `404` `application/json` (`{"detail":"Not Found"}`).
    - `GET https://aidss.zedth.my.id/trader/approvals` returned `404` `application/json` (`{"detail":"Not Found"}`).
-   - Cause: the VM reverse proxy routes `/trader*` to `aidss-trader` FastAPI instead of scoping backend proxy rules to `/trader/v1/*` and `/trader/health`, preventing the React SPA `index.html` from serving direct URLs or browser refreshes under `/trader*`.
+   - Cause (corrected 2026-11-15): not the VM. `location /trader/` in `frontend/nginx.conf`, inside the frontend image, proxied every `/trader/*` path to the Trader, including the SPA's own routes. Fixed in `75bc905` (see "Correction" below).
 3. **All 7 Trader Pages via SPA Navigation**:
    - `/trader` (`Trader`), `/trader/approvals` (`Approval queue`), `/trader/strategies` (`Strategies and modes`), `/trader/parameters` (`Strategy parameters`), `/trader/paper` (`Paper simulation assumptions`), `/trader/credentials` (`Credentials`), `/trader/limits` (`Risk limits and allowlist`).
    - Every page rendered its `<h1>`, displayed `HALTED` and `PAPER`, had `0` console errors, `0` page errors, `0` failed requests, and `0` leaked secret patterns in `/trader/v1/` responses.
@@ -34,4 +34,13 @@
 ## What Was Not Determined
 
 - Sidebar collapse toggle selector (`button[aria-label*="sidebar" i]`, etc.) did not match on `/trader` during the automated check; manual/selector inspection of the sidebar collapse button was not re-run.
-- Reverse-proxy configuration on `10.1.200.13` was not inspected directly (awaits SSH access).
+- ~~Reverse-proxy configuration on `10.1.200.13`~~ Not needed: the defect was in the repo's `frontend/nginx.conf`, not on the host.
+
+## Correction: root cause and fix (main agent, 2026-11-15)
+
+The routing defect above was attributed to a VM reverse proxy. It was in `frontend/nginx.conf`: `location /trader/`
+proxied the whole prefix to the Trader, which has no UI routes, so a refresh on `/trader/approvals` got a FastAPI 404 and
+`/trader` got its trailing-slash redirect to `http://`. Fix `75bc905`: the location is now `/trader/v1/`, and
+`tests/test_frontend_routing.py` asserts it is the only `/trader` location. Deployed the same day; after the redeploy
+(external `curl`, not a browser): `/trader`, `/trader/approvals`, `/trader/limits` answer 200 `text/html` with no redirect,
+`/trader/v1/status` still answers 401 JSON with the security headers. Not re-run in a browser.

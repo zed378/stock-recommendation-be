@@ -89,3 +89,21 @@ Not verified: the idempotency replay and the new indexes under real use (no requ
 the `GRANT DELETE` on `idempotency_key` beyond the migration succeeding; pruning of that table; every screen in a
 browser. Still open on the host: Postgres published on 5432, no `aidss_app` role, SSH password not rotated,
 liveness monitor not installed.
+
+---
+
+## Redeploy of commit 75bc905 (2026-11-15), frontend only
+
+One fix: `frontend/nginx.conf` proxied all of `/trader/*` to the Trader, so a refresh or bookmark on a `/trader` UI route
+got a 404 JSON (found in Task I). The location is now `/trader/v1/`; `tests/test_frontend_routing.py` guards it.
+Image `aidss-frontend:75bc905` built from a clean `git archive HEAD` export, `nginx -t` passed in the image, and the
+routes were checked on a local container before the push. On the VM only the frontend container was recreated
+(`docker compose ... up -d --no-build`, override on stdin); `aidss-trader:e410ab7` and `aidss-api:e7b3da3` and the
+database were not touched, no migration ran.
+
+Verified after (external `curl` and one SSH session): `/`, `/trader`, `/trader/approvals`, `/trader/limits` answer 200
+`text/html` with no redirect; `/trader/v1/status` answers 401 JSON with `nosniff`, `X-Frame-Options: DENY`, and the CSP;
+frontend container healthy; Trader healthcheck exit 0; Trader state `HALTED`.
+
+Not verified: a browser pass over the screens after the change. Rollback: set the frontend image back to
+`aidss-frontend:e410ab7` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
