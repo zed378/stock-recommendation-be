@@ -121,7 +121,7 @@
 
 | | |
 |---|---|
-| **Status** | TODO |
+| **Status** | PREPARED 2026-11-15: the script, redaction, and tests exist; **the owner has not run it** |
 | **Depends on** | T2-06 |
 | **Spec refs** | `docs/06-INTEGRATIONS/03` to `11` · `docs/06-INTEGRATIONS/14-INDODAX-LIVE-VERIFICATION-PLAN.md` · `docs/12-DELIVERY-PLAN/05-RELEASE-CHECKLIST.md` |
 | **Spec required** | yes |

@@ -104,3 +104,38 @@ request loop; a key in a command line that is stored in shell history; storing a
 The call list as a script with the caps, delays, and stop conditions above; the redaction function and its
 test; the empty record template. The script refuses to run without an explicit confirmation and without the key
 being supplied by the owner's environment, and it contains no endpoint outside this plan.
+
+## How the Owner Runs It (prepared 2026-11-15; never run)
+
+The script is `python -m aidss_trader live-check`. It is not a pytest test and has no marker. Its limits are code,
+not promises, and are tested against the synthetic mock (`tests/trader/test_livecheck.py`):
+
+- GET only; the module has no function that sends anything else and no order, deposit, withdrawal, or fiat path.
+- At most 60 requests, at least 1.5 s apart; it refuses a higher cap or a shorter delay.
+- It refuses to start without `--i-understand-this-calls-the-real-exchange`.
+- Both output directories must be **outside any git repository**; raw responses go to `--raw-dir`, the report and
+  record draft to `--out`. Responses that belong to an account are reduced to their shape, so no balance, order
+  id, `uid`, key, secret, or signature reaches a file; known secrets are also scrubbed from any text.
+- It stops on `-2015`, on a rate limit, on two server errors in a row, and at once if `GET /api/v2/account` says the
+  key can withdraw **or can trade** (the plan allows a Read-only key only).
+- The record draft lists what was **not** called, so a step that did not run is never reported as verified.
+- B8 (the private WebSocket token) is not implemented; the owner decides it separately.
+
+Phase A (public, no key), from a scratch directory outside the repository:
+
+```
+python -m aidss_trader live-check --phase A --raw-dir C:\scratchaw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
+```
+
+Phase B (a Read-only key made for this check, set in **your own terminal session only**, never typed into a command
+line or chat):
+
+```
+$env:AIDSS_LIVECHECK_KEY = "<read-only key>"; $env:AIDSS_LIVECHECK_SECRET = "<its secret>"
+python -m aidss_trader live-check --phase B --raw-dir C:\scratchaw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
+Remove-Item Env:AIDSS_LIVECHECK_KEY, Env:AIDSS_LIVECHECK_SECRET
+```
+
+Afterwards: revoke the key, read `report-phase-*.json` and `record-draft-phase-*.md`, delete the raw directory, copy
+only what is safe into `tests/trader/fixtures/recorded/`, correct the mock first with a test that would have caught
+each difference, and amend `06/03` to `06/11` through the deviation protocol. The draft is not a conclusion.

@@ -16,8 +16,37 @@ from aidss_trader.credentials import (
     generate_master_key_file,
     load_master_key,
 )
+from aidss_trader.livecheck import CONFIRM_FLAG
 from aidss_trader.runtime.assembly import build_api, build_runtime, serve_in_thread
 from aidss_trader.service import heartbeat_age_s, run
+
+
+def _live_check(args: argparse.Namespace) -> int:
+    import os
+
+    import httpx
+
+    from aidss_trader.livecheck import Config, LiveCheck, Refused
+
+    cfg = Config(
+        phase=args.phase,
+        raw_dir=args.raw_dir,
+        out_dir=args.out,
+        confirmed=args.confirmed,
+        key=os.environ.get("AIDSS_LIVECHECK_KEY", ""),
+        secret=os.environ.get("AIDSS_LIVECHECK_SECRET", ""),
+        symbol=args.symbol,
+    )
+    try:
+        with httpx.Client(timeout=15) as http:
+            report = LiveCheck(cfg, http).run()
+    except Refused as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
+    print(f"{len(report.calls)} calls made; stopped early: {report.stopped or 'no'}")
+    print(f"report and record draft written to {cfg.out_dir}; raw responses are in {cfg.raw_dir}")
+    print("next: revoke the key, review the redacted output, then delete the raw directory")
+    return 1 if report.stopped else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,6 +54,15 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("run")
     sub.add_parser("healthcheck")
+    live = sub.add_parser(
+        "live-check",
+        help="owner-led, read-only check of the real exchange (T2-07); never run by an agent",
+    )
+    live.add_argument("--phase", choices=["A", "B"], required=True)
+    live.add_argument("--raw-dir", type=Path, required=True, help="outside any git repository")
+    live.add_argument("--out", type=Path, required=True, help="outside any git repository")
+    live.add_argument(CONFIRM_FLAG, dest="confirmed", action="store_true")
+    live.add_argument("--symbol", default="BTCIDR")
     gen = sub.add_parser("generate-master-key")
     gen.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -34,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
         generate_master_key_file(args.out)
         print(f"wrote a new master key to {args.out}; keep it out of git and out of backups")
         return 0
+
+    if args.command == "live-check":
+        # Needs no database or settings. The key comes only from this terminal's environment.
+        return _live_check(args)
 
     settings = get_settings()
     if args.command == "healthcheck":
