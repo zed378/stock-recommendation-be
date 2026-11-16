@@ -2,6 +2,7 @@
 
 Newest first.
 
+- [2026-11-16 — S, T, U: Sinkronisasi ADR, pembersihan frontend, dan pengukuran landing produksi](2026-11-16-S-T-U-docs-cleanup-landing-measure.md) — `SELESAI` (`c4ea4d2` sync ADR-046/047/049/051; `48ac1f4` `git rm` 3 JPEG 713,149 B + `rec.label.reduce` + `94` Vitest + `518` pytest; `1681f92` pengukuran Playwright produksi `220f1cb` `index-DUOgi8mR.js`, `0` overflow & `0` error konsol)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 9 (ukur header & tautan ticker produksi `db57068`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 9 untuk pemilik dan agen utama
 - [2026-11-15 — R: Pengukuran header & tautan ticker produksi (`db57068`)](2026-11-15-R-production-header-ticker-remeasure.md) — `SELESAI` (header `375/360/320px` semua `44px`, `overflowPx: 0`, `55` `/picks` + `25` `/monitoring` ticker `47×44`, `1280px` tetap, `768px` kompak; zero perubahan kode)
 - [2026-11-15 — Z: Ringkasan akhir Tahap 8 (ukur ulang produksi `2fc6c0b`)](2026-11-15-Z-final.md) — rangkuman akhir Tahap 8 untuk pemilik dan agen utama
