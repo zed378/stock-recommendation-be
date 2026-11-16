@@ -28,3 +28,24 @@ First step of the host hardening plan (runbook R15, `deploy/trader/isolate_analy
 1. Apply `isolate_analysis_role.sql` as `aidss` (creates `aidss_app`), then set passwords and record `AIDSS_APP_DATABASE_URL`.
 2. Switch api and worker to `aidss_app`, unpublish port 5432 through the Compose override, rotate the superuser password.
 3. Rollback path: `rollback_analysis_role.sql` and the restore of this dump.
+
+---
+
+## Step 1 applied: role `aidss_app` created on production (2026-11-16, after the owner's go-ahead)
+
+Rehearsal first, on the VM, because the earlier rehearsals ran on a local PostgreSQL 18: `rehearse_isolation.sh stocks-postgres-1 aidss aidss` against a scratch clone of `aidss` on the production PostgreSQL 16 (clone 12s, isolation under 1s,
+rollback under 1s; `aidss_app` not superuser, owns every `public` table, `trading.audit_log` denied for it, DDL in `public` allowed). The scripts were placed in `~/rh` for the run and the directory, the scratch database and the temporary role were removed afterwards.
+
+Applied for real, as superuser `aidss` in database `aidss`, with `ON_ERROR_STOP=1` (the file is one transaction): `deploy/trader/isolate_analysis_role.sql`. Then a random 48-hex-character password was set through stdin
+(`ALTER ROLE aidss_app PASSWORD`, never on a command line) and `AIDSS_APP_DATABASE_URL=postgresql+psycopg://aidss_app:<password>@postgres:5432/aidss` was appended to `~/.aidss-trader.env` (mode `0600`). No password appears in this repository, the log or the shell history.
+The helper scripts and the SQL copy on the host were deleted.
+
+Verified after: connecting as `aidss_app` over TCP works and reads `public.users` (3 rows); `select count(*) from trading.audit_log` fails with `permission denied for schema trading`; the role is `rolsuper=f, rolcreatedb=f, rolcreaterole=f, rolbypassrls=f`;
+no `public` table has an owner other than `aidss_app`; all containers stayed healthy (nothing was restarted), Trader healthcheck exit 0, `trading_state` `HALTED`, `/api/health` 200.
+
+Not changed on purpose: `api` and `worker` still connect as the superuser `aidss` (`docker-compose.yml` on the host carries `AIDSS_DATABASE_URL: postgresql+psycopg://aidss:aidss@postgres:5432/aidss`, a literal weak password, which the next step replaces through the override),
+port 5432 is still published, and the superuser password is unchanged. Until step 2 the isolation is prepared, not in force.
+
+Rollback of step 1: run `rollback_analysis_role.sql` as `aidss` (returns ownership of `public` objects to `aidss`, rehearsed at under 1s on the clone), then `DROP ROLE aidss_app` once nothing connects as it, and remove the `AIDSS_APP_DATABASE_URL` line from `~/.aidss-trader.env`. The pre-change dump is `~/aidss-backups/pg_dumpall-20261116T100117Z.sql.gz`.
+
+Next (needs the owner's go-ahead): step 2, switch `api` and `worker` to `aidss_app` through the override, unpublish port 5432 (`ports: !reset []`), then rotate the superuser password; check the pre-step `pg_stat_activity` for any outside client first (R13, point 1).
