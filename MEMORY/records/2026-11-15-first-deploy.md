@@ -225,3 +225,18 @@ the production main chunk is `index-BR0mddld.js`, identical to the local build, 
 
 Not verified: the sizes in production. The 44px heights, the single-line `Sign out`, and the hidden brand text under 368px were seen only in a local browser on a mocked API (375, 360, 320px). Tablets
 (640 to 1023px) keep the compact header controls. Rollback: set the frontend image back to `aidss-frontend:2fc6c0b` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
+
+---
+
+## Redeploys of commits 4a5bb9d and 220f1cb (2026-11-16), frontend only
+
+Two frontend-only deploys, each from a clean `git archive HEAD` export, `nginx -t` and a local container smoke before the push. `4a5bb9d` is the landing-page redesign
+(see `2026-11-16-landing-redesign.md`). `220f1cb` fixes the hero on wide screens (headline overlapping the 3D stack at 1920px English): a clamped headline size, right padding on the text column,
+the stack centred with a 5/4 box. `aidss-frontend:220f1cb` (digest `sha256:0ce2737f3595c0dbf0f1ce2a346170ea6f29e15c41e8ec8c7437d067a2af0181`, main chunk `index-DUOgi8mR.js`) is what runs now.
+On the VM only the frontend container was recreated (`up -d --no-build`, override on stdin); `aidss-trader:e410ab7`, `aidss-api:e7b3da3` and the database were not touched, no migration ran.
+
+Verified after: `/`, `/login`, `/watchlist`, `/trader` answer 200 `text/html`; `/trader/v1/status` answers 401 JSON; the production main chunk matches the local build; frontend container healthy;
+Trader healthcheck exit 0; Trader `HALTED`. A Playwright run against production (Chromium) measured the gap from headline to stack at 70px (1440 EN, 1920 EN) and 85px (1920 ID), no overflow, no console errors at 375, 1440 and 1920.
+
+Not verified: LCP, INP and CLS were not measured; no real device or Safari; each font file appears twice in the network log on load (possible preload versus `@font-face` crossorigin mismatch), not yet diagnosed.
+Rollback: set the frontend image back to `aidss-frontend:db57068` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
