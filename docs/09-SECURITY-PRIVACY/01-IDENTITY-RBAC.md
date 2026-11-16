@@ -32,12 +32,11 @@ Existing: `viewer`, `investor`, `admin`. New: `trader` (ADR-015). The matrix is 
 | One owner | There is no two-person rule (ADR-015); the audit log and gates compensate |
 | Suspended users | A suspended account loses access immediately. The platform already checks status on each request so that a token issued before a suspension does not stay valid for its hour |
 
-## Step-Up for High-Impact Actions (proposed)
+## Step-Up for High-Impact Actions (ADR-046, accepted (owner, 2026-11-16))
 
 For `FLATTEN`, promotion to `AUTO`, raising a limit, and credential changes, require a **recent
-authentication** (for example a password re-entry within the last few minutes) in addition to a valid token,
-so a stolen idle session cannot do the most damaging things. This is a proposal; the mechanism and window are
-undecided and would be recorded as an ADR in task T5-01.
+authentication** (single-use 5-minute password re-entry grant) in addition to a valid token,
+so a stolen idle session cannot do the most damaging things. Recorded in `MEMORY/DECISIONS.md` ADR-046.
 
 ## Sessions
 
