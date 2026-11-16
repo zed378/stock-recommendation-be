@@ -238,5 +238,5 @@ On the VM only the frontend container was recreated (`up -d --no-build`, overrid
 Verified after: `/`, `/login`, `/watchlist`, `/trader` answer 200 `text/html`; `/trader/v1/status` answers 401 JSON; the production main chunk matches the local build; frontend container healthy;
 Trader healthcheck exit 0; Trader `HALTED`. A Playwright run against production (Chromium) measured the gap from headline to stack at 70px (1440 EN, 1920 EN) and 85px (1920 ID), no overflow, no console errors at 375, 1440 and 1920.
 
-Not verified: LCP, INP and CLS were not measured; no real device or Safari; each font file appears twice in the network log on load (possible preload versus `@font-face` crossorigin mismatch), not yet diagnosed.
+Not verified: LCP, INP and CLS were not measured; no real device or Safari. The font files looked doubled in an earlier network log; a later fresh load of production (Chromium, Playwright `request` events) shows each of the three files requested once, with CORS mode, so the `preload` calls in `Landing.tsx` match the `@font-face` fetches and there is no duplicate (the earlier count was a harness artefact).
 Rollback: set the frontend image back to `aidss-frontend:db57068` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
