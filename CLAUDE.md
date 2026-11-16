@@ -12,7 +12,7 @@ This repository holds **two systems at two different maturity levels**:
 | System | State | Where |
 |---|---|---|
 | **AIDSS analysis platform** | Built and running. FastAPI + PostgreSQL + React. Decision support only: no order, no broker, no execution, enforced by tests. | `src/aidss/`, `frontend/`, `alembic/`, `tests/` |
-| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T5 built, T6 partial; deployed `HALTED` on the VM (`zed378/aidss-trader:e410ab7`, migrations `0001..0008`).** `aidss_trader` has the foundation, Indodax connector, strategy, paper/backtest, Risk Engine, order manager, exit monitor, kill switch, reconciler, and `/trader/v1` + `frontend/src/trader/` operator surface, verified against a synthetic mock and SQLite (plus local PostgreSQL 18 privilege/index/restore rehearsals). **Never run against a real exchange; the VM instance starts `HALTED` with no exchange URL, no keys, and every owner number unset, so it trades nothing until the owner acts.** | `src/aidss_trader/`, `frontend/src/trader/`, `docs/`, `MEMORY/`, `TASKS/` |
+| **AIDSS Trader** (Indodax crypto auto-trading) | **Phases T1 to T5 built, T6 partial; deployed `HALTED` on the VM (`zed378/aidss-trader:7d03693`, migrations `0001..0008`).** `aidss_trader` has the foundation, Indodax connector, strategy, paper/backtest, Risk Engine, order manager, exit monitor, kill switch, reconciler, and `/trader/v1` + `frontend/src/trader/` operator surface, verified against a synthetic mock and SQLite (plus local PostgreSQL 18 privilege/index/restore rehearsals). **Never run against a real exchange; the VM instance starts `HALTED` with no exchange URL, no keys, and every owner number unset, so it trades nothing until the owner acts.** | `src/aidss_trader/`, `frontend/src/trader/`, `docs/`, `MEMORY/`, `TASKS/` |
 
 If this file and `TASKS/PROGRESS.md` disagree about what exists, trust `PROGRESS.md` and fix this file. A
 stale instruction document produces confidently wrong work.
@@ -162,7 +162,7 @@ Windows paths shown (`.venv/Scripts/python`); on Linux and macOS use `.venv/bin/
 
 ### Trader
 
-Verified on 2026-11-15 (`513 passed, 7 deselected` on SQLite + mock exchange; `7 passed` `-m postgres` on local PostgreSQL 18; `6 passed` `-m postgres` on VM PostgreSQL 16 clone; frontend Vitest + `tsc` + `oxlint` passing; VM deployed at `zed378/aidss-trader:e410ab7` / `zed378/aidss-frontend:f08e3af` / `zed378/aidss-api:e7b3da3` in `HALTED` state):
+Verified on 2026-11-15 (`513 passed, 7 deselected` on SQLite + mock exchange; `7 passed` `-m postgres` on local PostgreSQL 18; `6 passed` `-m postgres` on VM PostgreSQL 16 clone; frontend Vitest + `tsc` + `oxlint` passing; VM deployed at `zed378/aidss-trader:7d03693` / `zed378/aidss-frontend:f08e3af` / `zed378/aidss-api:e7b3da3` in `HALTED` state):
 
 | Command | Description |
 |---|---|
@@ -172,7 +172,7 @@ Verified on 2026-11-15 (`513 passed, 7 deselected` on SQLite + mock exchange; `7
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
 | `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); applied through `0008_indexes_idempotency` on VM PostgreSQL (2026-11-15) |
 
-The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler (T2 to T4), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and operator UI (`frontend/src/trader/`, `frontend/src/pages/Trader*.tsx`), are wired into `aidss_trader run` and deployed `HALTED` on the VM (`zed378/aidss-trader:e410ab7`, `zed378/aidss-frontend:220f1cb`, `zed378/aidss-api:e7b3da3`). Every owner number is unset and the Compose file passes no exchange URL, so the deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (`T2-07` is owner-led; `python -m aidss_trader live-check` is prepared). Live Playwright browser inspection on `https://aidss.zedth.my.id` (`75bc905`) passed direct `goto`/`reload` on all 7 `/trader` routes, collapsible sidebar persistence, landing page (`/`), security headers, and simulated `502` outage.
+The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler (T2 to T4), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and operator UI (`frontend/src/trader/`, `frontend/src/pages/Trader*.tsx`), are wired into `aidss_trader run` and deployed `HALTED` on the VM (`zed378/aidss-trader:7d03693`, `zed378/aidss-frontend:220f1cb`, `zed378/aidss-api:e7b3da3`). Every owner number is unset and the Compose file passes no exchange URL, so the deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (`T2-07` is owner-led; `python -m aidss_trader live-check` is prepared). Live Playwright browser inspection on `https://aidss.zedth.my.id` (`75bc905`) passed direct `goto`/`reload` on all 7 `/trader` routes, collapsible sidebar persistence, landing page (`/`), security headers, and simulated `502` outage.
 
 ## Code Style
 
@@ -183,7 +183,7 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 ## What Is Currently Failing
 
-Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **515 passed, 7 deselected, no xfail** (S13 is closed by `requirements-trader.lock`, ADR-050 and ADR-053, which holds only the Trader's own 28 packages; the lock is not yet in a deployed image), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **93 passed** (with `--pool=vmThreads`; the default pool fails on this machine's Node 26) (including `TraderLazyRoutes.test.tsx`).
+Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **515 passed, 7 deselected, no xfail** (S13 is closed by `requirements-trader.lock`, ADR-050 and ADR-053, which holds only the Trader's own 28 packages; the lock is in the deployed image `7d03693`, 2026-11-16), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **93 passed** (with `--pool=vmThreads`; the default pool fails on this machine's Node 26) (including `TraderLazyRoutes.test.tsx`).
 
 - `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
   fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not

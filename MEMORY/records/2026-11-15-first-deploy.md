@@ -240,3 +240,19 @@ Trader healthcheck exit 0; Trader `HALTED`. A Playwright run against production 
 
 Not verified: LCP, INP and CLS were not measured; no real device or Safari. The font files looked doubled in an earlier network log; a later fresh load of production (Chromium, Playwright `request` events) shows each of the three files requested once, with CORS mode, so the `preload` calls in `Landing.tsx` match the `@font-face` fetches and there is no duplicate (the earlier count was a harness artefact).
 Rollback: set the frontend image back to `aidss-frontend:db57068` in the override and run the same `up -d --no-build` (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of the Trader at commit 7d03693 (2026-11-16): the 28-package lock reaches production
+
+The owner chose "deploy now" for the Trader image built from `requirements-trader.lock` (ADR-050, ADR-053), with the commit tag, never `latest`. Image `zed378/aidss-trader:7d03693`
+(digest `sha256:56c0f2dd77f0452fc0d39aa3f40cf0ce1c9580881b762936a6bfb5fa52fa043c`), built from a clean `git archive HEAD` export with `Dockerfile.trader`. Compared with the lock before the push:
+`pip freeze` inside the image lists the same 28 name==version pairs as the lock (diff empty); the container runs as uid 999. On the VM only `stocks-trader-1` was recreated (`up -d --no-build trader`, override on stdin,
+env from `~/.aidss-trader.env`); the frontend (`220f1cb`), api and worker (`e7b3da3`) and PostgreSQL were not touched, no migration ran, the master key and the Compose secret are unchanged.
+
+Verified after: container healthy, `python -m aidss_trader healthcheck` exit 0, log shows `no exchange URLs configured: the Trader will observe and halt` and running cycles,
+`trading.trading_state` is `HALTED` ("initial state: awaiting the owner's resume"), `pip freeze` in the running container lists 28 packages, `/`, `/login`, `/watchlist`, `/trader` answer 200,
+`/trader/v1/status` answers 401 JSON `missing_token`. The image therefore drops the 16 packages the old `e410ab7` image carried beyond the lock (ADR-051 pruning).
+
+Not verified: behaviour under a real exchange (none configured, none made); the Trader's full test suite against this exact image (tests ran from the repository, 518 passed, not inside the image);
+the `-m postgres` suite against the VM database. Rollback: set the trader image back to `aidss-trader:e410ab7` in the override and run the same `up -d --no-build trader` (not rehearsed, no timing measured).
