@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-16 — Task T: Frontend cleanup (unused landing JPEGs & `rec.label.reduce`)](records/2026-11-16-t-frontend-cleanup.md) — `git rm` 3 unused JPEGs in `frontend/public/landing/` (713,149 B); added `rec.label.reduce` (`Kurangi` / `Reduce`) in `messages.ts` + `RecommendationLabels.test.ts`; `tsc`, `oxlint`, `94` Vitest, `vite build`, `ruff`, `518` pytest pass
+
 - [2026-11-16 — Task S: Sync accepted ADR-046, 047, 049, 051 across docs and backlog](records/2026-11-16-adr-acceptance-sync.md) — updated `TASKS/BACKLOG.md` (ADR-049 single parameter set; ADR-051 `_Replays._prune_expired` opportunistic pruning tested in `test_d_gaps.py`), `TASKS/PROGRESS.md` (`T3`), and `docs/09-SECURITY-PRIVACY/01-IDENTITY-RBAC.md` (ADR-046); `ADR-052` remains `proposed`; `42 passed`
 
 - [2026-11-15 — T1-05 external audit head-hash anchor & T1-02 CI workflow](records/2026-11-15-t1-05-audit-anchor-and-ci.md) — added `record_head_anchor`/`verify_head_anchor` + `audit-anchor` CLI (`ADR-054` proposed) and `.github/workflows/ci.yml` (`architecture-guard`, `trader-backend`, `frontend`); `ruff` clean, `518 passed, 7 deselected` (`-m postgres`); host schedule & GitHub Actions run pending

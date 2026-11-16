@@ -332,6 +332,7 @@ export const id = {
   // --- recommendation ----------------------------------------------------
   "rec.title": "Rekomendasi",
   "rec.label.buy": "Beli",
+  "rec.label.reduce": "Kurangi",
   "rec.label.sell": "Jual",
   "rec.label.hold": "Tahan",
   "rec.label.watchlist": "Pantau",
@@ -1845,6 +1846,7 @@ export const en: Record<MessageKey, string> = {
 
   "rec.title": "Recommendation",
   "rec.label.buy": "Buy",
+  "rec.label.reduce": "Reduce",
   "rec.label.sell": "Sell",
   "rec.label.hold": "Hold",
   "rec.label.watchlist": "Watch",
