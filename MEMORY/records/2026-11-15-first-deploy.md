@@ -270,3 +270,18 @@ Browser (Chromium, emulated CPU 4x and Fast 3G, 1440x900 English): CLS 0.0254 in
 does not overflow (`scrollWidth == clientWidth`) at 320, 360, 375, 390, 414, 600 and 767px in both languages (14 of 14).
 
 Not verified: LCP and INP after the change, a real device, Safari. Rollback: set the frontend image back to `aidss-frontend:220f1cb` and run the same `up -d --no-build frontend` (not rehearsed, no timing measured).
+
+---
+
+## `latest` tags and the VM moved to them (2026-11-16)
+
+`latest` was created for the three AIDSS repositories by retagging in the registry (`docker buildx imagetools create`), not by rebuilding: `src/aidss`, `alembic`, `pyproject.toml` and the Dockerfile have no diff between
+`e7b3da3` and HEAD, and a rebuild would only have risked pulling different unpinned API dependencies. Digests are therefore identical to the commit tags: `aidss-api:latest` = `e7b3da3` (`sha256:974ca6cec2125d6eda0d2f298d565d9c7777844940527f1944f23604347ec187`),
+`aidss-frontend:latest` = `a2ec4c3` (`sha256:b72a24271bafcc0d8bbc0fba07db6097dc303cc9777aeda6322ddadda4fb6341`), `aidss-trader:latest` = `7d03693` (`sha256:56c0f2dd77f0452fc0d39aa3f40cf0ce1c9580881b762936a6bfb5fa52fa043c`).
+
+On the VM the override now names `aidss-api:latest` (api and worker) and `aidss-frontend:latest`; `up -d --no-build api worker frontend` recreated those three containers. The Trader stays on `aidss-trader:7d03693`: the rule that the
+Trader is never deployed from `latest` is unchanged. Verified after: the running containers' image ids equal the digests above, all containers healthy, Trader healthcheck exit 0 and `trading_state` `HALTED`, `/`, `/login`, `/watchlist`,
+`/trader` and `/api/health` answer 200.
+
+Not done: deleting the other tags. Pending the owner's Docker Hub token and a final go-ahead; the candidates are 5 `aidss-api` tags and 16 `aidss-frontend` tags (the six `aidss-trader` commit tags stay). Consequences to remember before it:
+rollback to a deleted frontend or api tag becomes impossible (the rollback lines in earlier sections of this record then no longer apply), and `latest` moves whenever it is next pushed, so the digest above is the only fixed reference.
