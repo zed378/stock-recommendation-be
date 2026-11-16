@@ -256,3 +256,17 @@ Verified after: container healthy, `python -m aidss_trader healthcheck` exit 0, 
 
 Not verified: behaviour under a real exchange (none configured, none made); the Trader's full test suite against this exact image (tests ran from the repository, 518 passed, not inside the image);
 the `-m postgres` suite against the VM database. Rollback: set the trader image back to `aidss-trader:e410ab7` in the override and run the same `up -d --no-build trader` (not rehearsed, no timing measured).
+
+---
+
+## Redeploy of the frontend at commit a2ec4c3 (2026-11-16)
+
+Image `aidss-frontend:a2ec4c3` (digest `sha256:b72a24271bafcc0d8bbc0fba07db6097dc303cc9777aeda6322ddadda4fb6341`, main chunk `index-BrE3psqb.js`), clean `git archive HEAD` export. Changes since `220f1cb`: the italic headline face is preloaded
+and the headline size fits the longest word at every phone width (`f109775`); `rec.label.reduce` is translated and the three unused landing JPEGs are gone (stage 10, Task T). `nginx -t` passed, local container smoke
+passed (chunk contains `rec.label.reduce`, `/landing/*.jpg` falls back to the SPA page instead of serving an image). Only `stocks-frontend-1` was recreated; Trader (`7d03693`), api and worker (`e7b3da3`) and PostgreSQL were not touched.
+
+Verified after: frontend healthy, `/`, `/login`, `/watchlist`, `/trader` 200 `text/html`, `/trader/v1/status` 401, the production chunk is `index-BrE3psqb.js`, Trader healthcheck exit 0, `trading_state` `HALTED`.
+Browser (Chromium, emulated CPU 4x and Fast 3G, 1440x900 English): CLS 0.0254 in 10 of 10 runs on production (before the change 0.137 appeared in about 1 of 10); the headline box
+does not overflow (`scrollWidth == clientWidth`) at 320, 360, 375, 390, 414, 600 and 767px in both languages (14 of 14).
+
+Not verified: LCP and INP after the change, a real device, Safari. Rollback: set the frontend image back to `aidss-frontend:220f1cb` and run the same `up -d --no-build frontend` (not rehearsed, no timing measured).
