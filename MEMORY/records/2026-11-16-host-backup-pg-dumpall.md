@@ -49,3 +49,28 @@ port 5432 is still published, and the superuser password is unchanged. Until ste
 Rollback of step 1: run `rollback_analysis_role.sql` as `aidss` (returns ownership of `public` objects to `aidss`, rehearsed at under 1s on the clone), then `DROP ROLE aidss_app` once nothing connects as it, and remove the `AIDSS_APP_DATABASE_URL` line from `~/.aidss-trader.env`. The pre-change dump is `~/aidss-backups/pg_dumpall-20261116T100117Z.sql.gz`.
 
 Next (needs the owner's go-ahead): step 2, switch `api` and `worker` to `aidss_app` through the override, unpublish port 5432 (`ports: !reset []`), then rotate the superuser password; check the pre-step `pg_stat_activity` for any outside client first (R13, point 1).
+
+---
+
+## Step 2 applied: api and worker on `aidss_app`, port 5432 closed, superuser password rotated (2026-11-16, after the owner's go-ahead)
+
+Pre-check (R13 point 1): `pg_stat_activity` showed only Compose-network clients (`172.22.0.x`: api, worker, trader), none from outside. Three sub-steps, each verified before the next, all through the stdin Compose override
+(`up -d --no-build <service>`, env from `~/.aidss-trader.env`); `docker-compose.yml` on the host was not edited.
+
+- **2a, api and worker as `aidss_app`:** override sets `AIDSS_DATABASE_URL: ${AIDSS_APP_DATABASE_URL}` for both; only `api` and `worker` were recreated. `docker compose config` resolved both to `aidss_app`.
+  After: `pg_stat_activity` shows `aidss_app` for both, `trader_rw` for the Trader, no `aidss` connection; api healthy, `/health` 200, worker started with the leader lease; no error in the api log.
+- **2b, port 5432 closed:** override adds `postgres: ports: !reset []` (as in `deploy/trader/docker-compose.trader.yml`); `postgres` was recreated (same volume, data kept). Before: a TCP connect from the owner's workstation to `10.1.200.13:5432` succeeded;
+  after: `Connection refused`, `ss -ltn` shows nothing on 5432. The Trader, api and worker reconnected on their own; the api's realtime listener logged one reconnect warning at the restart and was listening again within a second.
+- **2c, superuser password:** `ALTER ROLE aidss PASSWORD` with a random 48-hex-character value through stdin, stored only in `~/.aidss-pg-superuser` (mode `0600`, outside the file Compose reads). From another container the old password `aidss` is now refused
+  (`password authentication failed`); the new one works. Administration through `docker exec stocks-postgres-1 psql -U aidss` is unchanged (the image's `pg_hba.conf` trusts the local socket and `127.0.0.1` inside the container).
+
+Verified after all three: containers healthy, Trader healthcheck exit 0 and `trading_state` `HALTED`, `/`, `/login` and `/api/health` answer 200.
+
+Still open, not part of this step:
+- The host's `docker-compose.yml` keeps `AIDSS_DATABASE_URL: ...aidss:aidss@...` and `POSTGRES_PASSWORD` defaults for a fresh start without the override; with the password rotated that URL no longer works, so `up` **without** the stdin override would start api and worker
+  that cannot connect. The deploy recipe must keep using the override (it already does); the base file on the host should be fixed by the owner or the main agent.
+- Other ports published on the host: api `7153` and frontend `5173` (reachable directly, bypassing the reverse proxy); not examined here.
+- The superuser password and `AIDSS_APP_DATABASE_URL` are single copies on the host; the backup `~/aidss-backups/pg_dumpall-20261116T100117Z.sql.gz` is on the same host.
+- Not exercised: a logged-in user flow and a worker job run as `aidss_app` after the change (health, connections and logs only).
+
+Rollback of step 2: set `AIDSS_DATABASE_URL` back to the superuser in the override (using the stored superuser password) and recreate `api` and `worker`; re-add `ports: ["5432:5432"]` to bring the published port back; the dump is the last resort.
