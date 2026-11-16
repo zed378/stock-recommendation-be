@@ -40,6 +40,14 @@ committee, calibration. The separate AIDSS Trader (Indodax, crypto) is built but
 - Contrast, computed with the project's checker: muted text on ink 7.86:1, accent on ink 8.88:1, ink on the accent button 6.41:1, text on paper 14.44:1, muted on paper 6.14:1, accent on paper 5.11:1.
 - Checks: `tsc` 5.9.3 and `oxlint` clean; Vitest 93 passed with `--pool=vmThreads` (the landing test went from 2 tests to 10); build 0.6 s; main JS 248.9 kB to 225.5 kB (the old page was heavier).
 
+## Follow-up, same day: the hero at 1920px (owner's screenshot)
+
+The first QA stopped at 1536px. At 1920px in English the headline ("recommendations", 105px) ran under the 3D stack, the caption sat far from the drawing, and the hero was taller than needed.
+Fixed in `Landing.tsx`: the headline is capped at 4.3rem (`clamp(2.75rem,5vw,4.3rem)`) with `lg:pr-12`, the stack is vertically centred against it (`lg:self-center`, aspect 5/4) and its caption pulled up.
+Measured as the distance between the right end of the headline text and the left edge of the leftmost plane, at 1024, 1280, 1440, 1680, 1920 and 2560px in both languages: 65 to 147px, never negative; overflow 0.
+An attempt to cap the size with an arbitrary `min-[1500px]` variant did not take effect in the dev build (computed size stayed 78.4px); the cap went into the `clamp` instead.
+Lesson recorded here: the page is now checked up to 2560px, not 1536px.
+
 ## Not verified / limits
 
 - **Not seen on a real device, and the references were not seen at all**: the two Dribbble shots are images and this session cannot view them, so the "study" of them rests on the owner's written description of their traits. The result is

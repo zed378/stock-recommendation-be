@@ -211,10 +211,10 @@ export function Landing() {
         {/* ---------------------------------------------------------- hero */}
         <section ref={hero} aria-labelledby="lp-hero-title" className="relative overflow-hidden">
           <div className="mx-auto grid max-w-[88rem] gap-8 px-5 pb-16 pt-12 sm:px-8 lg:grid-cols-12 lg:gap-4 lg:pb-28 lg:pt-24">
-            <div className="lg:col-span-7">
+            <div className="min-w-0 lg:col-span-7 lg:self-center lg:pr-12">
               <h1
                 id="lp-hero-title"
-                className="lp-display text-[clamp(2.1rem,11.6vw,2.75rem)] leading-[0.97] text-[var(--lp-text)] md:text-[clamp(2.75rem,7vw,6.6rem)]"
+                className="lp-display text-[clamp(2.1rem,11.6vw,2.75rem)] leading-[0.97] text-[var(--lp-text)] md:text-[clamp(2.75rem,5vw,4.3rem)]"
               >
                 {t("landing.hero.titleA")}{" "}
                 <em className="text-[var(--lp-accent)]">{t("landing.hero.titleEm")}</em>
@@ -240,13 +240,13 @@ export function Landing() {
               <p className="mt-6 text-sm text-[var(--lp-faint)]">{t("landing.hero.note")}</p>
             </div>
 
-            <figure className="relative lg:col-span-5 lg:-mr-10 lg:mt-6">
+            <figure className="relative lg:col-span-5 lg:-mr-10 lg:self-center">
               <div className="mx-auto w-full max-w-[34rem] lg:max-w-none">
-                <div className="relative aspect-[1/1]">
+                <div className="relative aspect-[5/4]">
                   <DecisionStack ref={heroStack} />
                 </div>
               </div>
-              <figcaption className="mt-2 max-w-[22rem] text-xs leading-relaxed text-[var(--lp-faint)] lg:ml-auto lg:mr-14">
+              <figcaption className="-mt-4 max-w-[22rem] text-xs leading-relaxed text-[var(--lp-faint)] lg:ml-auto lg:mr-14">
                 {t("landing.hero.figure")}
               </figcaption>
             </figure>
