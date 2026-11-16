@@ -57,3 +57,14 @@ Lesson recorded here: the page is now checked up to 2560px, not 1536px.
 - Hover on the stack is for pointer devices only; touch users get the scroll and step behaviour.
 - The hero stack's "pull apart" is partly out of view by the time it completes, because the hero fills the first screen; it is a gesture more than a reveal.
 - Side finding, not touched: the app's `rec.label.*` strings have `strong_sell` but no `reduce`, while the backend enum has `reduce` and no `strong_sell`, so a "reduce" recommendation would show a raw key on the asset page.
+
+## Follow-up: layout shift and headline width (2026-11-16)
+
+Task U measured, under emulated CPU 4x and Fast 3G, a CLS of up to 0.137 at 1440x900 English (1 run in 3) and a headline word wider than its box at 375 and 320px English
+(`h1.scrollWidth` 342 vs 335, 292 vs 280). Cause of the shift: the italic face (the emphasised word of the headline) was not preloaded, so when it arrived after the roman face the headline re-flowed
+and the figure and paragraph below moved. Changes in `Landing.tsx`: the italic face is preloaded too, and the headline size below `md` is `clamp(2rem, (100vw - 40px) / 8.1, 2.75rem)`, so the longest word ("recommendations")
+fits the 20px gutters at every width instead of being tuned to two widths.
+
+Measured on a local production build, same emulation, 1440x900 English, 10 runs each: before, 9 runs at 0.0254 and 1 at 0.137; after, 10 runs at 0.0254. The remaining 0.0254 is the single text shift
+when the faces swap in. Headline box at 320, 360, 375, 390, 414, 600 and 767px, both languages: `scrollWidth == clientWidth`, document width equal to the viewport. One vitest asserts the three font preloads.
+Not verified: the change in production (not deployed), and ten runs per side is a small sample; the 0.137 case is intermittent, so "0 of 10" is evidence, not proof.

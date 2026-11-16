@@ -65,8 +65,10 @@ export function Landing() {
   const [part, setPart] = useState<Part | null>(null);
   const [layer, setLayer] = useState(0);
 
-  // The two display faces are what the first paint is made of, so ask for them early. Only this page does.
+  // These faces are what the first paint is made of (the headline's emphasised word is italic), so ask for them
+  // early: a face that arrives after the text is painted re-flows the headline. Only this page does.
   preload("/fonts/newsreader-display.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
+  preload("/fonts/newsreader-display-italic.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
   preload("/fonts/inter-latin.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
 
   useStackMotion(heroStack, hero, { scroll: true, tilt: true });
@@ -214,7 +216,7 @@ export function Landing() {
             <div className="min-w-0 lg:col-span-7 lg:self-center lg:pr-12">
               <h1
                 id="lp-hero-title"
-                className="lp-display text-[clamp(2.1rem,11.6vw,2.75rem)] leading-[0.97] text-[var(--lp-text)] md:text-[clamp(2.75rem,5vw,4.3rem)]"
+                className="lp-display text-[clamp(2rem,calc((100vw-40px)/8.1),2.75rem)] leading-[0.97] text-[var(--lp-text)] md:text-[clamp(2.75rem,5vw,4.3rem)]"
               >
                 {t("landing.hero.titleA")}{" "}
                 <em className="text-[var(--lp-accent)]">{t("landing.hero.titleEm")}</em>

@@ -86,6 +86,16 @@ describe("landing page content is honest", () => {
     expect(en.container.textContent).toContain("No orders and no broker");
   });
 
+  it("asks early for every face the headline is painted with, so it does not re-flow when one arrives", () => {
+    render(<Harness />);
+    const hrefs = Array.from(document.querySelectorAll('link[rel="preload"][as="font"]')).map((l) =>
+      l.getAttribute("href"),
+    );
+    expect(hrefs).toContain("/fonts/newsreader-display.woff2");
+    expect(hrefs).toContain("/fonts/newsreader-display-italic.woff2");
+    expect(hrefs).toContain("/fonts/inter-latin.woff2");
+  });
+
   it("uses no raster image: the stack is drawn, and only the logo is an <img>", () => {
     const { container } = render(<Harness />);
     const images = Array.from(container.querySelectorAll("img"));
