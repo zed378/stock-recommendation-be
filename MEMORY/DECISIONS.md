@@ -1114,8 +1114,8 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 ### ADR-054 — External Audit Log Head-Hash Anchoring (`T1-05`)
 
 - **Date:** 2026-11-15
-- **Status:** proposed
-- **Deciders:** Engineering (awaiting owner confirmation of host anchor path and schedule)
+- **Status:** accepted (owner, 2026-11-16): option 1, hourly cron writing the anchor file outside the database volume (suggested path `/var/lib/aidss-anchor/anchor.jsonl`); installing the cron on the host is part of the host hardening steps and not yet done
+- **Deciders:** Engineering; owner chose option 1 and an hourly schedule on 2026-11-16
 - **Context:** `docs/09-SECURITY-PRIVACY/04-AUDIT-LOGGING.md` requires recording the audit chain's head hash outside the database so a database owner cannot silently truncate or rewrite `trading.audit_log`, and states the external target should be recorded as an ADR. `chain_head(session)` existed, but no external anchor writer, verifier, or CLI entry point had been built.
 - **Options:**
   1. Append-only JSONL file outside the database (`record_head_anchor` / `verify_head_anchor`) driven by `python -m aidss_trader audit-anchor --out <path>` (plus `--verify-only`), with idempotent appends when `(seq, head_hash)` has not advanced and `AuditChainBroken` failure on DB truncation or hash mismatch.
