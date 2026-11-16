@@ -183,7 +183,7 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 ## What Is Currently Failing
 
-Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **515 passed, 7 deselected, no xfail** (S13 is closed by `requirements-trader.lock`, ADR-050 and ADR-053, which holds only the Trader's own 28 packages; the lock is not yet in a deployed image), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **85 passed** (with `--pool=vmThreads`; the default pool fails on this machine's Node 26) (including `TraderLazyRoutes.test.tsx`).
+Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **515 passed, 7 deselected, no xfail** (S13 is closed by `requirements-trader.lock`, ADR-050 and ADR-053, which holds only the Trader's own 28 packages; the lock is not yet in a deployed image), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **93 passed** (with `--pool=vmThreads`; the default pool fails on this machine's Node 26) (including `TraderLazyRoutes.test.tsx`).
 
 - `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
   fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not

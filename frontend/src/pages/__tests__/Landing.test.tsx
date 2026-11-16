@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext, type Auth } from "@/auth/context";
 import { I18nContext, type I18n } from "@/i18n/context";
 import { locales, type Locale, type MessageKey } from "@/i18n/messages";
@@ -9,9 +9,10 @@ import { Landing } from "@/pages/Landing";
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
-function LandingHarness({ initialLocale = "id" }: { initialLocale?: Locale }) {
+function Harness({ initialLocale = "id", signedIn = false }: { initialLocale?: Locale; signedIn?: boolean }) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const dict = locales[locale];
   const i18n: I18n = {
@@ -19,11 +20,7 @@ function LandingHarness({ initialLocale = "id" }: { initialLocale?: Locale }) {
     setLocale,
     t: (key: MessageKey, values?: Record<string, string | number>) => {
       let msg: string = dict[key] ?? key;
-      if (values) {
-        for (const [k, v] of Object.entries(values)) {
-          msg = msg.replaceAll(`{${k}}`, String(v));
-        }
-      }
+      if (values) for (const [k, v] of Object.entries(values)) msg = msg.replaceAll(`{${k}}`, String(v));
       return msg;
     },
     n: (v) => String(v ?? "-"),
@@ -32,16 +29,15 @@ function LandingHarness({ initialLocale = "id" }: { initialLocale?: Locale }) {
     date: (v) => String(v ?? "-"),
     dateTime: (v) => String(v ?? "-"),
   };
-  const auth: Auth = {
-    user: null,
+  const auth = {
+    user: signedIn ? { id: "u", email: "o@example.com", full_name: "O", role: "trader" } : null,
     loading: false,
     signIn: async () => {},
     signUp: async () => {},
     signOut: () => {},
     expiredNotice: false,
     dismissExpiredNotice: () => {},
-  };
-
+  } as unknown as Auth;
   return (
     <MemoryRouter initialEntries={["/"]}>
       <I18nContext.Provider value={i18n}>
@@ -53,90 +49,139 @@ function LandingHarness({ initialLocale = "id" }: { initialLocale?: Locale }) {
   );
 }
 
-describe("Landing page luxury product revamp", () => {
-  it("renders without em dashes in any landing copy (R-02) and sets explicit image attributes (R-40)", () => {
-    const { container } = render(<LandingHarness initialLocale="id" />);
-    expect(container.textContent).not.toContain("\u2014");
-
-    const allImages = Array.from(container.querySelectorAll("img"));
-    expect(allImages.length).toBe(5);
-    for (const img of allImages) {
-      expect(img.getAttribute("width")).toBeTruthy();
-      expect(img.getAttribute("height")).toBeTruthy();
-    }
-
-    const editorialImages = Array.from(
-      container.querySelectorAll<HTMLImageElement>('img[src^="/landing/"]'),
-    );
-    expect(editorialImages.length).toBe(3);
-
-    const heroImg = editorialImages[0]!;
-    expect(heroImg.getAttribute("src")).toBe("/landing/hero-jakarta-skyline.jpg");
-    expect(heroImg.getAttribute("width")).toBe("1600");
-    expect(heroImg.getAttribute("height")).toBe("2411");
-    expect(heroImg.getAttribute("loading")).toBeNull();
-
-    for (const belowFoldImg of editorialImages.slice(1)) {
-      expect(belowFoldImg.getAttribute("loading")).toBe("lazy");
-      expect(belowFoldImg.getAttribute("width")).toBe("1200");
-      expect(belowFoldImg.getAttribute("height")).toBe("800");
+describe("landing page content is honest", () => {
+  it("has no em dash, in either language (R-02)", () => {
+    for (const locale of ["id", "en"] as const) {
+      const { container, unmount } = render(<Harness initialLocale={locale} />);
+      expect(container.textContent).not.toContain("—");
+      unmount();
     }
   });
 
-  it("wires issuer specimen switcher, pause/play motion toggle, studio tabs, debate graph nodes, language switcher, and mobile menu (R-35)", () => {
-    const { container } = render(<LandingHarness initialLocale="id" />);
+  // R-17 and R-38: no price, no confidence, no count of users. The only figures allowed are the ones that
+  // are facts about the product (13 indicators; the 1, 7, 14 and 30 day horizons of the stock picks) and the
+  // year in the copyright line.
+  it("contains no figure other than the ones that are facts about the product", () => {
+    for (const locale of ["id", "en"] as const) {
+      const { container, unmount } = render(<Harness initialLocale={locale} />);
+      const text = container.textContent ?? "";
+      // "01" to "05" are the zero-padded list markers of the workspaces; they are compared as numbers.
+      const figures = new Set((text.match(/\d+/g) ?? []).map((f) => (f.length === 4 ? f : String(Number(f)))));
+      const allowed = new Set(["13", "1", "7", "14", "30", String(new Date().getFullYear())]);
+      // Layer numbers 1 to 5 and the part indices 1 to 6 are list markers, not data.
+      for (const marker of ["2", "3", "4", "5", "6"]) allowed.add(marker);
+      for (const figure of figures) expect(allowed.has(figure), `unexpected figure ${figure}`).toBe(true);
+      expect(text).not.toMatch(/Rp|IDR\s?\d|%|BBCA|BMRI|TLKM/);
+      unmount();
+    }
+  });
 
-    // 1. Issuer Specimen Switcher updates hero stage metrics and issuer name
-    expect(screen.getAllByText(/Bank Central Asia Tbk/i).length).toBeGreaterThan(0);
-    const tlkmBtn = screen.getByRole("button", { name: /TLKM\.JK/i });
-    fireEvent.click(tlkmBtn);
-    expect(tlkmBtn.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getAllByText(/Telkom Indonesia \(Persero\) Tbk/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/2,890/i).length).toBeGreaterThan(0);
+  it("says the Trader has never been connected to an exchange and offers no order path", () => {
+    const { container, unmount } = render(<Harness initialLocale="id" />);
+    expect(container.textContent).toContain("belum pernah terhubung ke bursa sungguhan");
+    expect(container.textContent).toContain("Tidak ada pesanan dan tidak ada broker");
+    unmount();
+    const en = render(<Harness initialLocale="en" />);
+    expect(en.container.textContent).toContain("never been connected to a real one");
+    expect(en.container.textContent).toContain("No orders and no broker");
+  });
 
-    // 2. Pause / Play Animation button toggles data-motion-paused and aria-pressed (R-39)
-    // Note: clicking TLKM.JK already paused auto-cycling so the user's chosen specimen stays pinned.
-    const rootWrapper = container.querySelector("[data-motion-paused]")!;
-    expect(rootWrapper.getAttribute("data-motion-paused")).toBe("true");
-    const motionBtn = screen.getByRole("button", { name: /Putar Animasi/i });
-    fireEvent.click(motionBtn);
-    expect(rootWrapper.getAttribute("data-motion-paused")).toBe("false");
-    expect(motionBtn.getAttribute("aria-pressed")).toBe("false");
+  it("uses no raster image: the stack is drawn, and only the logo is an <img>", () => {
+    const { container } = render(<Harness />);
+    const images = Array.from(container.querySelectorAll("img"));
+    expect(images.length).toBe(2);
+    for (const img of images) {
+      expect(img.getAttribute("src")).toBe("/logo-symbol.svg");
+      expect(img.getAttribute("width")).toBeTruthy();
+      expect(img.getAttribute("height")).toBeTruthy();
+      expect(img.getAttribute("alt")).toBe("");
+    }
+  });
+});
 
-    // 3. Interactive Product Studio tabs (click + ArrowRight keyboard navigation)
-    const tab1 = screen.getByRole("tab", { name: /Kanvas Kronos & Level Harga/i });
-    const tab2 = screen.getByRole("tab", { name: /Teater Debat Multi-Agen/i });
-    const tab3 = screen.getByRole("tab", { name: /Memori Situasi & Kalibrasi/i });
+describe("landing page behaviour", () => {
+  it("sends a visitor to sign in, and a signed-in user to the workspace", () => {
+    const out = render(<Harness />);
+    const signIn = screen.getAllByRole("link", { name: "Masuk ke ruang kerja" });
+    expect(signIn.length).toBeGreaterThan(1);
+    for (const link of signIn) expect(link.getAttribute("href")).toBe("/login");
+    out.unmount();
+    render(<Harness signedIn />);
+    for (const link of screen.getAllByRole("link", { name: "Buka ruang kerja" })) {
+      expect(link.getAttribute("href")).toBe("/watchlist");
+    }
+  });
 
-    expect(tab1.getAttribute("aria-selected")).toBe("true");
-    fireEvent.click(tab2);
-    expect(tab2.getAttribute("aria-selected")).toBe("true");
+  it("only links to sections that exist, and every workspace link is a real route", () => {
+    const { container } = render(<Harness />);
+    const hrefs = Array.from(container.querySelectorAll("a[href]")).map((a) => a.getAttribute("href")!);
+    for (const href of hrefs.filter((h) => h.startsWith("#") && h.length > 1)) {
+      expect(container.querySelector(href), `${href} has no target`).not.toBeNull();
+    }
+    for (const route of ["/login", "/watchlist", "/picks", "/portfolio", "/monitoring", "/trader"]) {
+      expect(hrefs).toContain(route);
+    }
+    expect(container.querySelectorAll("h1").length).toBe(1);
+    expect(container.querySelector("main#main-content")).not.toBeNull();
+  });
 
-    // 4. Debate Graph Node buttons update the active transcript card
-    const bearNodeBtn = screen.getByRole("button", { name: /Bear Researcher/i });
-    fireEvent.click(bearNodeBtn);
-    expect(bearNodeBtn.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText(/Uji Tekanan & Valuasi/i)).toBeTruthy();
+  it("switches language", () => {
+    render(<Harness initialLocale="id" />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("bukti sebaliknya");
+    fireEvent.click(screen.getByRole("button", { name: "en" }));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("the evidence against them");
+  });
 
-    // Keyboard navigation from tab2 -> tab3
-    fireEvent.keyDown(tab2, { key: "ArrowRight" });
-    expect(tab3.getAttribute("aria-selected")).toBe("true");
-    expect(screen.getAllByText(/Bukti penyangkal wajib/i).length).toBeGreaterThan(0);
-
-    // 5. Mobile navigation toggle and Escape key close
-    const menuBtn = screen.getByRole("button", { name: "Menu" });
-    expect(menuBtn.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(menuBtn);
-    expect(menuBtn.getAttribute("aria-expanded")).toBe("true");
+  it("opens the phone menu, and Escape closes it", () => {
+    render(<Harness />);
+    const menu = screen.getByRole("button", { name: "Menu" });
+    expect(menu.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(menu);
+    expect(screen.getByRole("button", { name: "Tutup menu" }).getAttribute("aria-expanded")).toBe("true");
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(menuBtn.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Menu" }).getAttribute("aria-expanded")).toBe("false");
+  });
 
-    // 6. Language switcher switches to English without em dashes
-    const enBtns = screen.getAllByRole("button", { name: /^en$/i });
-    fireEvent.click(enBtns[0]!);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
-      "Investment decisions stress-tested",
-    );
-    expect(container.textContent).not.toContain("\u2014");
+  it("lights the matching part of the card when a part is pointed at or focused", () => {
+    const { container } = render(<Harness />);
+    const lit = () => container.querySelectorAll('.lp-field[data-active="true"]').length;
+    expect(lit()).toBe(0);
+    const confidence = within(container.querySelector("#kartu ol")!).getByRole("button", { name: /Keyakinan/ });
+    fireEvent.focus(confidence);
+    expect(lit()).toBe(1);
+    fireEvent.blur(confidence);
+    expect(lit()).toBe(0);
+    // The three lists of factors are one part and light together.
+    fireEvent.mouseEnter(within(container.querySelector("#kartu ol")!).getByRole("button", { name: /Tiga daftar faktor/ }));
+    expect(lit()).toBe(3);
+  });
+});
+
+describe("the five layers beside the stack", () => {
+  const callbacks: Array<(entries: Array<{ isIntersecting: boolean; target: Element }>) => void> = [];
+
+  beforeEach(() => {
+    callbacks.length = 0;
+    class FakeObserver {
+      constructor(cb: (entries: Array<{ isIntersecting: boolean; target: Element }>) => void) {
+        callbacks.push(cb);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("IntersectionObserver", FakeObserver);
+  });
+
+  it("brings forward the plane of the step that reaches the middle of the screen", () => {
+    const { container } = render(<Harness />);
+    const stacks = () => Array.from(container.querySelectorAll(".lp-stack[data-active]")).map((e) => e.getAttribute("data-active"));
+    expect(stacks()).toContain("0");
+    const step = container.querySelector('[data-step="3"]')!;
+    act(() => {
+      for (const cb of callbacks) cb([{ isIntersecting: true, target: step }]);
+    });
+    expect(stacks()).toContain("3");
+    expect(stacks()).not.toContain("0");
   });
 });
