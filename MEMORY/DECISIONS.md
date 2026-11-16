@@ -957,7 +957,7 @@ rule never fires until then.
 ### ADR-046 — Step-up authentication: a single-use grant minted after password re-entry
 
 **Date:** 2026-11-14
-**Status:** proposed (records the T5-01 mechanism; the window is a safe, reversible default, not a loss limit)
+**Status:** accepted (owner, 2026-11-16): the 5-minute single-use window as written
 
 **Decision:** `FLATTEN`, promotion to `AUTO`, a limit increase, and a credential change each need a
 **step-up grant** in addition to the bearer token. The Trader mints a grant only after the user re-enters their
@@ -979,7 +979,7 @@ platform); a typed confirmation phrase only (does not stop a stolen session).
 ### ADR-047 — A fresh install starts HALTED; signal exits in APPROVAL mode are not queued
 
 **Date:** 2026-11-14
-**Status:** proposed (reversible, no loss limit involved; the owner has not confirmed)
+**Status:** accepted (owner, 2026-11-16): both parts, a fresh install starts HALTED and signal exits in APPROVAL mode are not queued
 
 **Decision:** (1) When the runtime finds no trading-state row it creates one as `HALTED` ("initial state:
 awaiting the owner's resume"). Trading starts only when the owner resumes with a note. (2) In `APPROVAL` mode only
@@ -1024,7 +1024,7 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 ### ADR-049 — Per-pair strategy parameter overrides and version tracking
 
 **Date:** 2026-11-15
-**Status:** proposed (design only; the strategy implementation still uses a single parameter set across all allowlisted pairs until the owner decides)
+**Status:** accepted (owner, 2026-11-16): option 1, one parameter set for all pairs. The per-pair override design below is not adopted; revisit only if the owner asks
 
 **Decision:** Keep a strategy-level parameter set (`strategy_params:<strategy_id>`) as the shared baseline, and allow optional per-pair overrides stored under `strategy_params:<strategy_id>:<pair>` in `trading.trader_setting`. When a pair has an override:
 1. Its effective parameter hash is `EmaAdxStrategy(params).version_id()`, which differs from the baseline version id.
@@ -1064,7 +1064,7 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 ### ADR-051 - Durable Idempotency-Key replay table
 
 **Date:** 2026-11-15
-**Status:** proposed (implemented additively in migration `0008_indexes_idempotency`; the owner may reject it, in which case the table is unused and harmless)
+**Status:** accepted (owner, 2026-11-16); implemented additively in migration `0008_indexes_idempotency`
 
 **Decision:** Store each successful mutation answer in `trading.idempotency_key` (`key_hash` primary key, `body_hash`, `status_code`, `response_body`, `media_type`, `created_at`). `key_hash` is a SHA-256 over token, method, path, and key, so neither the token nor the key is stored. Entries older than 24 hours are ignored. `trader_rw` has `SELECT, INSERT, DELETE` only. If the table cannot be reached, the API falls back to the in-memory copy rather than failing the request.
 
