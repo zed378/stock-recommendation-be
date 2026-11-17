@@ -48,7 +48,7 @@ No unrelated project is approved for closure. Existing public AIDSS access is ou
 | IPv6 | Deny new remote IPv6 for these ports |
 | Other projects (6547, 8080, 8880, 8200, 8300, 9000, 9001, 17080, 17081, 18000 to 18300, 19080) | Untouched in stage 1; client inventory first |
 
-Netbird: the owner asked for netbird access from other devices. Netbird peers arrive on interface `wt0`, which the draft already admits for SSH and for every published port, so no netbird address range is listed. A CIDR such as `100.64.0.0/10` would be weaker (a LAN host could spoof a `100.x` source), and the real netbird range was not read from the host. Confirm the peer's ACL in the netbird dashboard.
+Netbird: the owner asked for netbird access from other devices. Netbird peers arrive on interface `wt0`, which the draft already admits for SSH and for every published port, so no netbird address range is listed. A CIDR such as `100.64.0.0/10` would be weaker (a LAN host could spoof a `100.x` source), and the real netbird range was not read from the host. The owner administers netbird and reports full access to the subnets (2026-11-17, stated, not checked from the host), so no ACL change is expected; the second-session test over netbird still proves it.
 
 Consequences to accept before applying: other hosts on `10.1.200.0/24` and `10.10.10.0/24` lose SSH and Portainer; the owner's own device must be inside `10.1.101.0/24` or on netbird. The draft values are in `deploy/host/firewall/docker-user.nft`; they are unvalidated by `nft -c` and not applied.
 
