@@ -1,0 +1,60 @@
+{
+  "_about": "Starter profile for the owner numbers (worksheet docs/01-PRODUCT-REQUIREMENTS/08), built for Rp 1,000,000. PROPOSED by the engineering agent at the owner's request on 2026-11-16, not decided: nothing here is applied to any instance. Edit the values, then run: python deploy/trader/check_owner_defaults.py <this file>",
+  "status": "proposed",
+  "basis": {
+    "equity_idr": "1000000",
+    "risk_profile": "conservative",
+    "timeframe": "4H",
+    "min_order_idr": "10000",
+    "min_order_note": "ASSUMPTION, not verified: the real per-pair minimum comes from GET /api/pairs (trade_min_base_currency, trade_min_traded_currency)",
+    "assumed_stop_pct": "5"
+  },
+  "limits": {
+    "risk_per_trade_pct": "0.5",
+    "max_daily_loss_idr": "15000",
+    "max_drawdown_pct": "8",
+    "max_consecutive_losses": 4,
+    "max_open_positions": 2,
+    "max_exposure_per_pair_pct": "25",
+    "max_total_exposure_pct": "50",
+    "max_order_idr": "250000",
+    "price_deviation_pct": "0.5",
+    "freshness_limit_s": 60,
+    "cooldown_s": 900,
+    "order_rate_limit": 6,
+    "trading_window": null
+  },
+  "strategy_params": {
+    "ema_fast": 20,
+    "ema_slow": 50,
+    "adx_period": 14,
+    "adx_threshold": "25",
+    "atr_period": 14,
+    "atr_stop_multiple": "2.5",
+    "cooldown_s": 14400
+  },
+  "paper": {
+    "slippage_pct": "0.20",
+    "partial_fill_fraction": "0.50",
+    "maker_fee_pct": "0.15",
+    "taker_fee_pct": "0.30",
+    "tax_pct": "0.25",
+    "clearing_pct": "0.05",
+    "start_equity_idr": "1000000"
+  },
+  "allowlist": {
+    "pairs": [
+      "BTCIDR",
+      "ETHIDR"
+    ],
+    "min_quote_volume_24h_idr": "500000000",
+    "max_spread_pct": "0.30"
+  },
+  "promotion_thresholds": {
+    "min_paper_trades": 10,
+    "max_paper_drawdown_pct": "6",
+    "backtest_min_return_pct": "0",
+    "max_live_capital_idr": "1000000",
+    "max_slippage_pct": "0.30"
+  }
+}

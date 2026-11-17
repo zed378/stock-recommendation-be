@@ -1125,4 +1125,11 @@ The password is the weakest point; a second factor is worth considering (ADR-046
   - `verify_chain` + external anchor comparison now detects whole-table DB rewrites or truncations across runs.
   - Until the owner schedules `audit-anchor --out <path>` on the deployment host, the mechanism is verified only in hermetic tests.
 
+### ADR-055 — Starter profiles for the owner numbers (a draft, not a default)
 
+- **Date:** 2026-11-16
+- **Status:** proposed (the owner asked for a prefilled starting point; the numbers are the agent's proposal and none is decided)
+- **Context:** `08-OWNER-NUMBERS-WORKSHEET` lists every number that limits loss and leaves each blank on purpose; the Trader has no default for them. Entering about forty values one screen at a time is slow, and the owner's account may be as small as Rp 50,000, where the exchange minimum order changes what a sensible risk per trade is.
+- **Decision:** Keep the runtime unchanged (no default is compiled in; an unset field still disables the strategy). Add two **editable profile files** that the owner can adjust and a read-only checker: `deploy/trader/owner-defaults.rp50000.json`, `owner-defaults.rp1000000.json`, `deploy/trader/check_owner_defaults.py`, documented in `docs/01-PRODUCT-REQUIREMENTS/09-OWNER-NUMBERS-STARTER-PROFILE.md`. The profiles are conservative, 4H, BTCIDR and ETHIDR. Costs are pessimistic placeholders and are not observed values (OQ-5 stays open); the minimum order and stop distance are stated assumptions (`basis`).
+- **Options:** (1) compile defaults into the Trader (rejected: a forgotten setting would become a permissive one, FR-T11); (2) a profile file plus checker, applied by the owner (chosen); (3) leave all blank (rejected by the owner's request).
+- **Consequences:** Nothing trades differently until the owner enters values. The profiles must be kept in step with the limit names and ranges (a test, `tests/trader/test_owner_defaults.py`, fails on drift). Loading a profile into an instance is a separate step; an import tool is not built.
