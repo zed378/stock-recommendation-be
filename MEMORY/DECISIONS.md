@@ -1079,7 +1079,7 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 ### ADR-052 - Frozen price-feed detection (R5)
 
 **Date:** 2026-11-15
-**Status:** proposed (design only; nothing is implemented)
+**Status:** proposed; **deferred by the owner on 2026-11-17** until a paper run has produced price data (no option and no threshold chosen; nothing is implemented)
 
 **Decision:** Not yet taken. A feed that returns a fresh timestamp with an unchanged price passes the freshness check. Options:
 1. **Identical price for N consecutive cycles** on pairs the owner marks liquid; N is the owner's number.

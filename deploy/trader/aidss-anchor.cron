@@ -1,0 +1,5 @@
+# /etc/cron.d/aidss-anchor: hourly audit-log anchor (ADR-054). Owned by root, mode 644.
+MAILTO=""
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+7 * * * * infra /usr/local/bin/aidss-anchor
