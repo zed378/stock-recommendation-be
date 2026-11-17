@@ -37,3 +37,15 @@ Rp 500,000,000 and 0.30%). The three samples fell within 20 seconds and say litt
   Rp 50,000 and 0.0001 BTC are fixture numbers; if real, BTCIDR could not be traded at Rp 50,000.
 - The fee, tax, clearing, slippage, liquidity-volume and spread values are placeholders chosen to err pessimistic, not observed (OQ-5, OQ-8 stay open).
 - The profiles were not applied to any instance; nothing about runtime behaviour changed. No import tool exists; values are entered on the Trader screens.
+
+## Update 2026-11-17, third piece: the import tool
+
+`deploy/trader/import_owner_profile.py` loads a profile into a running Trader so the owner does not type about forty values screen by screen. It is stdlib only, signs in as the owner with a prompted password (never an argument, an environment variable or a file),
+and calls the Trader's own routes: `PUT /strategies/ema_adx/parameters`, `/paper-config`, `/limits`, `/allowlist`, `/promotion-thresholds`. Every rule of those routes therefore applies (permissions, range checks, audit, a new strategy version starting in PAPER).
+Writes that loosen something get a single-use `RAISE_LIMIT` step-up grant minted from the same password; a refused write is retried once with a grant, never more.
+
+Gates: a dry run is the default (check the file, read the Trader, print current against proposed, write nothing); `--apply` writes only when the file's `"status"` is `"accepted"` (the owner edits the word; the starter files say `proposed`) and after typing `APPLY`; after writing it reads everything back and
+reports any difference. It cannot resume trading, change a mode, promote, touch credentials or call an exchange, and a test asserts the set of routes it may call. `tests/trader/test_import_owner_profile.py` (10 tests) runs it against the real Trader API from the T5 harness (SQLite, admin principal, no exchange):
+dry run writes nothing, `proposed` is not applied, the confirmation word is required, a file with a problem stops before any read, apply leaves every limit set / allowlist active / parameters configured in PAPER / thresholds set, grants are single-use, a second run has nothing to do, a refused sign-in stops, the password appears nowhere.
+
+Not verified: a run against the production Trader (it needs the owner's password, so only the owner can do it), and a real analysis-API login (the harness stands in for `/api/auth/login` with a mock that returns an admin token). The first real dry run is the check of those two.

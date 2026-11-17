@@ -76,10 +76,18 @@ yet: the breaker-to-kill-switch mapping (J1) and operations numbers (L).
 
 ## Using it
 
-1. Copy the file for your account size and edit the values you disagree with. Keep `status` as `proposed` until you have decided; change it yourself.
+1. Copy the file for your account size and edit the values you disagree with. The copy keeps `"status": "proposed"` until you decide.
 2. Run the checker. Fix every `PROBLEM:` line or decide knowingly to keep a relationship broken (`08` says some may be intended).
-3. Enter the values on the Trader screens (limits, strategy parameters, paper configuration, allowlist and liquidity filter, promotion thresholds). A limit change
-   may ask for a step-up with your password. Rows you leave blank keep that strategy disabled. A change later is a new audited version.
-4. Record what you decided and the date in `MEMORY/records/`, and answer the open questions in `TASKS/BACKLOG.md` (OQ-5, OQ-8, OQ-9, OQ-11, OQ-12, OQ-16).
+3. **Look before writing.** From the repository's environment, sign in as yourself and run a dry run; it reads what the Trader holds and prints current against proposed, and writes nothing:
 
-Even with every number set, the instance starts `HALTED`, every strategy is in `PAPER`, and nothing is promoted without the evidence gates (ADR-020).
+   ```
+   python deploy/trader/import_owner_profile.py my-profile.json --email you@example.com
+   ```
+
+   The password is typed at a prompt (never an argument or an environment variable). `--base-url` defaults to `https://aidss.zedth.my.id`.
+4. **Write.** Change `"status"` in your copy to `"accepted"` (the tool treats that word as your decision), then add `--apply`. It shows the differences, asks you to type `APPLY`, writes the five sections through the same routes the screens use
+   (strategy parameters, paper model, limits, allowlist and liquidity filter, promotion thresholds), mints a single-use step-up grant from your password for each write that loosens something, and reads everything back to confirm.
+   It never resumes trading, changes a mode, promotes a strategy, touches credentials or calls an exchange. Entering the values by hand on the Trader screens remains possible and gives the same result.
+5. Record what you decided and the date in `MEMORY/records/`, and answer the open questions in `TASKS/BACKLOG.md` (OQ-5, OQ-8, OQ-9, OQ-11, OQ-12, OQ-16).
+
+Even with every number set, the instance starts `HALTED`, every strategy is in `PAPER`, and nothing is promoted without the evidence gates (ADR-020). A change later is a new audited version; a changed strategy parameter set starts again in `PAPER`.
