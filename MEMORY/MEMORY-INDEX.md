@@ -68,3 +68,4 @@ One line per record, newest first. Add new entries at the top.
 - [2026-11-14 — T0: Trader documentation scaffolding](records/2026-11-14-trader-docs-scaffolding.md) — design interview, 27 ADRs, 100+ documents; found that the analysis platform has no crypto data provider for AI context, that Indodax has no sandbox, and that the trade key cannot be IP-locked
 - [Host hardening step 1: pg_dumpall backup and restore rehearsal (2026-11-16)](records/2026-11-16-host-backup-pg-dumpall.md) — dump verified, same-host, nothing else applied
 - [Starter profiles for the owner numbers (2026-11-16)](records/2026-11-16-owner-numbers-starter-profiles.md) — draft profiles for Rp 50,000 and Rp 1,000,000, checker, ADR-055 proposed
+- [Provider form: model dropdown fetched from the endpoint (2026-11-17)](records/2026-11-17-ai-model-dropdown.md) — list_models on three adapters, POST /admin/ai-providers/models, auto-fetch dropdown; not deployed

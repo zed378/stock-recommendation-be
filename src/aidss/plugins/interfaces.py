@@ -25,6 +25,7 @@ from aidss.domain.types import (
     Quote,
     Timeframe,
 )
+from aidss.plugins.errors import ProviderUnavailableError
 
 
 class ProviderPlugin(ABC):
@@ -139,6 +140,16 @@ class AIProvider(ProviderPlugin, ABC):
     @abstractmethod
     def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         """Section 12.3. The embedding model is configured separately from chat."""
+
+    def list_models(self) -> list[str]:
+        """The model ids this endpoint offers to the credential it was built with.
+
+        Optional: an adapter with no such listing says so rather than returning an empty list,
+        because "nothing to choose" and "cannot be asked" are different things for a form.
+        """
+        raise ProviderUnavailableError(
+            self.name, "this adapter cannot list its models", retryable=False
+        )
 
     def supports_tool_calling(self) -> bool:
         """Section 16.4 - support is uneven across providers."""

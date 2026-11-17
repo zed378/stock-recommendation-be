@@ -48,7 +48,9 @@ SELF_HOSTED_ADAPTERS = frozenset({"fixture"})
 KEYED_ADAPTERS = frozenset({"openai_compatible", "anthropic", "gemini"})
 
 
-def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN201
+def provider_from_row(  # noqa: ANN201
+    row: AIProviderConfig, settings: Settings, *, inherit_environment_key: bool = True
+):
     """Build the adapter this row describes, using *this row's* credentials.
 
     Previously every row was built with `from_settings`, so all of them shared
@@ -72,7 +74,8 @@ def provider_from_row(row: AIProviderConfig, settings: Settings):  # noqa: ANN20
         factory = getattr(cls, "from_settings", None)
         return factory(settings) if factory else cls()  # type: ignore[call-arg]
 
-    api_key: str | None = settings.ai_api_key
+    # A probe against a URL somebody just typed must not carry the environment's key there.
+    api_key: str | None = settings.ai_api_key if inherit_environment_key else None
     if row.api_key_ciphertext:
         api_key = decrypt_secret(row.api_key_ciphertext, settings)
 

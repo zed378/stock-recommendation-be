@@ -69,8 +69,14 @@ class OpenAICompatibleProvider(AIProvider):
         return headers
 
     def _post(self, path: str, payload: dict) -> dict:
+        return self._send("POST", path, json=payload)
+
+    def _get(self, path: str) -> dict:
+        return self._send("GET", path)
+
+    def _send(self, method: str, path: str, **kwargs) -> dict:
         try:
-            response = self._client.post(path, json=payload, headers=self._headers())
+            response = self._client.request(method, path, headers=self._headers(), **kwargs)
         except httpx.RequestError as exc:
             raise ProviderUnavailableError(
                 self.name, f"request failed: {exc}", retryable=True
@@ -146,6 +152,21 @@ class OpenAICompatibleProvider(AIProvider):
                 self.name, f"embedding response does not match the schema: {data!r}",
                 retryable=False,
             ) from exc
+
+    #: Ids that are never a chat model. Only the unambiguous ones: another server's chat model
+    #: must not vanish from the list because its name resembles something here.
+    _NOT_CHAT = ("embedding", "whisper", "tts-", "dall-e", "moderation")
+
+    def list_models(self) -> list[str]:
+        data = self._get("/models")
+        # `{"data": [...]}` is the OpenAI shape; a few servers return the bare list.
+        items = data.get("data", []) if isinstance(data, dict) else data
+        ids = {
+            str(m.get("id") if isinstance(m, dict) else m)
+            for m in items or []
+            if (m.get("id") if isinstance(m, dict) else m)
+        }
+        return sorted(i for i in ids if not any(bad in i.lower() for bad in self._NOT_CHAT))
 
     def supports_tool_calling(self) -> bool:
         return True

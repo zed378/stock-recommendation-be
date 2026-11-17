@@ -89,8 +89,14 @@ class AnthropicProvider(AIProvider):
         return headers
 
     def _post(self, path: str, payload: dict) -> dict:
+        return self._send("POST", path, json=payload)
+
+    def _get(self, path: str, params: dict | None = None) -> dict:
+        return self._send("GET", path, params=params)
+
+    def _send(self, method: str, path: str, **kwargs) -> dict:
         try:
-            response = self._client.post(path, json=payload, headers=self._headers())
+            response = self._client.request(method, path, headers=self._headers(), **kwargs)
         except httpx.RequestError as exc:
             raise ProviderUnavailableError(
                 self.name, f"request failed: {exc}", retryable=True
@@ -202,6 +208,11 @@ class AnthropicProvider(AIProvider):
             "from the chat model precisely so this can differ.",
             retryable=False,
         )
+
+    def list_models(self) -> list[str]:
+        # Newest first, which is the order worth keeping for a dropdown.
+        data = self._get("/models", params={"limit": 1000})
+        return [str(m["id"]) for m in data.get("data", []) if isinstance(m, dict) and m.get("id")]
 
     def supports_tool_calling(self) -> bool:
         return True

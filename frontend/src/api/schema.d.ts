@@ -1995,6 +1995,32 @@ export interface paths {
         patch: operations["update_ai_provider_admin_ai_providers__provider_id__patch"];
         trace?: never;
     };
+    "/admin/ai-providers/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List Ai Provider Models
+         * @description The models an endpoint offers to a key, so the form can show a dropdown.
+         *
+         *     Nothing is saved. Two deliberate limits: the environment's own key is never lent to this probe
+         *     (the URL may have just been typed, and the key would be sent to it), and a *stored* key is used
+         *     only against the URL it was saved with, so listing cannot be used to send it somewhere else.
+         *     Failures come back as `ok: false` with a reason, like the connection test, because a wrong key
+         *     is an answer rather than a server error.
+         */
+        post: operations["list_ai_provider_models_admin_ai_providers_models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/ai-providers/{provider_id}/test": {
         parameters: {
             query?: never;
@@ -2546,6 +2572,37 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AIProviderModelsRequest
+         * @description Ask an endpoint which models it offers, before the row is saved.
+         *
+         *     The form calls this while the key is being typed, so nothing here is stored. `api_key` is what
+         *     the admin typed; when it is omitted and `provider_id` names a saved row, that row's stored key
+         *     is used instead (what editing an existing provider expects), but only against the URL it was
+         *     saved with.
+         */
+        AIProviderModelsRequest: {
+            /**
+             * Adapter Name
+             * @default openai_compatible
+             */
+            adapter_name: string;
+            /** Base Url */
+            base_url?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Provider Id */
+            provider_id?: string | null;
+        };
+        /** AIProviderModelsResponse */
+        AIProviderModelsResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Models */
+            models?: string[];
+            /** Error */
+            error?: string | null;
+        };
         /**
          * AIProviderResponse
          * @description A configured provider, without its credential.
@@ -7640,6 +7697,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AIProviderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ai_provider_models_admin_ai_providers_models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIProviderModelsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProviderModelsResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1081,6 +1081,27 @@ class AIProviderTestResponse(BaseModel):
     error: str | None = None
 
 
+class AIProviderModelsRequest(BaseModel):
+    """Ask an endpoint which models it offers, before the row is saved.
+
+    The form calls this while the key is being typed, so nothing here is stored. `api_key` is what
+    the admin typed; when it is omitted and `provider_id` names a saved row, that row's stored key
+    is used instead (what editing an existing provider expects), but only against the URL it was
+    saved with.
+    """
+
+    adapter_name: str = Field(default="openai_compatible", max_length=80)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = Field(default=None, max_length=400)
+    provider_id: uuid.UUID | None = None
+
+
+class AIProviderModelsResponse(BaseModel):
+    ok: bool
+    models: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 class AdminUserCreate(BaseModel):
     """An account created by an administrator rather than by its owner.
 

@@ -90,8 +90,14 @@ class GeminiProvider(AIProvider):
         return headers
 
     def _post(self, path: str, payload: dict) -> dict:
+        return self._send("POST", path, json=payload)
+
+    def _get(self, path: str, params: dict | None = None) -> dict:
+        return self._send("GET", path, params=params)
+
+    def _send(self, method: str, path: str, **kwargs) -> dict:
         try:
-            response = self._client.post(path, json=payload, headers=self._headers())
+            response = self._client.request(method, path, headers=self._headers(), **kwargs)
         except httpx.RequestError as exc:
             raise ProviderUnavailableError(
                 self.name, f"request failed: {exc}", retryable=True
@@ -256,6 +262,23 @@ class GeminiProvider(AIProvider):
                     retryable=False,
                 ) from exc
         return vectors
+
+    def list_models(self) -> list[str]:
+        ids: list[str] = []
+        token: str | None = None
+        for _ in range(5):  # a page holds up to 1000; this is a bound, not an expectation
+            params: dict = {"pageSize": 1000}
+            if token:
+                params["pageToken"] = token
+            data = self._get("/models", params=params)
+            for m in data.get("models", []):
+                # The list also holds embedding and tuning models; only these can answer a prompt.
+                if "generateContent" in (m.get("supportedGenerationMethods") or []):
+                    ids.append(str(m.get("name", "")).removeprefix("models/"))
+            token = data.get("nextPageToken")
+            if not token:
+                break
+        return [i for i in ids if i]
 
     def supports_tool_calling(self) -> bool:
         return True

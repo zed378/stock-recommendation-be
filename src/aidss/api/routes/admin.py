@@ -35,6 +35,8 @@ from aidss.api.pagination import paginate
 from aidss.api.schemas import (
     AdminUserCreate,
     AdminUserResponse,
+    AIProviderModelsRequest,
+    AIProviderModelsResponse,
     AIProviderResponse,
     AIProviderTestResponse,
     AIProviderUpdate,
@@ -88,7 +90,7 @@ from aidss.plugins.errors import PluginNotFoundError
 from aidss.plugins.registry import get_plugin_class
 from aidss.security.passwords import PasswordPolicyError, hash_password
 from aidss.security.rbac import Permission
-from aidss.security.secrets import encrypt_secret
+from aidss.security.secrets import SecretUnreadable, encrypt_secret
 from aidss.security.secrets import hint as secret_hint
 from aidss.syndication.feeds import FeedParseError
 
@@ -970,6 +972,61 @@ def delete_ai_provider(
         after=None,
     )
     session.delete(row)
+
+
+#: Enough for any real catalogue, and a bound on what a misbehaving endpoint can make us return.
+MAX_LISTED_MODELS = 500
+
+
+@router.post("/ai-providers/models", response_model=AIProviderModelsResponse)
+def list_ai_provider_models(
+    payload: AIProviderModelsRequest,
+    session: Session = Depends(get_db),
+    _: User = Depends(require_permission(Permission.MANAGE_PROVIDERS)),
+) -> AIProviderModelsResponse:
+    """The models an endpoint offers to a key, so the form can show a dropdown.
+
+    Nothing is saved. Two deliberate limits: the environment's own key is never lent to this probe
+    (the URL may have just been typed, and the key would be sent to it), and a *stored* key is used
+    only against the URL it was saved with, so listing cannot be used to send it somewhere else.
+    Failures come back as `ok: false` with a reason, like the connection test, because a wrong key
+    is an answer rather than a server error.
+    """
+    _check_adapter(payload.adapter_name)
+    settings = get_settings()
+    base_url = (payload.base_url or "").strip() or None
+    probe = AIProviderConfig(
+        name="models-probe",
+        adapter_name=payload.adapter_name,
+        base_url=base_url,
+        timeout_seconds=20.0,
+    )
+
+    if payload.api_key:
+        probe.api_key_ciphertext = encrypt_secret(payload.api_key)
+    elif payload.api_key is None and payload.provider_id is not None:
+        stored = session.get(AIProviderConfig, payload.provider_id)
+        if stored is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+        same_url = (base_url or "").rstrip("/") == (stored.base_url or "").rstrip("/")
+        if stored.api_key_ciphertext and not same_url:
+            return AIProviderModelsResponse(
+                ok=False,
+                error="The stored key is only used with the URL it was saved with. "
+                "Enter the key again to list models from a different URL.",
+            )
+        probe.api_key_ciphertext = stored.api_key_ciphertext
+
+    try:
+        provider = provider_from_row(probe, settings, inherit_environment_key=False)
+        models = list(dict.fromkeys(provider.list_models()))[:MAX_LISTED_MODELS]
+    except SecretUnreadable:
+        return AIProviderModelsResponse(
+            ok=False, error="The stored key can no longer be read; enter it again."
+        )
+    except Exception as exc:  # noqa: BLE001 - adapters raise their own hierarchies
+        return AIProviderModelsResponse(ok=False, error=f"{type(exc).__name__}: {exc}"[:500])
+    return AIProviderModelsResponse(ok=True, models=models)
 
 
 @router.post("/ai-providers/{provider_id}/test", response_model=AIProviderTestResponse)

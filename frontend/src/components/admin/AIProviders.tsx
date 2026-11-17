@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/api/client";
 import { useI18n } from "@/i18n/context";
@@ -301,6 +301,71 @@ function ProviderEditor({
 
   const set = (patch: Partial<typeof form>) => setForm((current) => ({ ...current, ...patch }));
 
+  // The model list is asked of the endpoint itself, with the key being typed, so the choice is a
+  // dropdown of what that key can actually use rather than a name copied from documentation.
+  const [models, setModels] = useState<string[] | null>(null);
+  const [modelsStatus, setModelsStatus] = useState<"idle" | "loading" | "ok" | "failed">("idle");
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [typeModel, setTypeModel] = useState(false);
+  // Only the newest request may write its answer: a slow reply for a key since replaced would
+  // otherwise overwrite the list for the key now in the box.
+  const latest = useRef(0);
+
+  const fetchModels = useCallback(async () => {
+    const ticket = ++latest.current;
+    setModelsStatus("loading");
+    setModelsError(null);
+    try {
+      const { data, error: failed } = await api.POST("/admin/ai-providers/models", {
+        body: {
+          adapter_name: form.adapter_name,
+          base_url: form.base_url.trim() || null,
+          // Typed key wins; an untouched edit form lets the server use the stored one.
+          ...(apiKey === null ? { provider_id: provider?.id } : { api_key: apiKey }),
+        },
+      });
+      if (ticket !== latest.current) return;
+      if (failed || !data) throw new Error(errorMessage(failed, t("common.error")));
+      if (!data.ok) {
+        setModels(null);
+        setModelsStatus("failed");
+        setModelsError(data.error ?? t("common.error"));
+        return;
+      }
+      const listed = data.models ?? [];
+      setModels(listed);
+      setModelsStatus(listed.length ? "ok" : "failed");
+      setModelsError(listed.length ? null : t("admin.providers.modelsNone"));
+    } catch (caught) {
+      if (ticket !== latest.current) return;
+      setModels(null);
+      setModelsStatus("failed");
+      setModelsError((caught as Error).message);
+    }
+  }, [apiKey, form.adapter_name, form.base_url, provider, t]);
+
+  // Fetch by itself once there is a key to ask with: one being typed, or a stored one on an edit
+  // that has not touched it. A keyless local server has nothing to wait for, so it uses the button.
+  const canAsk = apiKey === null ? Boolean(provider?.api_key_hint) : apiKey.trim().length > 0;
+  useEffect(() => {
+    latest.current += 1; // whatever was in flight belongs to the previous inputs
+    setModels(null);
+    setModelsStatus("idle");
+    setModelsError(null);
+    if (!canAsk) return;
+    const timer = window.setTimeout(() => void fetchModels(), 700);
+    return () => window.clearTimeout(timer);
+    // `fetchModels` changes with exactly these inputs; listing them here would reschedule twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.adapter_name, form.base_url, apiKey, canAsk]);
+
+  const MANUAL = "__manual__";
+  const choosing = models !== null && models.length > 0 && !typeModel;
+  const modelOptions =
+    models && form.default_model && !models.includes(form.default_model)
+      ? [form.default_model, ...models]
+      : (models ?? []);
+
   return (
     <Modal
       title={provider ? provider.name : t("admin.providers.add")}
@@ -386,13 +451,60 @@ function ProviderEditor({
           />
         </Field>
 
-        <Field label={t("admin.providers.model")}>
-          <input
-            className={`${inputClass} font-mono text-xs`}
-            value={form.default_model}
-            onChange={(event) => set({ default_model: event.target.value })}
-          />
-        </Field>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label htmlFor="provider-model" className="text-xs font-medium text-muted">
+              {t("admin.providers.model")}
+            </label>
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              busy={modelsStatus === "loading"}
+              onClick={() => {
+                setTypeModel(false);
+                void fetchModels();
+              }}
+            >
+              {t("admin.providers.fetchModels")}
+            </Button>
+          </div>
+          {choosing ? (
+            <select
+              id="provider-model"
+              className={`${inputClass} font-mono text-xs`}
+              value={form.default_model}
+              onChange={(event) => {
+                if (event.target.value === MANUAL) setTypeModel(true);
+                else set({ default_model: event.target.value });
+              }}
+            >
+              {!form.default_model && <option value="">{t("admin.providers.modelPick")}</option>}
+              {modelOptions.map((name) => (
+                <option key={name} value={name}>
+                  {models?.includes(name) ? name : t("admin.providers.modelCurrent", { name })}
+                </option>
+              ))}
+              <option value={MANUAL}>{t("admin.providers.modelManual")}</option>
+            </select>
+          ) : (
+            <input
+              id="provider-model"
+              className={`${inputClass} font-mono text-xs`}
+              value={form.default_model}
+              onChange={(event) => set({ default_model: event.target.value })}
+            />
+          )}
+          <p className="mt-1 text-xs text-faint" aria-live="polite">
+            {modelsStatus === "loading"
+              ? t("admin.providers.fetchingModels")
+              : modelsStatus === "ok"
+                ? t("admin.providers.modelsFound", { count: String(models?.length ?? 0) })
+                : modelsStatus === "failed"
+                  ? t("admin.providers.modelsFailed", { reason: modelsError ?? "" })
+                  : t("admin.providers.modelsHint")}
+          </p>
+        </div>
 
         <Field
           label={t("admin.providers.apiKey")}
