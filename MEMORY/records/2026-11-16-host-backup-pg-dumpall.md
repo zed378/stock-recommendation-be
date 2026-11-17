@@ -115,3 +115,20 @@ from the owner's workstation, `10.1.200.13` ports 5173, 7153 and 5432 are all re
 
 Not verified: any consumer that reached `10.1.200.13:5173` directly over the LAN or the netbird interface (none was seen in the sample; it is cut off now); an internal DNS name for the site that might point at a LAN reverse proxy (the DNS suffix lookup `aidss.zedth.my.id.bodha.co.id` answered `10.10.10.6`, which was not probed).
 Rollback: remove the `ports: !override` lines from the frontend block of the override and run the same single `up -d --no-build --no-deps frontend` (about 10 seconds; not rehearsed).
+
+---
+
+## Step 5: the host's `docker-compose.yml` hardened (2026-11-17, after the owner's go-ahead)
+
+`~/stocks/docker-compose.yml` on the host was the development file copied there on 2026-09-01. It is owned by `root` and `~/stocks` is not writable by `infra`, so the edit ran through `sudo -n` (passwordless for `infra`, already used read-only for `ufw status`), limited to a script that edits that one file; owner and mode stayed `root:root 644`.
+A backup was made first: `~/stocks/docker-compose.yml.bak-20261117`.
+
+Changes (shown with the password and JWT secret lines masked): `AIDSS_DATABASE_URL` is now `${AIDSS_APP_DATABASE_URL:?...}` (the old `aidss:aidss` superuser URL is gone, and a bare `up` without the variable refuses instead of connecting as the superuser); the published ports `5432` and `7153` were removed and `5173` became
+`127.0.0.1:5173:80`; `build: .` and `build: ./frontend` became `image: ${AIDSS_API_IMAGE:-zed378/aidss-api:latest}` and `image: ${AIDSS_FRONTEND_IMAGE:-zed378/aidss-frontend:latest}`, so an `up --build` can no longer replace a deployed image; a comment block says why.
+`POSTGRES_PASSWORD` was first changed and then put back exactly: the change altered the database container's configuration hash, so the next `up` would have recreated PostgreSQL, the surprise behind the 2026-11-17 outage. The value is stale anyway (the superuser password was rotated) and is only read on first initialisation.
+
+Verification (no container was touched; `docker compose config` and `up --dry-run` only): with the variable unset, `config` fails with `required variable AIDSS_APP_DATABASE_URL is missing a value`; with the stdin override, the effective configuration of all five services before and after differs only in the removed `build` flag of api, worker and frontend (image, ports, environment hash, user in the database URL, dependencies all identical);
+`up -d --no-build --no-deps --dry-run` on all five services reports every container `Running` and no `Recreate`; the temporary helper files on the host were deleted.
+
+Not changed: the JWT secret is still a literal in that file (and in the backup copy); moving it to `~/.aidss-trader.env` is a separate step with a risk of its own (a different secret makes stored provider keys unreadable), so it needs a byte-for-byte comparison of the secret before and after. `~/stocks/.env` is `root:root 644` (world-readable) and was not examined.
+Rollback: `sudo cp -p ~/stocks/docker-compose.yml.bak-20261117 ~/stocks/docker-compose.yml`.
