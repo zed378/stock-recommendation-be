@@ -303,3 +303,17 @@ public `/`, `/login`, `/watchlist`, `/trader`, `/admin`, `/api/health` 200, `/ap
 
 Not verified: the model dropdown against a real vendor (the unit tests use canned responses) and the signed-in admin screen in a real browser; a scheduled job that ran during the roughly 30 seconds the worker was down. Rollback: set api and worker to `aidss-api:e7b3da3` and the frontend to
 `aidss-frontend:57b8f97` in the override and run the same single `up -d --no-build --no-deps` command (not rehearsed, no timing measured); both old tags still exist in the registry (no tag has been deleted).
+
+---
+
+## Tag cleanup: the owner's decision (2026-11-17), not yet executed
+
+The owner chose to keep **one rollback tag per repository** instead of deleting everything but `latest`. Plan, to run once the owner has set a Docker Hub personal access token with Read, Write and Delete in the environment (`DOCKERHUB_TOKEN`; none was present when asked, so nothing was deleted):
+
+| Repository | Keep | Delete |
+|---|---|---|
+| `aidss-api` | `latest`, `603e606` (same digest), `e7b3da3` (rollback) | `75bc905`, `5be7875`, `2a6b064`, `ae06451` |
+| `aidss-frontend` | `latest`, `603e606` (same digest), `57b8f97` (rollback) | `a2ec4c3`, `220f1cb`, `4a5bb9d`, `db57068`, `2fc6c0b`, `eba243c`, `dd2d776`, `f08e3af`, `ab5a9ab`, `75bc905`, `e410ab7`, `813d9cd`, `5be7875`, `e7b3da3`, `2a6b064`, `ae06451` |
+| `aidss-trader` | all six commit tags and `latest` | none |
+
+Registry state before the cleanup: `aidss-api` 7 tags, `aidss-frontend` 19, `aidss-trader` 7. Rollbacks older than the kept tags stop being possible after the deletion. Every deletion is one call, checked against the listing afterwards.
