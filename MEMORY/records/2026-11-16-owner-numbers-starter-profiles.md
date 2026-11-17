@@ -25,6 +25,12 @@ On the owner's instruction, one public, unsigned `GET https://indodax.com/api/pa
 `is_maintenance` 0 and `is_market_suspended` 0. The assumed Rp 10,000 minimum was right, so the Rp 50,000 profile is not blocked on either pair, and the mock's 0.0001 BTC minimum was a fixture number. The profile files now carry the observed note and the
 paper maker and taker fees are the headline 0.10 and 0.20 (tax 0.25 and clearing 0.05 stay placeholders; OQ-5 stays open because the real tax and clearing are only visible on a fill).
 
+## Update 2026-11-17, second reading: liquidity
+
+On the owner's instruction, three public, unsigned `GET https://indodax.com/api/summaries` calls, 10 seconds apart (05:22 UTC; HTTP 200 each; 450 pairs, fields `buy sell last high low vol_btc vol_idr`). 24h volume: BTCIDR Rp 23,933,196,548, ETHIDR Rp 4,906,615,791 (stable across the three samples).
+Bid/ask: BTCIDR 1,193,193,000 / 1,193,194,000 (spread 0.0001%), ETHIDR 33,799,000 / 33,800,000 (0.0030%): one price tick each, so the spread cannot be narrower. G2 and G3 in both profiles became Rp 1,000,000,000 and 0.10% (were the placeholders
+Rp 500,000,000 and 0.30%). The three samples fell within 20 seconds and say little about stressed hours; revisit the spread cap after a volatile day.
+
 ## Not verified (as of the original draft; items 1 and the fee headline are now observed, see above)
 
 - The minimum order (Rp 10,000) and the 5% stop distance are assumptions. The real minimums come from `GET /api/pairs`, which no agent has called (no live exchange call without the owner's instruction). The test mock's

@@ -47,8 +47,25 @@
       "BTCIDR",
       "ETHIDR"
     ],
-    "min_quote_volume_24h_idr": "500000000",
-    "max_spread_pct": "0.30"
+    "min_quote_volume_24h_idr": "1000000000",
+    "max_spread_pct": "0.10",
+    "observed": {
+      "observed_at_utc": "2026-11-17T05:22:46Z",
+      "source": "public GET /api/summaries, 3 samples 10 s apart (no key, no signature)",
+      "BTCIDR": {
+        "vol_24h_idr": "23933196548",
+        "spread_pct": "0.0001",
+        "bid": "1193193000",
+        "ask": "1193194000"
+      },
+      "ETHIDR": {
+        "vol_24h_idr": "4906615791",
+        "spread_pct": "0.0030",
+        "bid": "33799000",
+        "ask": "33800000"
+      },
+      "note": "the spread is one price tick (Rp 1,000) on both pairs, so it cannot be narrower; one 20-second window says nothing about stressed hours"
+    }
   },
   "promotion_thresholds": {
     "min_paper_trades": 10,
