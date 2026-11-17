@@ -163,7 +163,7 @@ Windows paths shown (`.venv/Scripts/python`); on Linux and macOS use `.venv/bin/
 
 ### Trader
 
-Verified on 2026-11-15 (`513 passed, 7 deselected` on SQLite + mock exchange; `7 passed` `-m postgres` on local PostgreSQL 18; `6 passed` `-m postgres` on VM PostgreSQL 16 clone; frontend Vitest + `tsc` + `oxlint` passing; VM deployed at `zed378/aidss-trader:7d03693` / `zed378/aidss-frontend:f08e3af` / `zed378/aidss-api:latest` (= `603e606`) in `HALTED` state):
+Historical PostgreSQL verification: `7 passed` on local PostgreSQL 18 and `6 passed` on a VM PostgreSQL 16 clone (2026-11-15). Current image references in the 2026-11-17 handoff are Trader `7d03693`, frontend and API `latest` (= `603e606`); Trader remains `HALTED`. These are recorded deployment facts, not a fresh host check. Local verification is recorded below and in the stage-11 handoff.
 
 | Command | Description |
 |---|---|
@@ -184,14 +184,19 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 ## What Is Currently Failing
 
-Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test_architecture_constraints.py tests/test_frontend_routing.py`): **515 passed, 7 deselected, no xfail** (S13 is closed by `requirements-trader.lock`, ADR-050 and ADR-053, which holds only the Trader's own 28 packages; the lock is in the deployed image `7d03693`, 2026-11-16), plus **7 passed** `-m postgres` on local PostgreSQL 18 and **6 passed** `-m postgres` on VM PostgreSQL 16 clone. Frontend Vitest: **93 passed** (with `--pool=vmThreads`; the default pool fails on this machine's Node 26) (including `TraderLazyRoutes.test.tsx`).
+The stage-11 prompt reports a pre-change baseline of **525 Trader + architecture + routing tests**, plus **100 frontend Vitest tests**. These replace the stale 515/93 counts but are handoff claims until independently rerun; see the stage-11 record for actual local results. Historical PostgreSQL results remain **7 passed** on local PostgreSQL 18 and **6 passed** on the VM PostgreSQL 16 clone. Frontend tests use `--pool=vmThreads` on this machine's Node 26. S13 is closed by the Trader's own 28-package hash lock (ADR-050/053), included in deployed image `7d03693`.
 
 - `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
   fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not
   related to the Trader.
 
-Open risks of the deployment (not code): `docker-compose.yml` on the server builds from source, so an
-`up --build` there reverts a deployed image; PostgreSQL backups and the server are the same host. Host hardening was applied on 2026-11-16 and 2026-11-17 (`MEMORY/records/2026-11-16-host-backup-pg-dumpall.md`): api and worker run as `aidss_app`, the superuser password was rotated, port 5432 and the api port 7153 are not published, the frontend port 5173 is bound to `127.0.0.1` (the host `cloudflared` reaches it over loopback). The host's `docker-compose.yml` was hardened the same way (no superuser URL, nothing published but the loopback frontend, images pulled not built; it refuses to start without `AIDSS_APP_DATABASE_URL`). Still open: the host has no firewall (`ufw` inactive), nothing is copied off the host, (the JWT secret lives in `~/stocks/.env`, now `infra:infra 600`; the compose file no longer has a default for it).
+Host hardening was applied on 2026-11-16/17 (`MEMORY/records/2026-11-16-host-backup-pg-dumpall.md`, steps 1 to 7): api and worker use `aidss_app`, the superuser password was rotated, 5432/7153 are unpublished, and frontend 5173 is loopback-only for host cloudflared. The host Compose file uses images instead of source builds and refuses missing application database/JWT variables. The JWT secret remains in `~/stocks/.env` (`infra:infra 600`); changing it makes stored provider keys unreadable.
+
+The migration kit in `deploy/production/` and `docs/10-OPERATIONS/09-MIGRATION-RUNBOOK.md` is prepared. Its production Compose configuration was compared on the host with the running five-service stack with zero differences (record `2026-11-17-migration-kit.md`). This is preparation, not a completed move.
+
+ADR-054's hourly audit anchor wrapper (`deploy/trader/aidss-anchor.sh`) was installed on the host on 2026-11-17. Two manual runs and verify-only passed; cron's first scheduled invocation and failure alerting were not observed in the installation record. Preserve the append-only anchor file on migration. Starter profiles and `deploy/trader/import_owner_profile.py` exist under ADR-055 (`proposed`): dry run by default, owner-accepted profile required for apply, no resume or promotion. They are proposals, never runtime defaults. `.gitattributes` keeps shell/cron files LF; preserve this when editing on Windows.
+
+Remaining deployment risks: the inventory reports no host firewall, and no real off-host backup is recorded. Stage 11 supplies a local encrypted-copy tool and an unapplied firewall plan (`docs/10-OPERATIONS/08-HOST-FIREWALL-PLAN.md`); neither means a host action has occurred. Liveness/failure notifications and owner-led live gates remain pending.
 
 ## If You Are Unsure
 

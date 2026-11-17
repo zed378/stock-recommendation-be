@@ -191,7 +191,7 @@ TASKS/                        what will be done (phases, progress, backlog)
 | `06-INBOUND-SECURITY.md` | The operator API; the channel is not a control path |
 | `07-SOFTWARE-SUPPLY-CHAIN.md` | Dependencies, images, registry visibility |
 
-### `10-OPERATIONS/` (8)
+### `10-OPERATIONS/` (10)
 
 | File | Purpose |
 |---|---|
@@ -203,6 +203,8 @@ TASKS/                        what will be done (phases, progress, backlog)
 | `05-SELF-OBSERVABILITY.md` | Logs, metrics, the watchdog problem |
 | `06-RUNBOOKS.md` | R1 to R12 for the owner under stress |
 | `07-INCIDENT-AND-ESCALATION.md` | Severity, response, post-incident records |
+| `08-HOST-FIREWALL-PLAN.md` | Unapplied host/Docker firewall proposal, owner questions and rollback |
+| `09-MIGRATION-RUNBOOK.md` | Production migration kit, source equivalence and recovery gates |
 
 ### `11-TESTING-QUALITY/` (8)
 

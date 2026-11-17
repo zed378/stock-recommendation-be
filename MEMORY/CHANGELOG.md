@@ -2,6 +2,12 @@
 
 Chronological summary of user-visible or operationally significant changes. Coarser than the records.
 
+## 2026-11-17
+
+- Stage 11 V: encrypted off-host cluster-copy tool and isolated restore instructions, fixture-tested only; no real copy made.
+- Stage 11 W: host/Docker firewall proposal, owner port questions, placeholder nftables rules and a disabled application draft; no rule applied.
+- Stage 11 X: operating instructions synchronized with recorded host hardening, migration kit and audit-anchor installation.
+
 ## 2026-11-14
 
 - **Documentation:** the AIDSS Trader (Indodax crypto auto-trading) is specified in `docs/`, `MEMORY/`,

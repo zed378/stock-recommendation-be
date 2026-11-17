@@ -38,6 +38,11 @@ rather than only a mention in a chat or a record.
 | **OQ-25** | **DEFERRED BY DECISION 2026-11-14 (ADR-045).** Whether to enable a veto, and its thresholds, are decided after the post-MVP evidence exists; thresholds are set before the evidence is read | post-MVP | `08/02`, `08/06` |
 | **OQ-26** | **RESOLVED 2026-11-14 (ADR-039).** A host script with a read-only role alerts directly to Telegram. Known gap: nothing alerts if the host is down | T6-04 | `10/02`, `10/05` |
 
+## Stage-11 owner follow-ups (2026-11-17)
+
+- Off-host backup: run the prepared tool against the host personally, rehearse restoring that encrypted file in isolation, and choose frequency/retention (ADR-040). Fixture verification does not establish a real copy.
+- Firewall: answer the per-port A/B/C/D questions and exact SSH/LAN source questions in `docs/10-OPERATIONS/08-HOST-FIREWALL-PLAN.md`. Identify java 6547 and bridge clients. No rule is approved/applied; nft syntax, IPv6, timed rollback and persistence require a separate owner-led rehearsal.
+
 ## Specification Gaps Found While Writing the Documents
 
 | Gap | Where | Action |

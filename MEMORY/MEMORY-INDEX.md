@@ -2,6 +2,10 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [2026-11-17 - V: encrypted off-host backup](records/2026-11-17-v-offhost-backup.md): local fixture verification, no real host copy.
+- [2026-11-17 - W: unapplied host firewall proposal](records/2026-11-17-w-host-firewall-plan.md): owner questions, empty source sets, disabled wrapper; nft unavailable locally.
+- [2026-11-17 - X: operating instruction currency](records/2026-11-17-x-operating-instructions.md): recorded hardening, migration kit and audit anchor; no deployment.
+
 - [2026-11-16 — Task U: Production landing page (`/`) read-only measurement (`220f1cb`)](records/2026-11-16-u-production-landing-measure.md) — Playwright Chromium on `https://aidss.zedth.my.id/` (`index-DUOgi8mR.js`): `0` overflow across 7 viewports×2 langs, `intersects: false`, `0` console/page/CSP errors, reduced-motion & Escape focus return pass; emulated 4× CPU + Fast 3G LCP median `2828 ms` (`1440`) / `2884 ms` (`375`), `en` `1440` CLS `0.136979`, `en` `h1` `+7`/`+12 px` vs `clientWidth` at `375`/`320` (viewport overflow `0`); zero code changes
 
 - [2026-11-16 — Task T: Frontend cleanup (unused landing JPEGs & `rec.label.reduce`)](records/2026-11-16-t-frontend-cleanup.md) — `git rm` 3 unused JPEGs in `frontend/public/landing/` (713,149 B); added `rec.label.reduce` (`Kurangi` / `Reduce`) in `messages.ts` + `RecommendationLabels.test.ts`; `tsc`, `oxlint`, `94` Vitest, `vite build`, `ruff`, `518` pytest pass
