@@ -285,3 +285,21 @@ Trader is never deployed from `latest` is unchanged. Verified after: the running
 
 Not done: deleting the other tags. Pending the owner's Docker Hub token and a final go-ahead; the candidates are 5 `aidss-api` tags and 16 `aidss-frontend` tags (the six `aidss-trader` commit tags stay). Consequences to remember before it:
 rollback to a deleted frontend or api tag becomes impossible (the rollback lines in earlier sections of this record then no longer apply), and `latest` moves whenever it is next pushed, so the digest above is the only fixed reference.
+
+---
+
+## Redeploy of api, worker and frontend at commit 603e606 (2026-11-17): the model dropdown
+
+Images `aidss-api:603e606` (digest `sha256:c30c55b3165c1d74806f5257431773fa77843b1cd8687dce4d4bb7ded9cc39c3`) and `aidss-frontend:603e606` (`sha256:361f7b1bb61e8bb3fb438e1782c7fa0ac9246ce6f3896062d91210ef4c00caf6`), clean `git archive HEAD` export; `latest` of both moved to
+these digests (registry-side retag). Content: `POST /admin/ai-providers/models`, `list_models()` on the three adapters, and the model dropdown on the AI provider form (see `2026-11-17-ai-model-dropdown.md`). The full hermetic suite passed before the build
+(2255 passed, 36 deselected, the known `test_output_language` failure excluded); `nginx -t` and a local container smoke passed (`/api/docs` 404, the admin chunk contains the new strings, `import aidss.main` works in the API image).
+
+Unlike the earlier api image, this one was a **rebuild**, so unpinned dependencies moved. `pip freeze` old (`e7b3da3`) against new: 70 packages each, six changed: SQLAlchemy 2.1.8 to 2.1.9, email-validator 2.3.0 to 2.4.0, fastapi 0.162.7 to 0.163.1,
+httpcore2 and httpx2 2.16.0 to 2.16.2, numpy 2.5.4 to 2.5.5 (plus the `aidss` package). The tests ran in the local virtual environment, not inside this image, so those six versions were not exercised by the suite.
+
+On the VM: `docker pull` of both images in one SSH command, then one `up -d --no-build --no-deps api worker frontend` with the override on stdin (the lesson recorded in `CLAUDE.md`). PostgreSQL and the Trader were not touched (uptime unchanged).
+Verified after: the three containers run the new digests, api and frontend healthy, worker started; `pg_stat_activity` shows `aidss_app` (4) and `trader_rw` (1) only; no traceback or permission error in the api log; Trader healthcheck exit 0, `trading_state` `HALTED`;
+public `/`, `/login`, `/watchlist`, `/trader`, `/admin`, `/api/health` 200, `/api/docs` and `/api/openapi.json` 404, `POST /api/admin/ai-providers/models` without a token 401, `/trader/v1/status` 401; 5432 and 7153 refused from the workstation.
+
+Not verified: the model dropdown against a real vendor (the unit tests use canned responses) and the signed-in admin screen in a real browser; a scheduled job that ran during the roughly 30 seconds the worker was down. Rollback: set api and worker to `aidss-api:e7b3da3` and the frontend to
+`aidss-frontend:57b8f97` in the override and run the same single `up -d --no-build --no-deps` command (not rehearsed, no timing measured); both old tags still exist in the registry (no tag has been deleted).
