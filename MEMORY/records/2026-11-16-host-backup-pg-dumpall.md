@@ -130,5 +130,20 @@ Changes (shown with the password and JWT secret lines masked): `AIDSS_DATABASE_U
 Verification (no container was touched; `docker compose config` and `up --dry-run` only): with the variable unset, `config` fails with `required variable AIDSS_APP_DATABASE_URL is missing a value`; with the stdin override, the effective configuration of all five services before and after differs only in the removed `build` flag of api, worker and frontend (image, ports, environment hash, user in the database URL, dependencies all identical);
 `up -d --no-build --no-deps --dry-run` on all five services reports every container `Running` and no `Recreate`; the temporary helper files on the host were deleted.
 
-Not changed: the JWT secret is still a literal in that file (and in the backup copy); moving it to `~/.aidss-trader.env` is a separate step with a risk of its own (a different secret makes stored provider keys unreadable), so it needs a byte-for-byte comparison of the secret before and after. `~/stocks/.env` is `root:root 644` (world-readable) and was not examined.
+Open at that point (corrected in step 6): the file's JWT line and the permissions of `~/stocks/.env`. **The claim made here that the compose file held the JWT secret as a literal was wrong**; see below.
 Rollback: `sudo cp -p ~/stocks/docker-compose.yml.bak-20261117 ~/stocks/docker-compose.yml`.
+
+---
+
+## Step 6: JWT secret and `.env` permissions (2026-11-17, after the owner's go-ahead), and a correction
+
+Inspection first, with no value printed (hashes, lengths and key names only). **Correction:** the host compose file does not hold the JWT secret. Its line was `AIDSS_JWT_SECRET: ${AIDSS_JWT_SECRET:-dev-only-change-me}`, the repository's public 18-character default; the real secret (45 characters) is in
+`~/stocks/.env`, which compose reads automatically, and the running api and worker use that value (their value's hash differs from the default's). `~/stocks/.env` also holds the AI provider settings (`AIDSS_AI_API_KEY`, 7 characters) and the provider and environment switches; it is ignored by the host's git, was never committed, and only the `infra` user (the sole member of the `docker` group) exists besides root.
+
+Changes: `~/stocks/.env` is now `infra:infra`, mode `600` (it was `root:root 644`; compose runs as `infra`, so it can still read it). The compose line became `AIDSS_JWT_SECRET: "${AIDSS_JWT_SECRET:?set AIDSS_JWT_SECRET (~/stocks/.env)}"`, so a missing or unreadable `.env` stops the start instead of silently running on the public default.
+Backups: `docker-compose.yml.bak-20261117` (before step 5) and `docker-compose.yml.bak-20261117b` (before this edit); neither holds a secret.
+
+Verification (no container touched): the effective configuration of all five services with the override is identical before and after (environment hashes equal, so the resolved secret is byte-identical); with `--env-file /dev/null` the base file refuses with `required variable AIDSS_JWT_SECRET is missing a value`; `up --dry-run` reports all five containers `Running`, no `Recreate`; the containers stayed healthy, the Trader healthcheck exit 0, public `/`, `/login`, `/api/health` 200.
+
+Not changed: the secret's value (no rotation: a different secret makes stored provider keys unreadable, `security/secrets.py`); its predictable `dev-only-change-me` prefix, which is followed by 27 characters that were not examined for randomness beyond their length; the secret's presence in `docker inspect` output for anyone in the `docker` group.
+Rollback: `sudo cp -p ~/stocks/docker-compose.yml.bak-20261117b ~/stocks/docker-compose.yml` and, if ever needed, `sudo chown root:root ~/stocks/.env && sudo chmod 644 ~/stocks/.env`.
