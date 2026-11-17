@@ -46,7 +46,7 @@ small account the exchange's minimum order, not preference, sets how much you mu
 | E3 | `atr_period`, `atr_stop_multiple` | 14, 2.5 | 14, 2.5 | Stop 2.5 ATR below the entry |
 | E4 | Timeframe | 4H | 4H | More signals than 1D, so four weeks of paper gives some evidence |
 | E | `cooldown_s` (strategy) | 14,400 | 14,400 | No re-entry within one 4H candle of an exit |
-| F1 to F4 | Maker, taker, tax, clearing (%) | 0.15, 0.30, 0.25, 0.05 | same | **Placeholders chosen above the 0.1 / 0.2 in the Indodax docs sample**, so paper results err pessimistic. **Not observed on your account (OQ-5)**; replace them from your first real fills |
+| F1 to F4 | Maker, taker, tax, clearing (%) | 0.10, 0.20, 0.25, 0.05 | same | Maker and taker are the **headline fees Indodax publishes for BTCIDR and ETHIDR** (`GET /api/pairs`, 2026-11-17). Tax and clearing are **placeholders** chosen on the high side. `commission` on a real fill is fees plus taxes, so the real total is **not observed on your account (OQ-5)**; replace all four from your first real fills |
 | F5, F6 | Paper slippage, partial-fill fraction | 0.20, 0.50 | same | Pessimistic on purpose |
 | F | Paper start equity | 1,000,000 | 50,000 | Equals the account the profile is built for |
 | G2, G3 | Min 24h quote volume, max spread | Rp 500,000,000, 0.30% | same | **Not measured.** A pair that fails stays inactive, which is the safe direction. Check against the real BTCIDR and ETHIDR figures |
@@ -65,9 +65,10 @@ yet: the breaker-to-kill-switch mapping (J1) and operations numbers (L).
 - **The minimum order decides everything at Rp 50,000.** The sizing rule takes the smallest of the risk-based size and the caps, then refuses
   an order below the pair's minimum; it does not round up (`intents/builder.py`). With a 5% stop and Rp 10,000 as the minimum, an entry needs at
   least Rp 500 of risk, which is 1% of Rp 50,000. That is why A1 is 1.5% there. The checker enforces this (`PROBLEM: MINIMUM ...`).
-- **Rp 10,000 and a 5% stop are assumptions**, written in each file under `basis`. The real minimums are `trade_min_base_currency` and
-  `trade_min_traded_currency` per pair from `GET /api/pairs`, and they differ by pair. The synthetic mock in the tests uses Rp 50,000 and 0.0001 BTC,
-  which would block BTCIDR entirely at this size; those are fixture numbers, not Indodax's. Until the real figures are read, treat BTCIDR at Rp 50,000 as unknown.
+- **The Rp 10,000 minimum order is observed, the 5% stop is not.** On 2026-11-17 the public `GET /api/pairs` (no key, no signature) reported
+  `trade_min_base_currency` 10,000 IDR for both BTCIDR and ETHIDR, with `trade_min_traded_currency` 8.36e-06 BTC and 0.00029667 ETH, which is the same Rp 10,000 at current prices.
+  So neither pair is blocked at Rp 50,000. The synthetic mock in the tests uses Rp 50,000 and 0.0001 BTC; those are fixture numbers, not Indodax's. The stop distance (`assumed_stop_pct`, 5%) is still an assumption: a tighter real stop sizes a larger position and loosens the minimum, a wider one tightens it.
+  Minimums can change; read them again before relying on them.
 - **Costs are large against Rp 50,000.** With the placeholder costs a round trip is about 0.9%, so a Rp 15,000 position pays about Rp 135 per trade against Rp 750
   of risk. A strategy needs a real edge after that. This is a reason to run the four weeks in `PAPER` first, not a reason to skip them.
 - **A larger risk percentage is the price of a small account.** 1.5% of Rp 50,000 is Rp 750, but it is 1.5% of the account all the same. If that is more than you

@@ -6,7 +6,7 @@
     "risk_profile": "small account: risk per trade is set by the exchange minimum, not by preference",
     "timeframe": "4H",
     "min_order_idr": "10000",
-    "min_order_note": "ASSUMPTION, not verified: the real per-pair minimum comes from GET /api/pairs (trade_min_base_currency, trade_min_traded_currency)",
+    "min_order_note": "OBSERVED 2026-11-17 from the public GET /api/pairs (no key, no signature): BTCIDR and ETHIDR both have trade_min_base_currency 10000 IDR (trade_min_traded_currency 8.36e-06 BTC and 0.00029667 ETH, about the same 10000 IDR). The 5% stop distance is still an assumption",
     "assumed_stop_pct": "5"
   },
   "limits": {
@@ -36,8 +36,8 @@
   "paper": {
     "slippage_pct": "0.20",
     "partial_fill_fraction": "0.50",
-    "maker_fee_pct": "0.15",
-    "taker_fee_pct": "0.30",
+    "maker_fee_pct": "0.10",
+    "taker_fee_pct": "0.20",
     "tax_pct": "0.25",
     "clearing_pct": "0.05",
     "start_equity_idr": "50000"

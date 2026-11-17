@@ -210,8 +210,7 @@ def main(argv: list[str]) -> int:
         print("PROBLEM:", line)
     basis = profile.get("basis", {})
     if basis.get("min_order_note"):
-        print("NOTE: basis.min_order_idr is an assumption. Read the real minimums (GET /api/pairs:")
-        print("      trade_min_base_currency, trade_min_traded_currency) before trusting it.")
+        print("NOTE:", basis["min_order_note"])
     if not found:
         print(f"{path.name}: no problem found (status: {profile.get('status', '?')})")
     return 1 if found else 0

@@ -18,7 +18,14 @@ Per the standing rule that a loss-limiting number is never defaulted silently, t
 `intents/builder.py` sizes an entry as the smallest of the risk-based size and the caps and then refuses an order under the pair minimum; it never rounds up. With a 5% stop and a Rp 10,000 minimum
 (both assumptions), an entry needs at least Rp 500 of risk, 1% of Rp 50,000. So the small-account profile uses 1.5% risk per trade (Rp 750), one open position, and caps of 40%.
 
-## Not verified
+## Update 2026-11-17: the exchange minimums were read
+
+On the owner's instruction, one public, unsigned `GET https://indodax.com/api/pairs` was made (no key, no signature, no other call; HTTP 200, 450 pairs). For the two allowlisted pairs: `trade_min_base_currency` **10,000 IDR** for both
+(BTCIDR `trade_min_traded_currency` 8.36e-06, ETHIDR 0.00029667), `trade_fee_percent_maker` 0.1 and `trade_fee_percent_taker` 0.2 (headline, `commission` on a fill also includes taxes), `price_precision` 1000, `quantity_increment` 1e-08,
+`is_maintenance` 0 and `is_market_suspended` 0. The assumed Rp 10,000 minimum was right, so the Rp 50,000 profile is not blocked on either pair, and the mock's 0.0001 BTC minimum was a fixture number. The profile files now carry the observed note and the
+paper maker and taker fees are the headline 0.10 and 0.20 (tax 0.25 and clearing 0.05 stay placeholders; OQ-5 stays open because the real tax and clearing are only visible on a fill).
+
+## Not verified (as of the original draft; items 1 and the fee headline are now observed, see above)
 
 - The minimum order (Rp 10,000) and the 5% stop distance are assumptions. The real minimums come from `GET /api/pairs`, which no agent has called (no live exchange call without the owner's instruction). The test mock's
   Rp 50,000 and 0.0001 BTC are fixture numbers; if real, BTCIDR could not be traded at Rp 50,000.
