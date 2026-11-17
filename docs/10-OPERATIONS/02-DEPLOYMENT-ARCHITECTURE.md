@@ -9,10 +9,13 @@
 
 ## Current Deployment (analysis platform, for context)
 
-One host runs the Compose project `stocks` with `postgres`, `api`, `worker`, and `frontend`. The analysis
-images are pulled from Docker Hub by immutable tag. The Compose file on the host builds from source and is
-owned by a different account than the deploying user, so image deployments are done with an override passed on
-standard input rather than by editing it. A rebuild from source on the host can revert a deployed image.
+One host runs the Compose project `stocks` with `postgres`, `api`, `worker`, `frontend` and `trader`. Images are
+pulled from Docker Hub by tag (`latest` for the analysis images, a commit tag for the Trader, never `latest`, ADR-053).
+The Compose file on the host is root-owned and was hardened on 2026-11-17 (no superuser URL, nothing published but the
+frontend on `127.0.0.1`, images pulled and never built); deployments still pass an override on standard input that adds the
+`trader` service and pins the tags. The same stack is written down in the repository as `deploy/production/docker-compose.production.yml`
+with one `.env` (`production.env.example`); its effective configuration was compared with the running stack and is identical.
+Moving to another host is described in `09-MIGRATION-RUNBOOK.md`.
 
 ## Planned: the `trader` Service
 

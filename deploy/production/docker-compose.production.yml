@@ -1,0 +1,235 @@
+# AIDSS production stack: one file, one `.env`, no override on standard input.
+#
+# This is what runs on the current host (the Compose project `stocks`), written down in the repository so
+# that moving to another host does not depend on a hand-edited file that exists only there. Differences from
+# the development `docker-compose.yml`, all deliberate:
+#   - images are pulled and pinned by the caller (`AIDSS_*_IMAGE` is required, no `latest` default), never built;
+#   - api and worker connect as the limited role `aidss_app` (ADR-021), never as the superuser;
+#   - nothing is published except the frontend on 127.0.0.1 (a reverse proxy or a tunnel on the host fronts it);
+#   - the `trader` service is part of the file (ADR-001: its own container, schema and role), without any exchange URL;
+#   - secrets (`AIDSS_JWT_SECRET`, the database URLs, `POSTGRES_PASSWORD`) have no default: a missing one stops the start.
+#
+# Use:  cp deploy/production/production.env.example .env   # fill it in, chmod 600
+#       docker compose -f docker-compose.production.yml config >/dev/null   # refuses if something is missing
+#       docker compose -f docker-compose.production.yml up -d postgres      # then restore, see docs/10-OPERATIONS/09
+# Always deploy one service at a time with --no-deps (CLAUDE.md, Traps).
+name: stocks
+
+x-aidss-env: &aidss-env
+  # --- Core ----------------------------------------------------------------
+  AIDSS_ENVIRONMENT: ${AIDSS_ENVIRONMENT:-development}
+  AIDSS_DEBUG: ${AIDSS_DEBUG:-false}
+  AIDSS_DATABASE_URL: "${AIDSS_APP_DATABASE_URL:?set AIDSS_APP_DATABASE_URL in .env}"
+
+  # Replace outside development. Generate with:
+  #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+  AIDSS_JWT_SECRET: "${AIDSS_JWT_SECRET:?set AIDSS_JWT_SECRET in .env}"
+  AIDSS_JWT_ALGORITHM: ${AIDSS_JWT_ALGORITHM:-HS256}
+  AIDSS_ACCESS_TOKEN_TTL_MINUTES: ${AIDSS_ACCESS_TOKEN_TTL_MINUTES:-60}
+
+  # --- Provider selection (Section 7, FR-07) -------------------------------
+  # `composite` is the working configuration for IDX: Yahoo serves prices and
+  # 401s on fundamentals; IDX serves fundamentals. Set `fixture` for an
+  # offline, deterministic run that touches no network at all.
+  AIDSS_MARKET_DATA_PROVIDER: ${AIDSS_MARKET_DATA_PROVIDER:-composite}
+  AIDSS_COMPOSITE_PRICE_PROVIDER: ${AIDSS_COMPOSITE_PRICE_PROVIDER:-yahoo}
+  AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER: ${AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER:-idx}
+  AIDSS_NEWS_PROVIDER: ${AIDSS_NEWS_PROVIDER:-rss}
+  AIDSS_AI_PROVIDER: ${AIDSS_AI_PROVIDER:-openai_compatible}
+  AIDSS_STORAGE_PROVIDER: ${AIDSS_STORAGE_PROVIDER:-local}
+
+  # --- Market data providers -----------------------------------------------
+  # Jakarta is spelled differently by each provider, which is why these are two
+  # settings rather than one shared value.
+  AIDSS_YAHOO_SYMBOL_SUFFIX: ${AIDSS_YAHOO_SYMBOL_SUFFIX:-.JK}
+  AIDSS_ALPHAVANTAGE_SYMBOL_SUFFIX: ${AIDSS_ALPHAVANTAGE_SYMBOL_SUFFIX:-.JKT}
+
+  # The browser profile curl_cffi presents to IDX. The first thing to change
+  # when that adapter starts getting refused.
+  AIDSS_IDX_IMPERSONATE: ${AIDSS_IDX_IMPERSONATE:-chrome}
+
+  # Alpha Vantage covers US equities and publishes nothing for IDX symbols.
+  # `premium` changes behaviour rather than just limits: `outputsize=full` is
+  # refused outright on a free key, so asking for it returns no data at all.
+  AIDSS_ALPHAVANTAGE_API_KEY: ${AIDSS_ALPHAVANTAGE_API_KEY:-}
+  AIDSS_ALPHAVANTAGE_PREMIUM: ${AIDSS_ALPHAVANTAGE_PREMIUM:-false}
+  AIDSS_FINNHUB_API_KEY: ${AIDSS_FINNHUB_API_KEY:-}
+
+  # --- AI layer (Section 12) -----------------------------------------------
+  # Any OpenAI-compatible endpoint: OpenAI, Azure, Ollama, vLLM, LM Studio,
+  # Groq, DeepSeek, OpenRouter, or a self-hosted gateway.
+  AIDSS_AI_BASE_URL: ${AIDSS_AI_BASE_URL:-https://api.openai.com/v1}
+  AIDSS_AI_API_KEY: ${AIDSS_AI_API_KEY:-}
+  AIDSS_AI_CHAT_MODEL: ${AIDSS_AI_CHAT_MODEL:-gpt-4o-mini}
+
+  # How long one model call may take. Not the same wait as an HTTP feed: a
+  # self-hosted gateway generating several hundred tokens of structured JSON
+  # legitimately takes minutes on modest hardware, and hanging up early makes
+  # every analyzer fail at once with "the read operation timed out" - which
+  # reads as a broken gateway rather than as this side giving up.
+  AIDSS_AI_TIMEOUT_SECONDS: ${AIDSS_AI_TIMEOUT_SECONDS:-300}
+
+  # Whether that endpoint runs on hardware you control. An assertion by the
+  # operator, because a URL cannot answer it: a self-hosted model published at
+  # a public domain looks exactly like a third-party API.
+  #
+  # Gates every agent handling personal financial data - portfolio, risk,
+  # journal reflection. False means they refuse to run rather than send
+  # positions to a third party, which is why false is the default.
+  AIDSS_AI_SELF_HOSTED: ${AIDSS_AI_SELF_HOSTED:-false}
+
+  # EMPTY means the endpoint serves no embedding model, which is a supported
+  # configuration: retrieval runs on BM25 alone and exact-token search is
+  # unaffected. Naming a chat model here does not help - it spends a failed
+  # round trip per batch and can trip the gateway's own rate limiter.
+  AIDSS_AI_EMBEDDING_MODEL: ${AIDSS_AI_EMBEDDING_MODEL:-}
+  # A property of the model, not the schema. Changing it needs a migration and
+  # a re-index: vectors of different widths cannot be compared at all.
+  AIDSS_EMBEDDING_DIMENSIONS: ${AIDSS_EMBEDDING_DIMENSIONS:-1536}
+
+  # --- Fundamentals pacing --------------------------------------------------
+  # Outbound calls per UTC day per provider account. 0 means NO CEILING -
+  # unlimited, not "spend nothing".
+  AIDSS_FUNDAMENTALS_DAILY_QUOTA: ${AIDSS_FUNDAMENTALS_DAILY_QUOTA:-25}
+  AIDSS_FUNDAMENTALS_REFRESH_INTERVAL_DAYS: ${AIDSS_FUNDAMENTALS_REFRESH_INTERVAL_DAYS:-30}
+  AIDSS_FUNDAMENTALS_MAX_ENQUEUED_PER_TICK: ${AIDSS_FUNDAMENTALS_MAX_ENQUEUED_PER_TICK:-5}
+
+  # --- Operational guardrails ----------------------------------------------
+  AIDSS_MIN_SCHEDULE_INTERVAL_SECONDS: ${AIDSS_MIN_SCHEDULE_INTERVAL_SECONDS:-300}
+  AIDSS_RATE_LIMIT_PER_MINUTE: ${AIDSS_RATE_LIMIT_PER_MINUTE:-120}
+  # Empty means no ceiling on AI spend. Set one before pointing this at a paid
+  # endpoint (Section 12.9).
+  AIDSS_DAILY_AI_BUDGET: ${AIDSS_DAILY_AI_BUDGET:-}
+  AIDSS_BUDGET_WARNING_THRESHOLD: ${AIDSS_BUDGET_WARNING_THRESHOLD:-0.8}
+
+  # --- Observability --------------------------------------------------------
+  AIDSS_LOG_LEVEL: ${AIDSS_LOG_LEVEL:-INFO}
+  AIDSS_JSON_LOGS: ${AIDSS_JSON_LOGS:-true}
+  # Only meaningful behind TLS. Sending HSTS over plain HTTP tells a browser to
+  # refuse the very connection it is using.
+  AIDSS_ENABLE_HSTS: ${AIDSS_ENABLE_HSTS:-false}
+
+  AIDSS_LOCAL_STORAGE_ROOT: ${AIDSS_LOCAL_STORAGE_ROOT:-/app/var/storage}
+
+services:
+  postgres:
+    image: ${AIDSS_POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    environment:
+      POSTGRES_USER: aidss
+      # Read only when the data directory is empty (a fresh host). After a restore the superuser's password is
+      # the one in the dump, not this one.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: aidss
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidss -d aidss"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+  api:
+    image: ${AIDSS_API_IMAGE:?set AIDSS_API_IMAGE in .env (a commit tag or a digest)}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *aidss-env
+    restart: always
+    volumes:
+      # Reports and knowledge-base objects survive a rebuild.
+      - storage_data:/app/var
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn aidss.main:app --host 0.0.0.0 --port 8000"
+    # A container that exits on a bad setting still reports "started" for the
+    # instant before it dies, and `depends_on: service_started` is satisfied by
+    # that instant. The healthcheck is what makes the failure visible in
+    # `docker compose ps` instead of only in the logs.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # The Scheduler -> Job Queue -> Worker Pool of the Section 4 diagram.
+  # Separate from the API so a long analysis cannot occupy a request thread,
+  # and so workers can be scaled independently of it.
+  worker:
+    image: ${AIDSS_API_IMAGE:?set AIDSS_API_IMAGE in .env (a commit tag or a digest)}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Waits for the API to be *healthy*, not merely started: migrations must
+      # have finished before a worker touches the tables, and `service_started`
+      # is satisfied by a container that is about to exit.
+      api:
+        condition: service_healthy
+    environment: *aidss-env
+    volumes:
+      - storage_data:/app/var
+    # Worker and scheduler in one process. `docker compose up --scale worker=N`
+    # is safe: the scheduler half elects a leader through a database lease, so
+    # exactly one of them enqueues scheduled work regardless of how many run.
+    command: python -m aidss.jobs
+    restart: always
+
+  # The investor dashboard: a static bundle behind nginx, which also proxies
+  # /api to the service above. One origin, so the browser needs no CORS and the
+  # bearer token never leaves it.
+  #
+  # A separate image rather than static files mounted into the API, so that a
+  # mistyped API path still returns a JSON 404 instead of index.html - and so
+  # the API image ships no HTML at all.
+  frontend:
+    image: ${AIDSS_FRONTEND_IMAGE:?set AIDSS_FRONTEND_IMAGE in .env (a commit tag or a digest)}
+    # Deliberately NOT `service_healthy`, and not even required. nginx resolves
+    # the API lazily, so the dashboard loads and shows a real error when the
+    # backend is down. Gating it on the API's health would restore exactly the
+    # failure this is built to avoid: one crashed container, and the whole site
+    # returns 502 instead of a page that can explain itself.
+    depends_on:
+      api:
+        condition: service_started
+        required: false
+    restart: always
+    ports:
+      - "127.0.0.1:5173:80"
+
+  # The Trader (ADR-001, ADR-021). It trades nothing here: no exchange URL is passed, it starts HALTED, and every
+  # owner number is unset until the owner sets it. Never run two instances against one database (ADR-027).
+  trader:
+    image: ${AIDSS_TRADER_IMAGE:?set AIDSS_TRADER_IMAGE in .env (a commit tag, never latest)}
+    # The master key file is owned by the deploy user with mode 0600, so the container runs as that user.
+    user: "${AIDSS_TRADER_UID:-1000}:${AIDSS_TRADER_GID:-1000}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIDSS_TRADER_DATABASE_URL: "${AIDSS_TRADER_DATABASE_URL:?set AIDSS_TRADER_DATABASE_URL in .env}"
+      AIDSS_TRADER_MASTER_KEY_FILE: /run/secrets/trader_master_key
+      AIDSS_TRADER_INSTANCE_NAME: ${AIDSS_TRADER_INSTANCE_NAME:-trader-1}
+      AIDSS_TRADER_ANALYSIS_API_URL: http://api:8000
+      # Left empty on purpose until the owner confirms the exchange hosts (T2-07): empty means no exchange client.
+      AIDSS_TRADER_EXCHANGE_BASE_URL: ${AIDSS_TRADER_EXCHANGE_BASE_URL:-}
+      AIDSS_TRADER_PUBLIC_BASE_URL: ${AIDSS_TRADER_PUBLIC_BASE_URL:-}
+    secrets:
+      - trader_master_key
+    expose:
+      - "8001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  # A file on the host, outside git and outside every backup (ADR-014, ADR-029).
+  trader_master_key:
+    file: ${AIDSS_TRADER_MASTER_KEY_PATH:?set AIDSS_TRADER_MASTER_KEY_PATH in .env}
+
+volumes:
+  postgres_data:
+  storage_data:

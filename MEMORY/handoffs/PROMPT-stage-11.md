@@ -54,7 +54,7 @@ Masukan: `MEMORY/records/2026-11-17-host-port-inventory.md` (satu-satunya sumber
 ## 5. Tugas X: perapian `CLAUDE.md` (dan `TASKS/PROGRESS.md` bila bertentangan)
 `CLAUDE.md` memuat beberapa baris yang sudah usang setelah hardening dan deploy 2026-11-16 dan 2026-11-17. Periksa **tiap klaim terhadap repo dan record** sebelum menulis (jangan mengira-ngira): baris "Verified on 2026-11-15 ... `aidss-frontend:f08e3af`",
 kalimat "Open risks of the deployment" (masih menyebut compose di server membangun dari source, padahal sudah memakai image; ada tanda kurung rusak), jumlah tes (Trader, arsitektur, routing; Vitest 100), dan versi image di kalimat "deployed `HALTED`". Jebakan `--no-deps` dari insiden 2026-11-17 sudah ada; jangan ditulis ulang.
-Tambahkan hanya yang benar dan perlu agen berikutnya tahu: `audit-anchor` (ADR-054) dan wrapper-nya, alat impor profil dan profil starter (ADR-055, status `proposed`), `.gitattributes` untuk LF. Jangan menulis bahwa Trader bisa trading. Jangan menambah jebakan yang tidak kamu buktikan dari record.
+Tambahkan hanya yang benar dan perlu agen berikutnya tahu: kit migrasi (`deploy/production/`, `docs/10-OPERATIONS/09-MIGRATION-RUNBOOK.md`; compose produksi yang setara dengan stack yang berjalan), `audit-anchor` (ADR-054) dan wrapper-nya, alat impor profil dan profil starter (ADR-055, status `proposed`), `.gitattributes` untuk LF. Jangan menulis bahwa Trader bisa trading. Jangan menambah jebakan yang tidak kamu buktikan dari record.
 Jalankan `python -m pytest tests/test_frontend_routing.py tests/test_architecture_constraints.py -q` sebagai bukti tidak ada yang rusak.
 
 ## 6. Tugas Y (opsional, hanya bila V, W, X selesai): tinjauan independen, hanya baca

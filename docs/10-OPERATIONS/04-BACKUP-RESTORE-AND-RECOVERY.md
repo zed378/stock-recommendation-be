@@ -35,7 +35,7 @@ reminder or an automatic off-host copy would be possible later additions and wou
 **Current VM status (2026-11-15):** The pre-deployment dump (`~/aidss-pre-trader-*.sql.gz`) resides on the same
 host disk (`10.1.200.13`) as the running PostgreSQL container. Per ADR-040 this is accepted while no live funds are
 at risk, but a disk or host failure would lose both the database and that local dump until the owner copies dumps
-off-host to their PC or an external drive.
+off-host to their PC or an external drive. The owner can pull an encrypted off-host cluster copy directly to their workstation using `deploy/trader/backup_offhost.sh` from Git Bash (see runbook R9).
 
 ## Restore
 
@@ -69,3 +69,8 @@ backup is not a backup. The rehearsal is recorded in `MEMORY/records/` with the 
 
 The owner's targets (worksheet L1). With manual backups (ADR-040) the audit-trail RPO is the interval between the owner's copies. The design makes the exchange the source of truth, so the RPO of trading
 *state* is bounded by reconciliation; the RPO of the **audit trail** is the backup interval.
+
+## Moving to another host
+
+A move is a restore with extra care about the two secrets that must travel byte for byte and never inside a backup (the JWT secret and the Trader master key).
+`09-MIGRATION-RUNBOOK.md` and the kit in `deploy/production/` (`restore.sh`, `fingerprint.sh`, `preflight.sh`) cover it; `restore.sh` is also the way to restore a `pg_dumpall` into a fresh PostgreSQL container for a recovery.
