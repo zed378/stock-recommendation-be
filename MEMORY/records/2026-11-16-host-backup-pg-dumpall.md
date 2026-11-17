@@ -147,3 +147,18 @@ Verification (no container touched): the effective configuration of all five ser
 
 Not changed: the secret's value (no rotation: a different secret makes stored provider keys unreadable, `security/secrets.py`); its predictable `dev-only-change-me` prefix, which is followed by 27 characters that were not examined for randomness beyond their length; the secret's presence in `docker inspect` output for anyone in the `docker` group.
 Rollback: `sudo cp -p ~/stocks/docker-compose.yml.bak-20261117b ~/stocks/docker-compose.yml` and, if ever needed, `sudo chown root:root ~/stocks/.env && sudo chmod 644 ~/stocks/.env`.
+
+---
+
+## Step 7: the audit anchor installed (2026-11-17, ADR-054 accepted with an hourly schedule)
+
+Files from the repository, LF, copied over SSH and installed with `sudo -n install`: `/usr/local/bin/aidss-anchor` (`deploy/trader/aidss-anchor.sh`, `root:root 755`), `/etc/cron.d/aidss-anchor` (`7 * * * * infra /usr/local/bin/aidss-anchor`, `root:root 644`), and the directory
+`/var/lib/aidss-anchor` (`infra:infra 700`). The wrapper runs a throw-away container from the pinned `zed378/aidss-trader:7d03693` on the `stocks_default` network, `--read-only --cap-drop ALL --security-opt no-new-privileges`, as uid 1000, with the anchor directory as its only writable mount.
+It hands the container only `AIDSS_TRADER_DATABASE_URL` (the Trader's own role, `trader_rw`, which can read the audit log); the owner, monitor and application URLs in `~/.aidss-trader.env` are never passed on, and the value travels in the environment, not on a command line.
+
+Verified by running it: the first run (as `infra`, the way cron runs it) wrote anchor line 1 (`seq=1`, head hash recorded; the audit log held one row, so this is a real anchor); `chattr +a` was then set on `anchor.jsonl` and, as `infra`, truncating it, removing it and renaming it are each refused with `Operation not permitted`;
+a second run found the same head and appended nothing (still one line); `audit-anchor --verify-only` in the same container recipe printed `verified seq=1`; the log line reached syslog (`logger -t aidss-anchor`); all five application containers were untouched. The log file `anchor.log` is mode 600.
+
+Not verified: the first run started by cron itself (expected at 09:07 UTC; look for a new line in `/var/lib/aidss-anchor/anchor.log` and `grep aidss-anchor /var/log/syslog`). Not done: any alert on failure. A broken chain makes the wrapper exit 2 and write an `err` line to the log and to syslog, but nothing watches either (the host liveness monitor and Telegram are not set up).
+Note for a move: copy `anchor.jsonl` to the new host and `chattr +a` it again, otherwise the chain of anchors starts over (`09-MIGRATION-RUNBOOK.md`).
+Rollback: `sudo rm /etc/cron.d/aidss-anchor /usr/local/bin/aidss-anchor`; the anchor directory can stay (the file is append-only on purpose; removing it needs `sudo chattr -a`).
