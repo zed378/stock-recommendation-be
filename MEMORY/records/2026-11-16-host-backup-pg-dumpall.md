@@ -74,3 +74,30 @@ Still open, not part of this step:
 - Not exercised: a logged-in user flow and a worker job run as `aidss_app` after the change (health, connections and logs only).
 
 Rollback of step 2: set `AIDSS_DATABASE_URL` back to the superuser in the override (using the stored superuser password) and recreate `api` and `worker`; re-add `ports: ["5432:5432"]` to bring the published port back; the dump is the last resort.
+
+---
+
+## Step 3: ports 7153 and 5173, public API docs, and an unplanned database outage (2026-11-16 to 2026-11-17)
+
+Findings, measured from the owner's workstation and the host: `10.1.200.13:7153` (api) and `:5173` (frontend) answered from the LAN; the host has no firewall (`ufw` inactive, `INPUT` policy `ACCEPT`);
+the api answered `/docs`, `/openapi.json` and `/health` without a token (`/health` reports `"environment":"development"`), and `https://aidss.zedth.my.id/api/docs` and `/api/openapi.json` answered 200 through Cloudflare without signing in.
+`AIDSS_ENVIRONMENT=development` only changes that echo (`is_production` is not used elsewhere in `src/aidss`). The JWT secret starts with the repository's default prefix `dev-only-change-me` followed by 27 random-looking characters;
+it was not rotated (a rotation makes stored provider keys unreadable) and its value was never printed. The public site reaches the frontend through a host `cloudflared` (systemd) that connects to `127.0.0.1:5173`, not through the `wedding-staging` tunnel container.
+
+Done with the owner's choices:
+- **Port 7153 closed** (`api: ports: !reset []` in the stdin override, only `api` recreated). Connect from the workstation: refused. The public site and `/api/health` stayed 200.
+- **Public API docs refused at the edge:** `frontend/nginx.conf` returns 404 for `/api/docs`, `/api/redoc`, `/api/openapi.json` and `/api/docs/oauth2-redirect` (a regex location ahead of the `/api/` proxy); a test in `tests/test_frontend_routing.py` pins both what is refused and what is not.
+  Deployed as `aidss-frontend:57b8f97` (digest `sha256:eea57bf146d935a52780c975895457d8f4e6d1c981cbe659b7c38e11b9aed47a`), `latest` moved to it. Verified on production: the four paths answer 404, `/`, `/login`, `/watchlist`, `/trader` 200, `/trader/v1/status` 401, `/api/health` 200.
+- **Port 5173 left as is, pending the owner:** the only client seen on it is the host's own `cloudflared` over loopback, so binding it to `127.0.0.1` would very likely keep the public site working and close LAN access, but it was not applied.
+
+### Incident: PostgreSQL recreated twice, about 2 minutes 15 seconds of database outage
+
+While deploying the frontend I ran `docker compose pull frontend` and then `up -d --no-build frontend` in one SSH command, both reading the override from stdin. The `up` recreated PostgreSQL: the local tag `pgvector/pgvector:pg16`
+now points at a newer image (id `484e838076e0`, PostgreSQL 16.16, pgvector 0.8.6) than the one the running container was created from (an older image now untagged), and `up` without `--no-deps` recreates dependencies. Because `pull` had consumed the stdin, that `up` ran
+with an empty override: the base `docker-compose.yml` (published 5432, the old superuser URL) was applied to PostgreSQL, the api recreate failed (`No such image: stocks-api:latest`), and the new PostgreSQL container was created but not started. Result: api and worker logged connection errors from
+03:04:52 to about 03:07:07 UTC, the Trader restarted in a loop (restart counter 16 on the current container, includes earlier restarts), until I recreated PostgreSQL with the correct override. A second recreate followed (a few seconds) because the `up` was repeated.
+Cause of the tag move: not established; a `pull` of the frontend with its dependencies is the likely trigger, unverified.
+
+State after: PostgreSQL 16.16 with pgvector 0.8.6 (same major, clean start, no error in its log), data intact (`public.users` 3 rows, `trading_state` `HALTED`), api and worker reconnected as `aidss_app`, Trader as `trader_rw`, Trader healthcheck exit 0,
+port 5432 not published (refused from the workstation), 7153 refused, all containers healthy. The pre-incident dump `~/aidss-backups/pg_dumpall-20261116T100117Z.sql.gz` was not needed. Any scheduled screen or job that ran inside the window may have failed once; none was checked.
+Lessons recorded in `CLAUDE.md` (Traps): always `--no-deps`, one command per SSH call that reads stdin, check `docker ps` before and after. The PostgreSQL minor upgrade (older 16.x to 16.16) was an unintended side effect, not a decision.
