@@ -191,7 +191,7 @@ Last Trader + architecture + routing run on 2026-11-15 (`tests/trader tests/test
   related to the Trader.
 
 Open risks of the deployment (not code): `docker-compose.yml` on the server builds from source, so an
-`up --build` there reverts a deployed image; PostgreSQL backups and the server are the same host; PostgreSQL port 5432 is still published with superuser `aidss` until the owner approves Task B host hardening (`deploy/trader/isolate_analysis_role.sql`).
+`up --build` there reverts a deployed image; PostgreSQL backups and the server are the same host. Host hardening was applied on 2026-11-16 and 2026-11-17 (`MEMORY/records/2026-11-16-host-backup-pg-dumpall.md`): api and worker run as `aidss_app`, the superuser password was rotated, port 5432 and the api port 7153 are not published, the frontend port 5173 is bound to `127.0.0.1` (the host `cloudflared` reaches it over loopback). Still open: the host has no firewall (`ufw` inactive), `docker-compose.yml` on the host still carries the old superuser URL, and nothing is copied off the host.
 
 ## If You Are Unsure
 

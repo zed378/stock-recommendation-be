@@ -90,6 +90,6 @@ Partial: T6-01/T6-02 mock tests, T6-03 restore script (`3s` local PostgreSQL 18 
 - No exchange sandbox exists; mock-only verification until T2-07.
 - The analysis platform cannot supply AI context for crypto pairs; deferred to post-MVP (ADR-032).
 - The deployment host keeps database backups on the same machine (`~/aidss-pre-trader-*.sql.gz`); off-host copies are manual (ADR-040).
-- Host PostgreSQL port 5432 exposure, superuser password rotation, and moving the analysis API to limited role `aidss_app` (ADR-021) are scripted in `deploy/trader/isolate_analysis_role.sql` + `rollback_analysis_role.sql` and awaiting the owner's approval to execute on `10.1.200.13` (`MEMORY/records/2026-11-15-host-hardening-plan.md`).
+- Host PostgreSQL port 5432 exposure, superuser password rotation, and moving the analysis API to limited role `aidss_app` (ADR-021) were scripted in `deploy/trader/isolate_analysis_role.sql` + `rollback_analysis_role.sql` and **applied on `10.1.200.13` on 2026-11-16** (`MEMORY/records/2026-11-16-host-backup-pg-dumpall.md`); port 5432 and the api port 7153 are no longer published and port 5173 is bound to `127.0.0.1` (2026-11-17). Open: no host firewall, the host `docker-compose.yml` still holds the old superuser URL, no off-host copy.
 - The host's Compose file builds from source and can revert a deployed image.
 - A production server password was shared in chat on 2026-11-14 and should be rotated.

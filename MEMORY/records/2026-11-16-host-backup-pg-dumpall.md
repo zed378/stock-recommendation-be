@@ -101,3 +101,17 @@ Cause of the tag move: not established; a `pull` of the frontend with its depend
 State after: PostgreSQL 16.16 with pgvector 0.8.6 (same major, clean start, no error in its log), data intact (`public.users` 3 rows, `trading_state` `HALTED`), api and worker reconnected as `aidss_app`, Trader as `trader_rw`, Trader healthcheck exit 0,
 port 5432 not published (refused from the workstation), 7153 refused, all containers healthy. The pre-incident dump `~/aidss-backups/pg_dumpall-20261116T100117Z.sql.gz` was not needed. Any scheduled screen or job that ran inside the window may have failed once; none was checked.
 Lessons recorded in `CLAUDE.md` (Traps): always `--no-deps`, one command per SSH call that reads stdin, check `docker ps` before and after. The PostgreSQL minor upgrade (older 16.x to 16.16) was an unintended side effect, not a decision.
+
+---
+
+## Step 4: port 5173 bound to 127.0.0.1 (2026-11-17, after the owner's go-ahead)
+
+Before changing anything: over six seconds of public requests, all 12 sampled established connections to `:5173` had peer `127.0.0.1`, and the only other listener consumer is the host `cloudflared` (systemd, root), so the public site reaches the frontend over loopback and not over the LAN address.
+`docker compose config` with the new override showed `host_ip: 127.0.0.1, published: 5173`.
+
+Applied with one command: the stdin override gains `frontend: ports: !override ["127.0.0.1:5173:80"]`, `up -d --no-build --no-deps frontend` (only `stocks-frontend-1` recreated; PostgreSQL, api, worker and Trader untouched, uptimes unchanged).
+Verified after: `docker ps` shows `127.0.0.1:5173->80/tcp`, healthy; the host listens on `127.0.0.1:5173` only; a request to `127.0.0.1:5173` on the host answers 200; public `/login` answered 200 eight times in a row, and `/`, `/watchlist`, `/trader`, `/admin`, `/api/health` 200, `/api/docs` 404, `/trader/v1/status` 401;
+from the owner's workstation, `10.1.200.13` ports 5173, 7153 and 5432 are all refused; Trader healthcheck exit 0, `trading_state` `HALTED`.
+
+Not verified: any consumer that reached `10.1.200.13:5173` directly over the LAN or the netbird interface (none was seen in the sample; it is cut off now); an internal DNS name for the site that might point at a LAN reverse proxy (the DNS suffix lookup `aidss.zedth.my.id.bodha.co.id` answered `10.10.10.6`, which was not probed).
+Rollback: remove the `ports: !override` lines from the frontend block of the override and run the same single `up -d --no-build --no-deps frontend` (about 10 seconds; not rehearsed).
