@@ -32,10 +32,7 @@ rebuilt; the audit trail, strategy history, and local annotations cannot.
 What stays mandatory: a backup **before every release** (`03`) and a restore rehearsal in the release checklist. A
 reminder or an automatic off-host copy would be possible later additions and would need the owner's approval.
 
-**Current VM status (2026-11-15):** The pre-deployment dump (`~/aidss-pre-trader-*.sql.gz`) resides on the same
-host disk (`10.1.200.13`) as the running PostgreSQL container. Per ADR-040 this is accepted while no live funds are
-at risk, but a disk or host failure would lose both the database and that local dump until the owner copies dumps
-off-host to their PC or an external drive. The owner can pull an encrypted off-host cluster copy directly to their workstation using `deploy/trader/backup_offhost.sh` from Git Bash (see runbook R9).
+**Recorded VM status (2026-11-17):** The verified cluster dump at `~/aidss-backups/pg_dumpall-20261116T100117Z.sql.gz` is on the database host (`10.1.200.13`); no real off-host copy is recorded. The owner can stream a fresh encrypted cluster copy to their PC with `bash deploy/trader/backup_offhost.sh` from Git Bash (R9), then rehearse restoring that file before trusting it for recovery.
 
 ## Restore
 

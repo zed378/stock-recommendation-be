@@ -85,6 +85,30 @@ reopens; `FLATTEN` reports it. Decide whether to reduce exposure elsewhere.
 
 `04-BACKUP-RESTORE-AND-RECOVERY.md`. Reconcile before resuming.
 
+### Off-host encrypted copy
+
+Run from **Git Bash** (or POSIX bash; PowerShell pipes corrupt binary streams) on the owner's workstation:
+
+```sh
+bash deploy/trader/backup_offhost.sh [--dest DIR] [--host infra@10.1.200.13]
+```
+
+The script streams `docker exec stocks-postgres-1 pg_dumpall -U aidss --quote-all-identifiers | gzip -6` over SSH directly into `openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt`. Remote Bash uses pipefail so a failed dump is not hidden by gzip success. Type and confirm the passphrase silently; it travels through a pipe file descriptor, never an argument, environment variable or disk file. Keep it in the owner's custody outside the backup directory. The test-only `--passphrase-fd N` reads one line from an existing descriptor; `--source-cmd` runs a local command and must never be taken from an untrusted source.
+
+The default directory is `$HOME/aidss-offhost-backups`, created under umask 077. Output names are `aidss-pg_dumpall-<UTC>.sql.gz.enc` and `.enc.sha256`, mode 600 (Windows filesystem ACLs must be checked separately). Existing names, including sidecars, are refused. Failed sources, invalid dumps and interrupted runs remove partial outputs owned by this run. No plaintext backup is written locally or remotely. Verification decrypts into `gzip -t` and a streaming structure check for roles, COPY termination and the cluster footer, printing counts and size only. A passing check is not proof of recoverability or a complete database snapshot. `pg_dumpall` takes separate database snapshots; freeze writers for a migration fingerprint comparison.
+
+Keep `~/.aidss-trader-master.key` separate (R10). AES-CBC plus this unkeyed checksum detects accidental corruption but is not authenticated encryption; an attacker able to replace both files can replace the checksum. Protect the destination and independently retain its checksum. Do not pass the passphrase through shell history or PowerShell pipelines.
+
+Before trusting a real copy, rehearse in a fresh, isolated PostgreSQL 16 container with pgvector, no published ports, no application containers and a disposable data volume. Check the sidecar first with `sha256sum -c <file>.enc.sha256` from its directory. Then, in Bash with pipefail enabled:
+
+```sh
+set -o pipefail
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in <backup>.sql.gz.enc \
+  | gunzip | docker exec -i <scratch-container> psql -U postgres
+```
+
+OpenSSL prompts on the terminal. Replace angle-bracket placeholders before use; never target production. Inspect every restore error (the bootstrap role/database may already exist), compare roles, schema versions and table counts to the captured source fingerprint, and verify append-only privileges. `deploy/trader/rehearse_restore.sh --full` documents the count/privilege checks but creates its own dump, so it does not test this encrypted cluster file. `deploy/production/restore.sh` supports a cluster stream into a fresh stack with application containers stopped; follow `09-MIGRATION-RUNBOOK.md` for that variant. Remove the scratch resources and record real timings and evidence. The script prints a restore example but never executes it. No production copy or restore is implied by local fixture tests.
+
 ## R10 — Credential unreadable (master key lost, corrupted, or rotated)
 
 The master key (`~/.aidss-trader-master.key`, mounted at `/run/secrets/trader_master_key`) has only one copy on the
