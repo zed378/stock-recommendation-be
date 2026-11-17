@@ -88,6 +88,33 @@ def test_the_api_prefix_is_not_swallowed_by_the_fallback() -> None:
     assert re.search(r"location\s+/api/", read(NGINX))
 
 
+def test_the_apis_own_documentation_is_refused_at_the_edge() -> None:
+    """/api/docs and /api/openapi.json were public, without signing in. The block must
+    refuse exactly those and still let every real API path through."""
+    conf = read(NGINX)
+    found = re.search(r"location\s+~\s+(\^/api/[^\s{]+)\s*\{\s*return\s+404;\s*\}", conf)
+    assert found, "the documentation block is missing or no longer returns 404"
+    pattern = re.compile(found.group(1))
+    refused = (
+        "/api/docs",
+        "/api/docs/",
+        "/api/redoc",
+        "/api/openapi.json",
+        "/api/docs/oauth2-redirect",
+    )
+    allowed = (
+        "/api/health",
+        "/api/auth/me",
+        "/api/documents",
+        "/api/openapi.json.bak",
+        "/api/ws/stream",
+    )
+    for path in refused:
+        assert pattern.match(path), path
+    for path in allowed:
+        assert not pattern.match(path), path
+
+
 def test_the_trader_proxy_is_scoped_to_the_api_and_not_the_ui_routes() -> None:
     """`location /trader/` proxied the operator UI's own routes to the Trader, which
     answered 404 JSON on every refresh of /trader/approvals. Only /trader/v1/ is the
