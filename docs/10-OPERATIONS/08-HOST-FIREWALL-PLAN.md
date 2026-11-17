@@ -39,6 +39,19 @@ For each question, record an answer before rendering rules: **A** leave reachabl
 
 No unrelated project is approved for closure. Existing public AIDSS access is outbound cloudflared to loopback and must continue to work.
 
+## Owner decisions recorded (2026-11-17, stage 1)
+
+| Question | Answer |
+|---|---|
+| SSH (22) sources | `10.1.101.0/24` plus netbird (`wt0`) |
+| Portainer (8000, 9443) sources | `10.1.101.0/24` plus netbird (`wt0`) |
+| IPv6 | Deny new remote IPv6 for these ports |
+| Other projects (6547, 8080, 8880, 8200, 8300, 9000, 9001, 17080, 17081, 18000 to 18300, 19080) | Untouched in stage 1; client inventory first |
+
+Netbird: the owner asked for netbird access from other devices. Netbird peers arrive on interface `wt0`, which the draft already admits for SSH and for every published port, so no netbird address range is listed. A CIDR such as `100.64.0.0/10` would be weaker (a LAN host could spoof a `100.x` source), and the real netbird range was not read from the host. Confirm the peer's ACL in the netbird dashboard.
+
+Consequences to accept before applying: other hosts on `10.1.200.0/24` and `10.10.10.0/24` lose SSH and Portainer; the owner's own device must be inside `10.1.101.0/24` or on netbird. The draft values are in `deploy/host/firewall/docker-user.nft`; they are unvalidated by `nft -c` and not applied.
+
 ## Lockout prevention and rollback
 
 `deploy/host/firewall/apply-with-rollback.sh` is deliberately disabled (exit 2 before any action). Its comments specify the review/application sequence. Only syntax checking and tests with command stubs are permitted at this stage.

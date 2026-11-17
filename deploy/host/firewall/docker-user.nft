@@ -1,31 +1,34 @@
-# DRAFT, NOT APPLIED. Review 08-HOST-FIREWALL-PLAN.md before rendering a policy.
+# DRAFT, NOT APPLIED. Stage 1 values from the owner's answers of 2026-11-17 (see
+# 08-HOST-FIREWALL-PLAN.md, "Owner decisions recorded"). Not validated by nft, never loaded.
 # Equivalent to DOCKER-USER filtering, without editing Docker-owned tables.
-# All source addresses are placeholders: fill from owner's answers (isi dari jawaban pemilik).
-# Empty sets intentionally grant no new remote access. Do not load this draft.
+# Stage 1 scope: SSH (22) and Portainer (8000, 9443) only. No other port is touched.
+# IPv6 sets stay empty on purpose: new remote IPv6 is denied for these ports.
+# Netbird peers are admitted by interface (wt0), not by address range, so no netbird CIDR is listed.
 table inet aidss_host_draft {
     set ssh_v4 {
         type ipv4_addr
         flags interval
-        # elements = { OWNER_APPROVED_IPV4_OR_CIDR } # isi dari jawaban pemilik
+        elements = { 10.1.101.0/24 }
     }
     set ssh_v6 {
         type ipv6_addr
         flags interval
-        # elements = { OWNER_APPROVED_IPV6_OR_CIDR } # isi dari jawaban pemilik
+        # empty: owner chose to deny new remote IPv6
     }
     set lan_v4 {
         type ipv4_addr
         flags interval
-        # elements = { OWNER_APPROVED_LAN_CIDR } # isi dari jawaban pemilik
+        elements = { 10.1.101.0/24 }
     }
     set lan_v6 {
         type ipv6_addr
         flags interval
-        # elements = { OWNER_APPROVED_LAN_IPV6_CIDR } # isi dari jawaban pemilik
+        # empty: owner chose to deny new remote IPv6
     }
     set managed_tcp {
         type inet_service
-        # Populate ONLY ports whose owner has confirmed a restriction.
+        # Only ports whose owner has confirmed a restriction: Portainer.
+        elements = { 8000, 9443 }
     }
     chain input_guard {
         type filter hook input priority -10; policy accept;

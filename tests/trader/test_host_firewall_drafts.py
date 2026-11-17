@@ -49,5 +49,16 @@ def test_container_filter_uses_original_port_and_both_source_families() -> None:
     assert "ct original proto-dst @managed_tcp" in text
     assert "ip saddr @lan_v4" in text and "ip6 saddr @lan_v6" in text
     assert "flush ruleset" not in text
-    assert "elements = { OWNER_APPROVED" in text
-    assert not any(line.strip().startswith("elements") for line in text.splitlines())
+    assert "OWNER_APPROVED" not in text
+
+
+def test_stage_one_values_match_the_recorded_owner_answers() -> None:
+    lines = [ln.strip() for ln in NFT.read_text().splitlines()]
+    elements = [ln for ln in lines if ln.startswith("elements")]
+    # ssh_v4, lan_v4, managed_tcp; both IPv6 sets stay empty (new remote IPv6 denied).
+    assert elements == [
+        "elements = { 10.1.101.0/24 }",
+        "elements = { 10.1.101.0/24 }",
+        "elements = { 8000, 9443 }",
+    ]
+    assert "100.64." not in NFT.read_text()  # netbird is admitted by wt0, not by a CIDR
