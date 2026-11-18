@@ -85,6 +85,30 @@ TRANSLATABLE_KEYS: frozenset[str] = frozenset(
         "drawdown_note",
         "concentration_risks",
         "limitations",
+        # --- debate, trader, risk debate, portfolio manager, reflector ---------
+        "thesis",
+        "key_arguments",
+        "counter_points",
+        "invalidation_conditions",
+        "position_sizing_note",
+        "risk_posture",
+        "evaluation",
+        "risk_arguments",
+        "recommended_adjustments",
+        "investment_plan",
+        "bull_case_summary",
+        "bear_case_summary",
+        "key_catalysts",
+        "key_risks",
+        "decision_summary",
+        "key_conditions",
+        "risk_adjusted_rationale",
+        "lessons_applied",
+        "outcome_assessment",
+        "what_worked",
+        "what_missed",
+        "actionable_lesson",
+        "mood_label",
         # --- journal, chat, knowledge -------------------------------------------------
         "patterns",
         "insufficient_evidence_for",
@@ -104,6 +128,9 @@ NOT_TRANSLATED: frozenset[str] = frozenset(
         # References back to the retrieved passages an answer drew on.
         # Translating a citation breaks the link to the thing being cited.
         "sources_used",
+        # Verbatim excerpts of what people posted. A machine translation presented
+        # as their words misquotes them; the reader sees the original text.
+        "notable_posts",
     }
 )
 

@@ -186,9 +186,7 @@ plainly is the house style. Money is `Decimal`. For UI, copy, and comment work t
 
 The stage-11 prompt reports a pre-change baseline of **525 Trader + architecture + routing tests**, plus **100 frontend Vitest tests**. These replace the stale 515/93 counts but are handoff claims until independently rerun; see the stage-11 record for actual local results. Historical PostgreSQL results remain **7 passed** on local PostgreSQL 18 and **6 passed** on the VM PostgreSQL 16 clone. Frontend tests use `--pool=vmThreads` on this machine's Node 26. S13 is closed by the Trader's own 28-package hash lock (ADR-050/053), included in deployed image `7d03693`.
 
-- `tests/test_output_language.py::test_translation_covers_every_prose_field`: the TradingAgents agents' prose
-  fields (`thesis`, `key_arguments`, and others) are neither translated nor excluded. Pre-existing, not
-  related to the Trader.
+No known failing test as of 2026-11-18: `test_translation_covers_every_prose_field` was fixed by classifying the 24 agent prose fields (`notable_posts` is deliberately not translated, being verbatim quotes).
 
 Host hardening was applied on 2026-11-16/17 (`MEMORY/records/2026-11-16-host-backup-pg-dumpall.md`, steps 1 to 7): api and worker use `aidss_app`, the superuser password was rotated, 5432/7153 are unpublished, and frontend 5173 is loopback-only for host cloudflared. The host Compose file uses images instead of source builds and refuses missing application database/JWT variables. The JWT secret remains in `~/stocks/.env` (`infra:infra 600`); changing it makes stored provider keys unreadable.
 
