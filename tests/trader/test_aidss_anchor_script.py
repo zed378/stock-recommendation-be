@@ -14,7 +14,9 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "trader" / "aidss-anchor.sh"
-BASH = shutil.which("bash")
+GIT_BASH = Path(r"C:\Program Files\Git\bin\bash.exe")
+BASH = str(GIT_BASH) if GIT_BASH.exists() else shutil.which("bash")
+GIT_USR_BIN = Path(r"C:\Program Files\Git\usr\bin")
 pytestmark = pytest.mark.skipif(BASH is None, reason="needs a POSIX shell")
 
 STUB = """#!/bin/sh
@@ -37,8 +39,12 @@ def run(tmp_path: Path, env_lines: list[str], *, rc: int = 0, out: str | None = 
     anchor_dir.mkdir()
     # Not the whole environment: the test process carries its own AIDSS_* variables, and the point
     # is to see exactly which ones the script itself passes on.
+    path_parts = [str(stub_dir)]
+    if GIT_USR_BIN.exists():
+        path_parts.append(str(GIT_USR_BIN))
+    path_parts.append(os.environ["PATH"])
     env = {
-        "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
+        "PATH": os.pathsep.join(path_parts),
         "HOME": str(tmp_path),
         "AIDSS_ANCHOR_ENV_FILE": str(env_file),
         "AIDSS_ANCHOR_DIR": str(anchor_dir),
@@ -47,7 +53,9 @@ def run(tmp_path: Path, env_lines: list[str], *, rc: int = 0, out: str | None = 
     }
     if out is not None:
         env["STUB_OUT"] = out
-    done = subprocess.run([BASH, str(SCRIPT)], env=env, capture_output=True, text=True)
+    done = subprocess.run(
+        [BASH, str(SCRIPT)], env=env, capture_output=True, text=True, timeout=30
+    )
     return done, anchor_dir
 
 
