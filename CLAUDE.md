@@ -163,7 +163,7 @@ Windows paths shown (`.venv/Scripts/python`); on Linux and macOS use `.venv/bin/
 
 ### Trader
 
-Historical PostgreSQL verification: `7 passed` on local PostgreSQL 18 and `6 passed` on a VM PostgreSQL 16 clone (2026-11-15). Current image references in the 2026-11-17 handoff are Trader `9b52dfa`, frontend `latest` (= `603e606`) and API `latest` (= `7878f7c`); Trader remains `HALTED`. These are recorded deployment facts, not a fresh host check. Local verification is recorded below and in the stage-11 handoff.
+Historical PostgreSQL verification: `7 passed` on local PostgreSQL 18 and `6 passed` on a VM PostgreSQL 16 clone (2026-11-15). Current image references in the 2026-11-17 handoff are Trader `9b52dfa`, frontend `latest` (= `d9a4b58`) and API `latest` (= `7878f7c`); Trader remains `HALTED`. These are recorded deployment facts, not a fresh host check. Local verification is recorded below and in the stage-11 handoff.
 
 | Command | Description |
 |---|---|
@@ -173,7 +173,7 @@ Historical PostgreSQL verification: `7 passed` on local PostgreSQL 18 and `6 pas
 | `python -m aidss_trader healthcheck` | Exit 0 if a recent heartbeat exists |
 | `alembic -c alembic_trader.ini upgrade head` | Migrations as `trader_owner` (`AIDSS_TRADER_MIGRATION_DATABASE_URL`); applied through `0008_indexes_idempotency` on VM PostgreSQL (2026-11-15) |
 
-The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler (T2 to T4), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and operator UI (`frontend/src/trader/`, `frontend/src/pages/Trader*.tsx`), are wired into `aidss_trader run` and deployed `HALTED` on the VM (`zed378/aidss-trader:9b52dfa`, `zed378/aidss-frontend:latest` (= `603e606`), `zed378/aidss-api:latest` (= `7878f7c`)). Every owner number is unset and the Compose file passes no exchange URL, so the deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (`T2-07` is owner-led; `python -m aidss_trader live-check` is prepared). Live Playwright browser inspection on `https://aidss.zedth.my.id` (`75bc905`) passed direct `goto`/`reload` on all 7 `/trader` routes, collapsible sidebar persistence, landing page (`/`), security headers, and simulated `502` outage.
+The connector, strategy, paper, backtest, risk, order manager, exit monitor, kill switch, and reconciler (T2 to T4), plus the T5 backend (approvals, step-up, notifier, promotion, export, `/trader/v1` API) and operator UI (`frontend/src/trader/`, `frontend/src/pages/Trader*.tsx`), are wired into `aidss_trader run` and deployed `HALTED` on the VM (`zed378/aidss-trader:9b52dfa`, `zed378/aidss-frontend:latest` (= `d9a4b58`), `zed378/aidss-api:latest` (= `7878f7c`)). Every owner number is unset and the Compose file passes no exchange URL, so the deployed image trades nothing. The PAPER lifecycle is built (mock-tested) and does nothing until the owner sets the paper cost model. The `admin` role holds every trader permission (ADR-048). No real Indodax call has been made (`T2-07` is owner-led; `python -m aidss_trader live-check` is prepared). Live Playwright browser inspection on `https://aidss.zedth.my.id` (`75bc905`) passed direct `goto`/`reload` on all 7 `/trader` routes, collapsible sidebar persistence, landing page (`/`), security headers, and simulated `502` outage.
 
 ## Code Style
 
