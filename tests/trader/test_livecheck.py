@@ -334,3 +334,14 @@ def test_the_allowlist_contains_no_order_mutation_or_account_movement_path() -> 
         "withdraw" in p or "capital" in p or "fiat" in p or "deposit" in p for p in paths
     )
     assert "/api/v2/order" in paths and "/api/v2/order" in {p for _, p in SIGNED_PATHS}
+
+
+def test_an_increment_spelled_differently_is_not_a_disagreement() -> None:
+    """On the first live run the JSON float 1e-06 differed from the string 0.000001 as text and
+    10 pairs looked wrong; compared as numbers they agree."""
+    from aidss_trader.livecheck.runner import _same_number
+
+    assert _same_number("0.000001", 1e-06) is True
+    assert _same_number("1000", 1000) is True
+    assert _same_number("0.00000100", 1) is False  # a real disagreement still shows
+    assert _same_number("x", 1) is False

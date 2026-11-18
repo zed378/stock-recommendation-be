@@ -27,6 +27,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -386,7 +387,11 @@ class LiveCheck:
             for p in prs:
                 if isinstance(p, dict) and p.get("ticker_id") in table and "pricescale" in p:
                     checked += 1
-                    agree += str(table[p["ticker_id"]]) == str(p["pricescale"])
+                    # Compared as numbers, the way the Trader compares them. As text, the JSON
+                    # float 1e-06 differs from the string "0.000001" for the same value, which
+                    # on the first live run made 10 pairs look like disagreements when they were
+                    # only spelled differently.
+                    agree += _same_number(table[p["ticker_id"]], p["pricescale"])
             obs["A3_increment_vs_pricescale"] = {"checked": checked, "agree": agree}
         for tf in ("240", "1D"):
             rows = raw.get(f"A4-ohlc-{tf}")
@@ -517,3 +522,10 @@ class LiveCheck:
             "`docs/06-INTEGRATIONS/03` to `11`.",
         ]
         return "\n".join(lines) + "\n"
+
+
+def _same_number(a: object, b: object) -> bool:
+    try:
+        return Decimal(str(a)) == Decimal(str(b))
+    except InvalidOperation:
+        return False
