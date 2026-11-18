@@ -61,4 +61,34 @@ def test_stage_one_values_match_the_recorded_owner_answers() -> None:
         "elements = { 10.1.101.0/24 }",
         "elements = { 8000, 9443 }",
     ]
-    assert "100.64." not in NFT.read_text()  # netbird is admitted by wt0, not by a CIDR
+    assert not __import__("re").search(r"\b100\.\d+\.\d+\.\d+/", NFT.read_text())
+
+
+@pytest.mark.skipif(BASH is None, reason="needs bash")
+def test_validator_only_checks_offline_with_readonly_draft() -> None:
+    script = ROOT / "deploy/host/firewall/validate-draft.sh"
+    done = subprocess.run([BASH, "-n", str(script)], capture_output=True, timeout=15)
+    assert done.returncode == 0
+    text = script.read_text()
+    for required in ("--rm", "--pull never", "--network none", "--read-only",
+                     "--cap-drop ALL", "--cap-add NET_ADMIN", "readonly", "nft -c -f"):
+        assert required in text
+    assert "--privileged" not in text and "--network host" not in text
+
+
+@pytest.mark.skipif(BASH is None or shutil.which("docker") is None, reason="needs Docker/bash")
+def test_local_nft_validation_if_prepared_image_exists() -> None:
+    image = subprocess.run(
+        ["docker", "image", "inspect", "aidss-nft-validator:alpine3.22.2"],
+        capture_output=True, timeout=20,
+    )
+    if image.returncode:
+        pytest.skip("NOT VALIDATED: pre-provisioned nft image unavailable; no download allowed")
+    done = subprocess.run(
+        [BASH, str(ROOT / "deploy/host/firewall/validate-draft.sh")],
+        capture_output=True, text=True, timeout=45,
+    )
+    if done.returncode and any(word in done.stderr.lower() for word in
+                              ("operation not permitted", "operation not supported")):
+        pytest.skip("NOT VALIDATED: container kernel limitation: " + done.stderr)
+    assert done.returncode == 0, done.stdout + done.stderr
