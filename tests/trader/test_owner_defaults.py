@@ -31,11 +31,15 @@ def _profile(path: Path = LARGE) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_every_starter_profile_is_proposed_and_has_no_problem() -> None:
+def test_every_starter_profile_is_proposed_or_owner_accepted_and_has_no_problem() -> None:
     assert len(PROFILES) >= 2
     for path in PROFILES:
         profile = _profile(path)
-        assert profile["status"] == "proposed", path.name
+        assert profile["status"] in ("proposed", "accepted"), path.name
+        if profile["status"] == "accepted":
+            # Only the owner's decision may flip it, and the record must say so.
+            assert profile["decision"]["accepted_by"] == "owner", path.name
+            assert "tax_pct" in profile["decision"]["unverified"], path.name
         assert _checker().problems(profile) == [], path.name
 
 

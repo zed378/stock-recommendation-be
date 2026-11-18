@@ -1,6 +1,13 @@
 {
   "_about": "Starter profile for the owner numbers (worksheet docs/01-PRODUCT-REQUIREMENTS/08), built for Rp 50,000. PROPOSED by the engineering agent at the owner's request on 2026-11-16, not decided: nothing here is applied to any instance. At this size the exchange minimum order forces a larger risk per trade than the Rp 1,000,000 profile (see the profile document). Edit the values, then run: python deploy/trader/check_owner_defaults.py <this file>",
-  "status": "proposed",
+  "status": "accepted",
+  "decision": {
+    "accepted_by": "owner",
+    "accepted_on": "2026-11-18",
+    "scope": "all values as written, chosen over the Rp 1,000,000 profile in a multiple-choice answer",
+    "unverified": "paper.tax_pct (0.25) and paper.clearing_pct (0.05) are placeholders, not observed values (OQ-5); every paper result built on them is an estimate",
+    "applied": "not yet: the owner runs import_owner_profile.py, dry run first, then --apply with their own password"
+  },
   "basis": {
     "equity_idr": "50000",
     "risk_profile": "small account: risk per trade is set by the exchange minimum, not by preference",
