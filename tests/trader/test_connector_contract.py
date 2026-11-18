@@ -194,26 +194,30 @@ def _stale_server_time(env: Env, stale: set[int], readings: int = 5) -> None:
         )
 
 
-def test_a_minority_of_stale_readings_does_not_halt() -> None:
+def test_a_fresh_reading_among_stale_ones_is_enough() -> None:
     env = Env(skew_ms=0)
-    _stale_server_time(env, {2, 4})  # 2 of 5 readings are a second old
+    _stale_server_time(env, {1, 2, 3, 4})  # only the fifth reading is fresh
     assert abs(env.client.check_clock()) <= 250
     env.client.get_account()
 
 
-def test_a_majority_of_stale_or_skewed_readings_still_halts() -> None:
+def test_the_check_stops_at_the_first_fresh_reading() -> None:
     env = Env(skew_ms=0)
-    # 3 of 5 stale in the first measurement AND in the re-measurement: the median is a second off
-    # twice in a row.
-    _stale_server_time(env, {1, 2, 3, 6, 7, 8}, readings=10)
+    env.client.check_clock()
+    assert [r["path"] for r in env.mock.requests] == ["/api/server_time"]  # one reading was enough
+
+
+def test_all_readings_stale_twice_in_a_row_halts() -> None:
+    env = Env(skew_ms=0)
+    _stale_server_time(env, set(range(1, 11)), readings=10)  # both measurements, every reading old
     with pytest.raises(ConnectorError) as exc:
         env.client.check_clock()
-    assert exc.value.error_class is ErrorClass.CLOCK_SKEW and "median of 5" in str(exc.value)
+    assert exc.value.error_class is ErrorClass.CLOCK_SKEW and "best of 5" in str(exc.value)
 
 
-def test_one_bad_measurement_is_measured_again_before_it_halts() -> None:
+def test_one_all_stale_measurement_is_measured_again_before_it_halts() -> None:
     env = Env(skew_ms=0)
-    _stale_server_time(env, {1, 2, 3}, readings=5)  # first measurement bad, the second is clean
+    _stale_server_time(env, {1, 2, 3, 4, 5}, readings=6)  # first measurement all old, then fresh
     assert abs(env.client.check_clock()) <= 250
 
 

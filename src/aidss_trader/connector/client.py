@@ -24,7 +24,6 @@ import hashlib
 import hmac
 import logging
 import re
-import statistics
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -71,7 +70,7 @@ ALLOWED_METHODS = frozenset(
     }
 )
 
-#: Readings per clock check; odd, so the median is one of them. See `check_clock`.
+#: Most readings per clock check. See `check_clock`.
 CLOCK_SAMPLES = 5
 CLOCK_RETRY_PAUSE_S = 0.5
 
@@ -300,37 +299,47 @@ class IndodaxClient:
         at the midpoint of the round trip so network latency is not mistaken for
         skew.
         """
-        # Two layers against a noisy reference, neither of which loosens the limit (ADR-041).
-        # Indodax serves `/api/server_time` through caches: from the VM most readings sat within
-        # 50 ms of the host clock (NTP-synced, a few ms off) but about one in six was a stale value
-        # off by roughly one second, which a single sample reports as a skew and halts on.
-        #  1. The offset is the median of several readings. A clock that really is off moves every
-        #     reading, so the median moves with it; a stale minority does not.
-        #  2. A median beyond the limit is measured once more before it counts (docs 06/08: re-sync,
-        #     retry once, then halt). Two bad measurements in a row halt; one does not.
-        offset = self._median_offset()
+        # The reference is noisy in one direction only, and the estimator uses that (ADR-041 limit
+        # unchanged). Indodax serves `/api/server_time` through caches. Measured from the VM on
+        # 2026-11-18 over one reused connection: readings were either fresh (offset about -30 ms,
+        # round trip about 60 ms) or served from a cache (offset about -760 ms, round trip about
+        # 10 ms), roughly half and half. A cache can only make the server's time older than it is,
+        # so a stale reading can only make `server - local` too low, never too high: the reading
+        # closest to zero is the freshest, and a fresh reading inside the limit proves the clock is
+        # inside it. A clock that really is ahead of Indodax (the case it rejects, 1 s or more)
+        # makes every reading, stale or not, lower still, so it cannot pass.
+        #  1. Read up to CLOCK_SAMPLES times and stop at the first reading inside the limit; if
+        #     none is, the best (closest to zero) is the offset.
+        #  2. A best offset beyond the limit is measured once more before it counts (docs 06/08:
+        #     re-sync, retry once, then halt).
+        offset = self._best_offset()
         if abs(offset) > self._max_skew_ms:
             self._sleep(CLOCK_RETRY_PAUSE_S)
-            offset = self._median_offset()
+            offset = self._best_offset()
         if abs(offset) > self._max_skew_ms:
             raise ConnectorError(
                 ErrorClass.CLOCK_SKEW,
-                f"clock offset {offset} ms (median of {CLOCK_SAMPLES}, measured twice) exceeds "
+                f"clock offset {offset} ms (best of {CLOCK_SAMPLES}, measured twice) exceeds "
                 f"the {self._max_skew_ms} ms limit",
                 operation="check_clock",
             )
         self._last_clock_ok = self._clock()
         return offset
 
-    def _median_offset(self) -> int:
-        offsets: list[int] = []
+    def _best_offset(self) -> int:
+        best: int | None = None
         for _ in range(CLOCK_SAMPLES):
             server_ms = self.get_server_time()
             # Only the time on the wire counts. Measuring around the call would include the
             # throttle's wait, and a drained bucket would read as a clock skew that is not there.
             t0, t1 = self._wire.span
-            offsets.append(server_ms - (t0 + t1) // 2)
-        return int(statistics.median(offsets))
+            offset = server_ms - (t0 + t1) // 2
+            if best is None or abs(offset) < abs(best):
+                best = offset
+            if abs(offset) <= self._max_skew_ms:
+                break
+        assert best is not None
+        return best
 
     def _ensure_clock(self, operation: str) -> None:
         if self._last_clock_ok is None or (
