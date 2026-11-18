@@ -41,6 +41,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 DEFAULT_BASE = "https://aidss.zedth.my.id"
 STRATEGY = "ema_adx"
+USER_AGENT = "aidss-owner-import/1.0"
 INT_LIMITS = {
     "max_consecutive_losses",
     "max_open_positions",
@@ -65,6 +66,9 @@ class ImportError_(Exception):
 
 def http_send(method: str, url: str, headers: dict[str, str], body: Any) -> tuple[int, Any]:
     data = None if body is None else json.dumps(body).encode()
+    # The site sits behind Cloudflare, which refuses urllib's default "Python-urllib" agent with a
+    # 403 (error 1010) before the request reaches the API. A plain tool name gets through.
+    headers = {"User-Agent": USER_AGENT, **headers}
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:

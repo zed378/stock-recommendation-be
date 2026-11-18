@@ -192,3 +192,34 @@ def test_the_password_is_never_in_the_output_or_the_headers(setup) -> None:
 
     assert "correct horse" not in text
     assert all("correct horse" not in json.dumps(h) for _, _, h in wire.calls)
+
+
+def test_the_real_transport_does_not_send_the_default_python_user_agent() -> None:
+    """Cloudflare answers 403 (error 1010) to urllib's default agent, which made sign-in fail
+    before the API was reached."""
+    import http.server
+    import threading
+
+    seen: list[str] = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            seen.append(self.headers.get("User-Agent", ""))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.handle_request)
+    thread.start()
+    try:
+        status, _ = tool.http_send("GET", f"http://127.0.0.1:{server.server_port}/", {}, None)
+    finally:
+        thread.join(5)
+        server.server_close()
+    assert status == 200
+    assert seen and not seen[0].startswith("Python-urllib")
