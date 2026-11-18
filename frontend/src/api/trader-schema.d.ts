@@ -279,6 +279,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/pair-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Groups */
+        get: operations["get_groups_trader_v1_pair_groups_get"];
+        /**
+         * Put Groups
+         * @description Replace the owner's groups. A group only names pairs: selecting it copies them into the
+         *     allowlist when that is saved (and that save is what needs the step-up), so editing a
+         *     group changes nothing that trades.
+         */
+        put: operations["put_groups_trader_v1_pair_groups_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/pairs-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pairs Catalog
+         * @description Every IDR market the exchange lists, with its 24 hour volume and spread, for picking
+         *     pairs and building groups. Two public calls, cached for a minute.
+         */
+        get: operations["pairs_catalog_trader_v1_pairs_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/paper-config": {
         parameters: {
             query?: never;
@@ -497,6 +541,13 @@ export interface components {
         };
         /** AllowlistBody */
         AllowlistBody: {
+            /**
+             * All Pairs
+             * @default false
+             */
+            all_pairs: boolean;
+            /** Max Pairs */
+            max_pairs?: number | null;
             /** Max Spread Pct */
             max_spread_pct?: string | null;
             /** Min Quote Volume 24H Idr */
@@ -508,6 +559,10 @@ export interface components {
         AllowlistData: {
             /** Active */
             active: boolean;
+            /** All Pairs */
+            all_pairs: boolean;
+            /** Max Pairs */
+            max_pairs: number | null;
             /** Max Spread Pct */
             max_spread_pct: string | null;
             /** Min Quote Volume 24H Idr */
@@ -596,6 +651,26 @@ export interface components {
             win_rate_pct: string;
             /** Wins */
             wins: number;
+        };
+        /** CatalogData */
+        CatalogData: {
+            /** Pairs */
+            pairs: components["schemas"]["CatalogPair"][];
+        };
+        /** CatalogPair */
+        CatalogPair: {
+            /** Asset */
+            asset: string;
+            /** Min Order Idr */
+            min_order_idr: string | null;
+            /** Pair */
+            pair: string;
+            /** Quote Volume 24H Idr */
+            quote_volume_24h_idr: string | null;
+            /** Spread Pct */
+            spread_pct: string | null;
+            /** Trading */
+            trading: boolean;
         };
         /**
          * CredentialBody
@@ -687,6 +762,11 @@ export interface components {
             data: components["schemas"]["ApproveData"];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[CatalogData] */
+        Envelope_CatalogData_: {
+            data: components["schemas"]["CatalogData"];
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[CredentialItemModel] */
         Envelope_CredentialItemModel_: {
             data: components["schemas"]["CredentialItemModel"];
@@ -720,6 +800,11 @@ export interface components {
         /** Envelope[ModeData] */
         Envelope_ModeData_: {
             data: components["schemas"]["ModeData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[PairGroupsData] */
+        Envelope_PairGroupsData_: {
+            data: components["schemas"]["PairGroupsData"];
             meta: components["schemas"]["MetaModel"];
         };
         /** Envelope[PaperConfigData] */
@@ -1003,6 +1088,23 @@ export interface components {
             /** Trades Closed */
             trades_closed: number;
         };
+        /** PairGroup */
+        PairGroup: {
+            /** Name */
+            name: string;
+            /** Pairs */
+            pairs: string[];
+        };
+        /** PairGroupsBody */
+        PairGroupsBody: {
+            /** Groups */
+            groups: components["schemas"]["PairGroup"][];
+        };
+        /** PairGroupsData */
+        PairGroupsData: {
+            /** Groups */
+            groups: components["schemas"]["PairGroup"][];
+        };
         /** PaperBody */
         PaperBody: {
             /** Clearing Pct */
@@ -1143,6 +1245,10 @@ export interface components {
         PutAllowlistData: {
             /** Active */
             active: boolean;
+            /** All Pairs */
+            all_pairs: boolean;
+            /** Max Pairs */
+            max_pairs: number | null;
             /** Pairs */
             pairs: string[];
         };
@@ -1939,6 +2045,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_list_OrderItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_groups_trader_v1_pair_groups_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PairGroupsData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_groups_trader_v1_pair_groups_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairGroupsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PairGroupsData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pairs_catalog_trader_v1_pairs_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CatalogData_"];
                 };
             };
             /** @description Validation Error */

@@ -33,6 +33,11 @@ THRESHOLD_FIELDS: tuple[str, ...] = (
 # evaluate, so the parameter API refuses it instead of letting it sit silently inert.
 MAX_HISTORY_BARS = 300
 ALLOWLIST_KEY = "allowlist"
+PAIR_GROUPS_KEY = "pair_groups"
+#: Ceiling on how many pairs "ALL" may ask the exchange's public endpoints to keep current. Each
+#: active pair costs a candle request every few minutes and the public legacy API is rate limited,
+#: so the owner chooses N (it is never defaulted) and this only bounds a typo.
+MAX_ALL_PAIRS_LIMIT = 200
 STRATEGY_PREFIX = "strategy_params:"
 
 
@@ -50,8 +55,23 @@ class LiquidityFilter:
 
 @dataclass(frozen=True, slots=True)
 class Allowlist:
+    """`pairs` are the ones the owner chose by name. `all_pairs` adds every IDR market that passes
+    the liquidity filter, best 24 hour volume first, at most `max_pairs` of them: ALL is inactive
+    until the owner sets N."""
+
     pairs: tuple[str, ...] = ()
     liquidity: LiquidityFilter = LiquidityFilter()
+    all_pairs: bool = False
+    max_pairs: int | None = None
+
+    @property
+    def all_active(self) -> bool:
+        return self.all_pairs and self.max_pairs is not None and self.liquidity.configured
+
+    @property
+    def has_scope(self) -> bool:
+        """Something is selected: named pairs, or ALL with its number set."""
+        return bool(self.pairs) or self.all_active
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -73,7 +93,16 @@ def get_allowlist(session: Session) -> Allowlist:
         liquidity=LiquidityFilter(
             _dec(v.get("min_quote_volume_24h_idr")), _dec(v.get("max_spread_pct"))
         ),
+        all_pairs=bool(v.get("all_pairs", False)),
+        max_pairs=_int(v.get("max_pairs")),
     )
+
+
+def _int(value: Any) -> int | None:
+    try:
+        return None if value is None else int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _put(session: Session, key: str, value: dict[str, Any], by: str, now: datetime) -> None:
@@ -105,7 +134,36 @@ def set_allowlist(
             "pairs": [p.upper() for p in allowlist.pairs],
             "min_quote_volume_24h_idr": _text(allowlist.liquidity.min_quote_volume_24h_idr),
             "max_spread_pct": _text(allowlist.liquidity.max_spread_pct),
+            "all_pairs": allowlist.all_pairs,
+            "max_pairs": allowlist.max_pairs,
         },
+        by,
+        now or datetime.now(UTC),
+    )
+
+
+def get_pair_groups(session: Session) -> dict[str, tuple[str, ...]]:
+    """The owner's named groups of pairs. A group is a shortcut for ticking several pairs at once:
+    it names pairs, it never trades anything by itself (selecting it copies its pairs into the
+    allowlist when that is saved)."""
+    row = session.get(TraderSetting, PAIR_GROUPS_KEY)
+    if row is None:
+        return {}
+    groups = row.value.get("groups", {})
+    return {str(name): tuple(str(p).upper() for p in pairs) for name, pairs in groups.items()}
+
+
+def set_pair_groups(
+    session: Session,
+    groups: dict[str, tuple[str, ...]],
+    *,
+    by: str,
+    now: datetime | None = None,
+) -> None:
+    _put(
+        session,
+        PAIR_GROUPS_KEY,
+        {"groups": {name: [p.upper() for p in pairs] for name, pairs in sorted(groups.items())}},
         by,
         now or datetime.now(UTC),
     )

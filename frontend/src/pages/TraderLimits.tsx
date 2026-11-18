@@ -18,9 +18,13 @@ import {
   type Effect,
   type LimitField,
 } from "@/trader/limitsMeta";
-import { useSaveAllowlist, useSaveLimits } from "@/trader/mutations";
+import { useSaveAllowlist, useSaveLimits, useSavePairGroups } from "@/trader/mutations";
+import { PairPicker } from "@/trader/PairPicker";
 import { StepUpDialog } from "@/trader/StepUpDialog";
-import type { Allowlist, Limits } from "@/trader/types";
+import type { Allowlist, Limits, PairCatalog, PairGroups } from "@/trader/types";
+
+/** Mirrors `MAX_ALL_PAIRS_LIMIT` on the server: the most markets ALL may keep current. */
+const MAX_ALL_PAIRS = 200;
 
 const EFFECT_LABEL: Record<Effect, MessageKey | null> = {
   looser: "trader.limits.review.looser",
@@ -346,34 +350,62 @@ function AllowlistEditor() {
 function AllowlistForm({ data }: { data: Allowlist }) {
   const { t, locale } = useI18n();
   const save = useSaveAllowlist();
+  const catalogQuery = useTraderQuery<PairCatalog>(
+    ["pairs-catalog"],
+    () => traderApi.GET("/trader/v1/pairs-catalog"),
+    { interval: 60_000 },
+  );
+  const groupsQuery = useTraderQuery<PairGroups>(
+    ["pair-groups"],
+    () => traderApi.GET("/trader/v1/pair-groups"),
+    { interval: false },
+  );
+  const saveGroups = useSavePairGroups();
+  const [selected, setSelected] = useState<string[]>([...data.pairs].sort());
   const [pairsText, setPairsText] = useState(data.pairs.join(", "));
+  const [allPairs, setAllPairs] = useState(data.all_pairs);
+  const [maxPairsText, setMaxPairsText] = useState(data.max_pairs === null ? "" : String(data.max_pairs));
   const [minVolume, setMinVolume] = useState(data.min_quote_volume_24h_idr ?? "");
   const [maxSpread, setMaxSpread] = useState(data.max_spread_pct ?? "");
   const [reviewing, setReviewing] = useState(false);
   const [stepUp, setStepUp] = useState(false);
   const [done, setDone] = useState(false);
 
-  const pairs = parsePairs(pairsText);
+  const pairs = selected;
   const pairsBad = pairs.some((p) => !PAIR.test(p));
+  const maxPairsBad =
+    maxPairsText.trim() !== "" &&
+    !(/^\d{1,3}$/.test(maxPairsText.trim()) && +maxPairsText >= 1 && +maxPairsText <= MAX_ALL_PAIRS);
+  const maxPairs = maxPairsText.trim() === "" || maxPairsBad ? null : Number(maxPairsText.trim());
   const volBad = minVolume.trim() !== "" && !(DECIMAL.test(minVolume.trim()) && compareDecimals(minVolume.trim(), "0") > 0);
   const spreadBad =
     maxSpread.trim() !== "" &&
     !(DECIMAL.test(maxSpread.trim()) && compareDecimals(maxSpread.trim(), "0") > 0 && compareDecimals(maxSpread.trim(), "100") <= 0);
-  const invalid = pairsBad || volBad || spreadBad;
+  const invalid = pairsBad || volBad || spreadBad || maxPairsBad;
 
   const before = { pairs: data.pairs, vol: data.min_quote_volume_24h_idr, spread: data.max_spread_pct };
   const next = { vol: minVolume.trim() || null, spread: maxSpread.trim() || null };
   const changed =
-    pairs.join(",") !== [...before.pairs].sort().join(",") || next.vol !== before.vol || next.spread !== before.spread;
+    pairs.join(",") !== [...before.pairs].sort().join(",") ||
+    next.vol !== before.vol ||
+    next.spread !== before.spread ||
+    allPairs !== data.all_pairs ||
+    maxPairs !== data.max_pairs;
 
-  const prevSnap = { pairs: before.pairs, minVolume: before.vol, maxSpread: before.spread };
-  const nextSnap = { pairs, minVolume: next.vol, maxSpread: next.spread };
+  const prevSnap = {
+    pairs: before.pairs,
+    minVolume: before.vol,
+    maxSpread: before.spread,
+    allPairs: data.all_pairs,
+    maxPairs: data.max_pairs,
+  };
+  const nextSnap = { pairs, minVolume: next.vol, maxSpread: next.spread, allPairs, maxPairs };
   const loosens = allowlistLoosens(prevSnap, nextSnap);
   const rowEffects = allowlistEffects(prevSnap, nextSnap);
 
   const send = (grant?: string) =>
     save.mutate(
-      { pairs, minVolume: next.vol, maxSpread: next.spread, stepUp: grant },
+      { pairs, minVolume: next.vol, maxSpread: next.spread, allPairs, maxPairs, stepUp: grant },
       {
         onSuccess: () => {
           setDone(true);
@@ -386,11 +418,15 @@ function AllowlistForm({ data }: { data: Allowlist }) {
 
   const status = data.active
     ? t("trader.allow.active")
-    : data.pairs.length === 0
+    : data.pairs.length === 0 && !data.all_pairs
       ? t("trader.allow.inactive.noPairs")
-      : t("trader.allow.inactive.noFilter");
+      : data.all_pairs && data.max_pairs === null
+        ? t("trader.allow.inactive.noN")
+        : t("trader.allow.inactive.noFilter");
   const list = (p: string[]) => (p.length ? p.join(", ") : t("trader.allow.empty"));
   const num = (v: string | null) => (v === null ? t("trader.limits.unset") : groupDigits(v, locale));
+  const allText = (on: boolean, n: number | null) =>
+    !on ? t("trader.allow.all.off") : n === null ? t("trader.allow.all.noN") : t("trader.allow.all.on", { n });
 
   return (
     <form
@@ -401,19 +437,78 @@ function AllowlistForm({ data }: { data: Allowlist }) {
       }}
     >
       <p className="max-w-prose text-sm text-muted">{t("trader.allow.intro")}</p>
-      <Field label={t("trader.allow.pairs")}>
-        <input
-          className={`${inputClass} font-mono`}
-          value={pairsText}
-          spellCheck={false}
-          autoComplete="off"
-          aria-invalid={pairsBad}
-          onChange={(e) => {
+      <fieldset className="space-y-3">
+        <legend className="mb-1.5 text-xs font-medium text-muted">{t("trader.allow.pairs")}</legend>
+        <PairPicker
+          catalog={catalogQuery.data?.data.pairs ?? null}
+          catalogError={catalogQuery.isError ? catalogQuery.error.message : null}
+          selected={selected}
+          onChange={(next) => {
             setDone(false);
-            setPairsText(e.target.value);
+            setSelected(next);
+            setPairsText(next.join(", "));
           }}
+          groups={groupsQuery.data?.data.groups ?? []}
+          onSaveGroups={(groups) => saveGroups.mutate(groups)}
+          groupsBusy={saveGroups.isPending}
+          groupsError={saveGroups.error?.message ?? null}
         />
-      </Field>
+        {catalogQuery.isError && (
+          <Field label={t("trader.allow.manual")}>
+            <input
+              className={`${inputClass} font-mono`}
+              value={pairsText}
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={pairsBad}
+              onChange={(e) => {
+                setDone(false);
+                setPairsText(e.target.value);
+                setSelected(parsePairs(e.target.value));
+              }}
+            />
+          </Field>
+        )}
+      </fieldset>
+      <div className="space-y-2 rounded-md border border-line p-3">
+        <label className="flex cursor-pointer items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0"
+            checked={allPairs}
+            onChange={(e) => {
+              setDone(false);
+              setAllPairs(e.target.checked);
+            }}
+          />
+          <span>
+            <span className="font-medium text-ink">{t("trader.allow.all.label")}</span>
+            <span className="mt-0.5 block text-xs text-muted">{t("trader.allow.all.hint")}</span>
+          </span>
+        </label>
+        {allPairs && (
+          <div className="max-w-xs">
+            <Field label={t("trader.allow.all.max")}>
+              <input
+                className={`${inputClass} font-mono tnum`}
+                inputMode="numeric"
+                value={maxPairsText}
+                aria-invalid={maxPairsBad}
+                onChange={(e) => {
+                  setDone(false);
+                  setMaxPairsText(e.target.value);
+                }}
+              />
+              <span className="mt-1 block text-xs text-muted">{t("trader.allow.all.maxHint", { max: MAX_ALL_PAIRS })}</span>
+            </Field>
+            {maxPairsBad && (
+              <p role="alert" className="mt-1 text-xs text-fall">
+                {t("trader.allow.all.invalid", { max: MAX_ALL_PAIRS })}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
       {pairsBad && (
         <p role="alert" className="text-xs text-fall">
           {t("trader.allow.invalid.pairs")}
@@ -486,6 +581,12 @@ function AllowlistForm({ data }: { data: Allowlist }) {
         >
           <ul className="space-y-3">
             <ReviewLine label={t("trader.allow.pairs")} from={list(before.pairs)} to={list(pairs)} effect={rowEffects.pairs} />
+            <ReviewLine
+              label={t("trader.allow.all.label")}
+              from={allText(data.all_pairs, data.max_pairs)}
+              to={allText(allPairs, maxPairs)}
+              effect={rowEffects.allPairs}
+            />
             <ReviewLine label={t("trader.allow.minVolume")} from={num(before.vol)} to={num(next.vol)} effect={rowEffects.minVolume} />
             <ReviewLine label={t("trader.allow.maxSpread")} from={num(before.spread)} to={num(next.spread)} effect={rowEffects.maxSpread} />
           </ul>

@@ -64,6 +64,8 @@ class MockExchange:
         self.increments = {"btc_idr": "1000"}
         self.prices = {"BTCIDR": "1236777000"}
         self.books = {"BTCIDR": ("1236777000", "0.5", "1236800000", "0.5")}
+        # `/api/summaries` tickers keyed like the exchange (btc_idr); tests fill what they need.
+        self.summaries: dict[str, dict[str, Any]] = {}
         self.candles: dict[tuple[str, str], list[tuple[int, str, str, str, str, str]]] = {}
         self.candle_numbers_as_strings = False
         self.market_fill_price = "1236800000"
@@ -159,6 +161,7 @@ class MockExchange:
         routes: dict[tuple[str, str], Callable[[httpx.Request], httpx.Response]] = {
             ("GET", "/api/server_time"): self._server_time,
             ("GET", "/api/pairs"): lambda r: _json(200, self.pairs),
+            ("GET", "/api/summaries"): lambda r: _json(200, {"tickers": self.summaries}),
             ("GET", "/api/price_increments"): lambda r: _json(200, {"increments": self.increments}),
             ("GET", "/tradingview/history_v2"): self._ohlc,
             ("GET", "/api/v2/ticker/price"): self._ticker_price,

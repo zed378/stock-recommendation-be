@@ -139,6 +139,9 @@ export interface AllowlistSnapshot {
   pairs: readonly string[];
   minVolume: string | null;
   maxSpread: string | null;
+  /** ALL: every IDR market that passes the liquidity filter, best volume first, at most `maxPairs`. */
+  allPairs?: boolean;
+  maxPairs?: number | null;
 }
 
 /**
@@ -148,6 +151,8 @@ export interface AllowlistSnapshot {
  */
 export function allowlistLoosens(prev: AllowlistSnapshot, next: AllowlistSnapshot): boolean {
   if (next.pairs.some((p) => !prev.pairs.includes(p))) return true;
+  // ALL switched on, or its number raised (an unset number counts as 0): more markets can qualify.
+  if (next.allPairs && (!prev.allPairs || (next.maxPairs ?? 0) > (prev.maxPairs ?? 0))) return true;
   const prevConfigured = prev.minVolume !== null && prev.maxSpread !== null;
   const nextConfigured = next.minVolume !== null && next.maxSpread !== null;
   if (!nextConfigured) return false;
@@ -162,7 +167,7 @@ export function allowlistLoosens(prev: AllowlistSnapshot, next: AllowlistSnapsho
 export function allowlistEffects(
   prev: AllowlistSnapshot,
   next: AllowlistSnapshot,
-): { pairs: Effect; minVolume: Effect; maxSpread: Effect } {
+): { pairs: Effect; minVolume: Effect; maxSpread: Effect; allPairs: Effect } {
   const prevSet = new Set(prev.pairs);
   const nextSet = new Set(next.pairs);
   const added = next.pairs.some((p) => !prevSet.has(p));
@@ -204,6 +209,24 @@ export function allowlistEffects(
             ? "tighter"
             : "neutral";
 
-  return { pairs: pairsEffect, minVolume: minVolumeEffect, maxSpread: maxSpreadEffect };
+  const prevAll = prev.allPairs === true;
+  const nextAll = next.allPairs === true;
+  const allEffect: Effect =
+    nextAll && !prevAll
+      ? "enabled"
+      : !nextAll && prevAll
+        ? "cleared"
+        : nextAll && (next.maxPairs ?? 0) > (prev.maxPairs ?? 0)
+          ? "looser"
+          : nextAll && (next.maxPairs ?? 0) < (prev.maxPairs ?? 0)
+            ? "tighter"
+            : "neutral";
+
+  return {
+    pairs: pairsEffect,
+    minVolume: minVolumeEffect,
+    maxSpread: maxSpreadEffect,
+    allPairs: allEffect,
+  };
 }
 

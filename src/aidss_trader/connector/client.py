@@ -40,6 +40,7 @@ from aidss_trader.connector.types import (
     Account,
     BookTicker,
     Candle,
+    MarketSummary,
     OrderInfo,
     PairInfo,
     TradeFill,
@@ -56,6 +57,7 @@ ALLOWED_METHODS = frozenset(
         "get_ohlc",
         "get_last_prices",
         "get_book_tickers",
+        "get_market_summaries",
         # private, read
         "get_account",
         "get_open_orders",
@@ -378,6 +380,32 @@ class IndodaxClient:
                     taker_fee_pct=optional("trade_fee_percent_taker"),
                     raw=raw,
                 )
+            )
+        return out
+
+    def get_market_summaries(self) -> dict[str, MarketSummary]:
+        """Every IDR market's last price, best bid and ask, and 24 hour volume in one call.
+
+        The reason it exists: choosing among hundreds of pairs by liquidity must not cost one
+        candle request per pair (the public endpoints are rate limited).
+        """
+        op = "get_market_summaries"
+        body = self._call(op, "GET", self._public, "/api/summaries", scope="public_legacy")
+        tickers = body.get("tickers") if isinstance(body, dict) else None
+        if not isinstance(tickers, dict):
+            raise ConnectorError(ErrorClass.MALFORMED, "missing field 'tickers'", operation=op)
+        out: dict[str, MarketSummary] = {}
+        for key, raw in tickers.items():
+            pair = canonical(str(key))
+            if not pair.endswith("IDR") or not isinstance(raw, dict):
+                continue
+            optional = _optional_decimal(raw, op)
+            out[pair] = MarketSummary(
+                pair=pair,
+                last=optional("last"),
+                bid=optional("buy"),
+                ask=optional("sell"),
+                quote_volume_24h=optional("vol_idr"),
             )
         return out
 

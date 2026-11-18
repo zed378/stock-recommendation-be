@@ -165,10 +165,31 @@ describe("limitsMeta.ts — validation and server-parity loosening rules", () =>
         maxSpread: "0.2",
       });
       expect(effects).toEqual({
+        allPairs: "neutral",
         pairs: "tighter",
         minVolume: "looser",
         maxSpread: "tighter",
       });
+    });
+  });
+
+  describe("ALL (every market that passes the liquidity filter)", () => {
+    const base = { pairs: ["BTCIDR"], minVolume: "1000000000", maxSpread: "0.5" };
+
+    it("loosens when switched on or when its number is raised, never when narrowed", () => {
+      expect(allowlistLoosens(base, { ...base, allPairs: true, maxPairs: 10 })).toBe(true);
+      expect(allowlistLoosens({ ...base, allPairs: true, maxPairs: 10 }, { ...base, allPairs: true, maxPairs: 20 })).toBe(true);
+      expect(allowlistLoosens({ ...base, allPairs: true, maxPairs: 10 }, { ...base, allPairs: true, maxPairs: 5 })).toBe(false);
+      expect(allowlistLoosens({ ...base, allPairs: true, maxPairs: 10 }, { ...base, allPairs: false })).toBe(false);
+      // An unset number counts as 0, so setting it on an already-on ALL is looser.
+      expect(allowlistLoosens({ ...base, allPairs: true, maxPairs: null }, { ...base, allPairs: true, maxPairs: 3 })).toBe(true);
+    });
+
+    it("labels the review row", () => {
+      expect(allowlistEffects(base, { ...base, allPairs: true, maxPairs: 10 }).allPairs).toBe("enabled");
+      expect(allowlistEffects({ ...base, allPairs: true, maxPairs: 10 }, { ...base, allPairs: false }).allPairs).toBe("cleared");
+      expect(allowlistEffects({ ...base, allPairs: true, maxPairs: 10 }, { ...base, allPairs: true, maxPairs: 20 }).allPairs).toBe("looser");
+      expect(allowlistEffects({ ...base, allPairs: true, maxPairs: 10 }, { ...base, allPairs: true, maxPairs: 5 }).allPairs).toBe("tighter");
     });
   });
 });

@@ -1,0 +1,9 @@
+# Pair catalogue, groups and ALL (2026-11-18)
+
+Owner's request: let the bot analyse every coin when the owner enters ALL, fetch the whole coin list, and let the owner make groups to tick. Decisions by multiple choice: ALL = liquid markets with a cap N; groups are copied at save time (ADR-058).
+
+Backend: `MarketSummary` and `get_market_summaries` (public `/api/summaries`) in the connector and the port; `runtime/pair_selection.py` (`resolve_all`, pure); `Allowlist.all_pairs` and `max_pairs`, `get_pair_groups` and `set_pair_groups` in `settings_store`; `Runtime._active_pairs` (cached resolution, 5 min refresh, 15 min fail-closed) used everywhere the loop read the allowlist; candle refresh bounded to 8 pairs per cycle; API `GET /pairs-catalog`, `GET/PUT /pair-groups`, ALL fields on the allowlist routes, `allowlist_loosens` treats ALL on or a higher N as a loosening. 29 new tests (`tests/trader/test_pair_selection.py`); the mock exchange serves `/api/summaries`.
+Frontend: `PairPicker` (search, tick, select visible, groups with tick and indeterminate state, save selection as a group, delete), ALL toggle with N, review rows, text fallback when the list is unavailable; pure helpers in `pairGroups.ts`; i18n in id and en; regenerated `trader-schema.d.ts`; 17 new Vitest tests (118 total).
+
+Not verified: the whole thing against the real exchange and the real screen (no browser run); `/api/summaries` shape from one manual public GET (438 IDR tickers, fields `buy`, `sell`, `last`, `vol_idr`); how many paper intents ALL produces over days; the UI on a phone.
+Observed while checking the owner's "no transactions" report: the strategy is in PAPER mode, RUNNING since 11:24 UTC, one paper BUY intent for USDTIDR recorded at 11:38 UTC that settles when the 08:00 candle closes at 12:00 UTC. A stablecoin on a 4H EMA cross is mostly noise; suggested to the owner to leave USDTIDR out.

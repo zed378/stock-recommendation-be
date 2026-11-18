@@ -46,6 +46,21 @@ class PairInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketSummary:
+    """One IDR market from the exchange's public summary: the numbers a liquidity filter needs.
+
+    `bid` and `ask` are the exchange's `buy` and `sell` fields (the best prices), so the spread is
+    `(ask - bid) / bid`. Any of the numbers may be absent for an illiquid or new market.
+    """
+
+    pair: str  # canonical, e.g. BTCIDR
+    last: Decimal | None
+    bid: Decimal | None
+    ask: Decimal | None
+    quote_volume_24h: Decimal | None  # `vol_idr`
+
+
+@dataclass(frozen=True, slots=True)
 class Account:
     can_trade: bool
     can_withdraw: bool

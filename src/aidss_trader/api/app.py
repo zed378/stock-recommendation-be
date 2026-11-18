@@ -25,7 +25,7 @@ from typing import Any, Generic, Literal, TypeVar
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,7 @@ from aidss_trader.audit import AuditLogger
 from aidss_trader.auth.stepup import StepUp, StepUpRefused
 from aidss_trader.auth.verify import AuthFailed, Principal, TokenVerifier
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
+from aidss_trader.connector.errors import ConnectorError
 from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.credentials import CredentialStore, CredentialUnreadable
 from aidss_trader.credentials.admin import check_account
@@ -67,18 +68,22 @@ from aidss_trader.runtime.accounting import (
     paper_drawdown_pct,
     replay_origin,
 )
+from aidss_trader.runtime.pair_selection import spread_pct as pair_spread_pct
 from aidss_trader.runtime.settings_store import (
+    MAX_ALL_PAIRS_LIMIT,
     MAX_HISTORY_BARS,
     THRESHOLD_FIELDS,
     Allowlist,
     LiquidityFilter,
     PaperSettings,
     get_allowlist,
+    get_pair_groups,
     get_paper_settings,
     get_promotion_thresholds,
     get_strategy_params,
     paper_flatters,
     set_allowlist,
+    set_pair_groups,
     set_paper_settings,
     set_promotion_thresholds,
     set_strategy_params,
@@ -88,6 +93,9 @@ from aidss_trader.runtime.settings_store import (
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 
 PREFIX = "/trader/v1"
+MAX_PAIR_GROUPS = 50
+MAX_GROUP_NAME = 40
+MAX_GROUP_PAIRS = 500
 CONFIRMATION = {
     "CANCEL": "CANCEL ALL OPEN ORDERS",
     "FLATTEN": "SELL ALL HOLDINGS AT MARKET",
@@ -178,6 +186,36 @@ class AllowlistBody(BaseModel):
     pairs: list[str]
     min_quote_volume_24h_idr: str | None = None
     max_spread_pct: str | None = None
+    # ALL: every IDR market that passes the liquidity filter, best volume first, at most
+    # `max_pairs` of them. Inactive until `max_pairs` is set.
+    all_pairs: bool = False
+    max_pairs: int | None = Field(default=None, ge=1, le=MAX_ALL_PAIRS_LIMIT)
+
+
+class PairGroup(BaseModel):
+    name: str
+    pairs: list[str]
+
+
+class PairGroupsBody(BaseModel):
+    groups: list[PairGroup]
+
+
+class PairGroupsData(BaseModel):
+    groups: list[PairGroup]
+
+
+class CatalogPair(BaseModel):
+    pair: str
+    asset: str
+    min_order_idr: str | None
+    trading: bool
+    quote_volume_24h_idr: str | None
+    spread_pct: str | None
+
+
+class CatalogData(BaseModel):
+    pairs: list[CatalogPair]
 
 
 class ParametersBody(BaseModel):
@@ -408,11 +446,15 @@ class AllowlistData(BaseModel):
     pairs: list[str]
     min_quote_volume_24h_idr: str | None
     max_spread_pct: str | None
+    all_pairs: bool
+    max_pairs: int | None
     active: bool
 
 
 class PutAllowlistData(BaseModel):
     pairs: list[str]
+    all_pairs: bool
+    max_pairs: int | None
     active: bool
 
 
@@ -1181,7 +1223,9 @@ def create_app(ctx: ApiContext) -> FastAPI:
                 "max_spread_pct": None
                 if a.liquidity.max_spread_pct is None
                 else format(a.liquidity.max_spread_pct.normalize(), "f"),
-                "active": a.liquidity.configured and bool(a.pairs),
+                "all_pairs": a.all_pairs,
+                "max_pairs": a.max_pairs,
+                "active": a.liquidity.configured and a.has_scope,
             }
         )
 
@@ -1204,6 +1248,8 @@ def create_app(ctx: ApiContext) -> FastAPI:
                     else Decimal(body.min_quote_volume_24h_idr),
                     None if body.max_spread_pct is None else Decimal(body.max_spread_pct),
                 ),
+                all_pairs=body.all_pairs,
+                max_pairs=body.max_pairs,
             )
         except InvalidOperation:
             raise ApiError(
@@ -1227,7 +1273,122 @@ def create_app(ctx: ApiContext) -> FastAPI:
             "limit_changed", "the allowlist or liquidity filter changed", {"pairs": len(new.pairs)}
         )
         return envelope(
-            {"pairs": list(new.pairs), "active": new.liquidity.configured and bool(new.pairs)}
+            {
+                "pairs": list(new.pairs),
+                "all_pairs": new.all_pairs,
+                "max_pairs": new.max_pairs,
+                "active": new.liquidity.configured and new.has_scope,
+            }
+        )
+
+    # --------------------------------------------- the pair catalogue and the owner's groups
+
+    catalog_cache: dict[str, Any] = {"at": 0.0, "rows": None}
+
+    @app.get(f"{r}/pairs-catalog", response_model=Envelope[CatalogData])
+    def pairs_catalog(_: Principal = Depends(need(perm.VIEW))):
+        """Every IDR market the exchange lists, with its 24 hour volume and spread, for picking
+        pairs and building groups. Two public calls, cached for a minute."""
+        from decimal import Decimal
+
+        client = ctx.stored_exchange_client()
+        if client is None:
+            raise ApiError(
+                503,
+                "UNAVAILABLE",
+                "no_exchange",
+                "no exchange is configured, so the pair list cannot be fetched",
+            )
+        if catalog_cache["rows"] is None or time.monotonic() - catalog_cache["at"] > 60:
+            try:
+                infos = client.get_pairs()
+                summaries = client.get_market_summaries()
+            except ConnectorError as exc:
+                raise ApiError(
+                    502,
+                    "UNAVAILABLE",
+                    "exchange_error",
+                    f"the exchange refused ({exc.error_class})",
+                ) from None
+            rows = []
+            for info in infos:
+                if not info.pair.endswith("IDR"):
+                    continue
+                summary = summaries.get(info.pair)
+                spread = None if summary is None else pair_spread_pct(summary)
+                rows.append(
+                    {
+                        "pair": info.pair,
+                        "asset": info.quote_asset,
+                        "min_order_idr": None
+                        if info.min_base_idr is None
+                        else format(info.min_base_idr.normalize(), "f"),
+                        "trading": not (info.maintenance or info.suspended),
+                        "quote_volume_24h_idr": None
+                        if summary is None or summary.quote_volume_24h is None
+                        else format(summary.quote_volume_24h.normalize(), "f"),
+                        "spread_pct": None
+                        if spread is None
+                        else format(spread.quantize(Decimal("0.0001")), "f"),
+                    }
+                )
+            rows.sort(
+                key=lambda x: (-Decimal(x["quote_volume_24h_idr"] or "0"), x["pair"])
+            )
+            catalog_cache["rows"], catalog_cache["at"] = rows, time.monotonic()
+        return envelope({"pairs": catalog_cache["rows"]}, source="exchange")
+
+    @app.get(f"{r}/pair-groups", response_model=Envelope[PairGroupsData])
+    def get_groups(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        groups = get_pair_groups(s)
+        return envelope(
+            {"groups": [{"name": n, "pairs": list(p)} for n, p in sorted(groups.items())]}
+        )
+
+    @app.put(f"{r}/pair-groups", response_model=Envelope[PairGroupsData])
+    def put_groups(
+        body: PairGroupsBody,
+        who: Principal = Depends(need(perm.CONFIGURE_RISK)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        """Replace the owner's groups. A group only names pairs: selecting it copies them into the
+        allowlist when that is saved (and that save is what needs the step-up), so editing a
+        group changes nothing that trades."""
+        import re
+
+        if len(body.groups) > MAX_PAIR_GROUPS:
+            raise ApiError(
+                400, "VALIDATION", "too_many_groups", f"at most {MAX_PAIR_GROUPS} groups"
+            )
+        cleaned: dict[str, tuple[str, ...]] = {}
+        seen: set[str] = set()
+        for group in body.groups:
+            name = " ".join(group.name.split())
+            if not 1 <= len(name) <= MAX_GROUP_NAME:
+                raise ApiError(
+                    400,
+                    "VALIDATION",
+                    "bad_group_name",
+                    f"a group name is 1 to {MAX_GROUP_NAME} characters",
+                )
+            if name.lower() in seen:
+                raise ApiError(400, "VALIDATION", "duplicate_group", "group names must be unique")
+            seen.add(name.lower())
+            pairs = tuple(sorted({p.strip().upper() for p in group.pairs if p.strip()}))
+            bad = [p for p in pairs if not re.fullmatch(r"[A-Z0-9]{2,12}IDR", p)]
+            if bad or not pairs or len(pairs) > MAX_GROUP_PAIRS:
+                raise ApiError(
+                    400,
+                    "VALIDATION",
+                    "bad_group_pairs",
+                    f"a group holds 1 to {MAX_GROUP_PAIRS} IDR pairs such as BTCIDR: {bad[:5]}",
+                )
+            cleaned[name] = pairs
+        set_pair_groups(s, cleaned, by=who.user_id)
+        s.commit()
+        return envelope(
+            {"groups": [{"name": n, "pairs": list(p)} for n, p in sorted(cleaned.items())]}
         )
 
     @app.get(
@@ -1770,9 +1931,14 @@ def limit_problem(name: str, value: Any) -> str | None:
 
 
 def allowlist_loosens(old: Allowlist, new: Allowlist) -> bool:
-    """True if `new` can trade something `old` could not: a new pair, a lower volume floor, a
-    wider spread cap, or a liquidity filter switched on where it was not."""
+    """True if `new` can trade something `old` could not: a new pair, ALL switched on or its number
+    raised, a lower volume floor, a wider spread cap, or a liquidity filter switched on where it
+    was not."""
     if set(new.pairs) - set(old.pairs):
+        return True
+    if new.all_pairs and (not old.all_pairs or (new.max_pairs or 0) > (old.max_pairs or 0)):
+        # ALL switched on, or its number raised (an unset number counts as 0): more markets can
+        # qualify. Turning ALL off, or lowering N, only narrows.
         return True
     a, b = old.liquidity, new.liquidity
     if not b.configured:

@@ -71,6 +71,7 @@ from aidss_trader.orders.state import OrderState
 from aidss_trader.reconcile import reconcile, windows
 from aidss_trader.risk.engine import CheckResult, Decision, RiskContext, breakers
 from aidss_trader.runtime import accounting
+from aidss_trader.runtime.pair_selection import resolve_all
 from aidss_trader.runtime.paper_lifecycle import PaperBook
 from aidss_trader.runtime.settings_store import (
     MAX_HISTORY_BARS,
@@ -83,6 +84,11 @@ from aidss_trader.runtime.settings_store import (
 logger = logging.getLogger("aidss_trader.runtime")
 
 ZERO = Decimal(0)
+# How often ALL is re-resolved from the exchange summary, and how long a stale selection may be
+# kept when that fails. Candle refreshes per cycle are bounded so a long list cannot overrun one.
+ALL_REFRESH_S = 300
+ALL_MAX_AGE_S = 900
+CANDLE_REFRESH_PER_CYCLE = 8
 QUOTE = "IDR"
 LIVE_OPEN = (
     OrderState.SUBMITTING.value,
@@ -163,6 +169,11 @@ class Runtime:
         self._last: dict[str, datetime] = {}
         self._alerted: set[str] = set()
         self._clock_bad = False
+        # ALL, resolved from the exchange's summary and refreshed on a timer (see _active_pairs).
+        self._all_key: tuple | None = None
+        self._all_pairs: tuple[str, ...] = ()
+        self._all_at: datetime | None = None
+        self._candle_at: dict[str, datetime] = {}
         self.last_snapshot_at: datetime | None = None
         self._last_snapshot: Snapshot | None = None
 
@@ -285,6 +296,37 @@ class Runtime:
             report.errors.append(f"{name}: {type(exc).__name__}")
         return None
 
+    def _active_pairs(self, s: Session, allow: Allowlist | None = None) -> tuple[str, ...]:
+        """The pairs the runtime watches and decides on: the owner's named pairs, plus, when ALL
+        is on with its number set, the liquid markets the exchange summary currently selects.
+        Fail closed: if the selection cannot be refreshed it is kept for a while, then dropped,
+        so ALL never keeps trading a stale list."""
+        allow = allow or get_allowlist(s)
+        if not allow.all_active or self._client is None:
+            return allow.pairs
+        assert allow.max_pairs is not None
+        key = (
+            allow.max_pairs,
+            allow.liquidity.min_quote_volume_24h_idr,
+            allow.liquidity.max_spread_pct,
+        )
+        now = self._now()
+        age = None if self._all_at is None else (now - self._all_at).total_seconds()
+        if key != self._all_key or age is None or age >= ALL_REFRESH_S:
+            try:
+                self._all_pairs = resolve_all(
+                    self._client.get_pairs(),
+                    self._client.get_market_summaries(),
+                    allow.liquidity,
+                    allow.max_pairs,
+                )
+                self._all_key, self._all_at = key, now
+            except ConnectorError as exc:
+                logger.warning("ALL could not be refreshed: %s", exc.error_class)
+                if key != self._all_key or age is None or age >= ALL_MAX_AGE_S:
+                    self._all_pairs, self._all_key, self._all_at = (), key, None
+        return tuple(sorted({*allow.pairs, *self._all_pairs}))
+
     def _due(self, name: str, every_s: float) -> bool:
         now = self._now()
         last = self._last.get(name)
@@ -331,7 +373,7 @@ class Runtime:
         """One price call for every allowlisted pair and every position held."""
         if self._client is None:
             return None
-        wanted = sorted({canonical(p) for p in get_allowlist(s).pairs} | set(positions))
+        wanted = sorted({canonical(p) for p in self._active_pairs(s)} | set(positions))
         if not wanted:
             return {}
         try:
@@ -365,13 +407,14 @@ class Runtime:
             account.can_trade and not account.can_withdraw and not account.can_withdraw_fiat
         )
         allow = get_allowlist(s)
+        active = self._active_pairs(s, allow)
         held = [
             a
             for a, (free, locked) in account.balances.items()
             if a != QUOTE and (free + locked) > 0
         ]
         wanted = sorted(
-            {canonical(p) for p in (pairs or allow.pairs)} | {f"{a}{QUOTE}" for a in held}
+            {canonical(p) for p in (pairs or active)} | {f"{a}{QUOTE}" for a in held}
         )
         # Prices already fetched this cycle are reused; only what is still missing is asked for.
         prices = dict(prices or {})
@@ -814,8 +857,9 @@ class Runtime:
         report: CycleReport,
     ) -> None:
         allow = get_allowlist(s)
+        active = self._active_pairs(s, allow)
         strategy = load_strategy(s)
-        if strategy is None or not allow.pairs:
+        if strategy is None or not active:
             report.skipped.append("no strategy parameters or empty allowlist")
             return
         row = s.get(StrategyRow, strategy.name)
@@ -832,9 +876,9 @@ class Runtime:
                 report.skipped.append("paper cost model and start capital unset (owner)")
                 return
             positions, events = accounting.replay_origin(s, "PAPER")
-            closes = {p: c[-1].close for p in allow.pairs if (c := self._load_candles(s, p))}
+            closes = {p: c[-1].close for p in active if (c := self._load_candles(s, p))}
             paper_equity = accounting.paper_equity(ps.start_equity_idr, positions, events, closes)
-        for pair in allow.pairs:
+        for pair in active:
             rules = self._rules.get(pair)
             if rules is None or not rules.tradable:
                 report.skipped.append(f"{pair}: pair rules missing or blocked")
@@ -1068,9 +1112,20 @@ class Runtime:
     def _refresh_all_candles(self, s: Session, report: CycleReport) -> None:
         """Keep stored candles current for every allowlisted pair, halted or not: the paper
         simulation and the strategies both read them, and neither may wait for a resume."""
-        if not self._due("candles", self._candle_poll_s):
-            return
-        for pair in get_allowlist(s).pairs:
+        # At most CANDLE_REFRESH_PER_CYCLE pairs per cycle, oldest first, each when its candles
+        # are older than the poll interval. With a few pairs this is the same sweep as before; with
+        # ALL it spreads the requests over cycles instead of blocking one cycle on the throttle
+        # (a cycle that overruns trips the watchdog).
+        now = self._now()
+        due = [
+            p
+            for p in self._active_pairs(s)
+            if (at := self._candle_at.get(p)) is None
+            or (now - at).total_seconds() >= self._candle_poll_s
+        ]
+        due.sort(key=lambda p: self._candle_at.get(p, datetime.min.replace(tzinfo=UTC)))
+        for pair in due[:CANDLE_REFRESH_PER_CYCLE]:
+            self._candle_at[pair] = now
             try:
                 self._refresh_candles(s, pair)
             except ConnectorError as exc:
@@ -1083,7 +1138,7 @@ class Runtime:
             return
         book = PaperBook(ps, self._tf)
         closes: dict[str, Decimal] = {}
-        for pair in get_allowlist(s).pairs:
+        for pair in self._active_pairs(s):
             candles = self._load_candles(s, pair)
             if not candles:
                 continue
@@ -1110,7 +1165,10 @@ class Runtime:
         if self._client is not None and self._due("reconcile", self._reconcile_s):
             allow = get_allowlist(s)
             pairs = sorted(
-                {*allow.pairs, *(p for (p,) in s.execute(select(OrderRow.pair).distinct()))}
+                {
+                    *self._active_pairs(s, allow),
+                    *(p for (p,) in s.execute(select(OrderRow.pair).distinct())),
+                }
             )
             # Reconcile only counts once the ledger is up to date, so a trade that settled
             # between two cycles is not reported as an unexplained difference.

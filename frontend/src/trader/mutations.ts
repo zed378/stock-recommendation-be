@@ -4,6 +4,7 @@ import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { idempotencyKey, traderApi, unwrap, TraderError } from "@/trader/client";
 import type { CredentialKind, KillResult, PromotionThresholds } from "@/trader/types";
+import type { PairGroup } from "@/trader/pairGroups";
 
 /**
  * What the API requires the confirmation field to say, word for word.
@@ -194,10 +195,12 @@ export function useSaveAllowlist() {
       pairs: string[];
       minVolume: string | null;
       maxSpread: string | null;
+      allPairs: boolean;
+      maxPairs: number | null;
       stepUp?: string;
     }
   >({
-    mutationFn: async ({ pairs, minVolume, maxSpread, stepUp }) => {
+    mutationFn: async ({ pairs, minVolume, maxSpread, allPairs, maxPairs, stepUp }) => {
       const out = await unwrap<{ pairs: string[]; active: boolean }>(
         traderApi.PUT("/trader/v1/allowlist", {
           params: {
@@ -210,12 +213,31 @@ export function useSaveAllowlist() {
             pairs,
             min_quote_volume_24h_idr: minVolume,
             max_spread_pct: maxSpread,
+            all_pairs: allPairs,
+            max_pairs: maxPairs,
           },
         }),
       );
       return out.data;
     },
     onSettled: () => void refresh(),
+  });
+}
+
+/** Replace the owner's pair groups. Groups trade nothing, so there is no step-up. */
+export function useSavePairGroups() {
+  const queryClient = useQueryClient();
+  return useMutation<{ groups: { name: string; pairs: string[] }[] }, TraderError, PairGroup[]>({
+    mutationFn: async (groups) => {
+      const out = await unwrap<{ groups: { name: string; pairs: string[] }[] }>(
+        traderApi.PUT("/trader/v1/pair-groups", {
+          params: { header: { "Idempotency-Key": idempotencyKey() } },
+          body: { groups },
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["trader", "pair-groups"] }),
   });
 }
 

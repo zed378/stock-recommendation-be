@@ -29,6 +29,7 @@ from aidss_trader.connector.types import (
     Account,
     BookTicker,
     Candle,
+    MarketSummary,
     OrderInfo,
     PairInfo,
     TradeFill,
@@ -54,6 +55,10 @@ class ExchangeClient(Protocol):
     def get_last_prices(self, symbols: Iterable[str] | None = None) -> dict[str, Decimal]: ...
 
     def get_book_tickers(self, symbols: Iterable[str] | None = None) -> dict[str, BookTicker]: ...
+
+    def get_market_summaries(self) -> dict[str, MarketSummary]:
+        """Last price, best bid and ask and 24 hour quote volume for every market, in one call."""
+        ...
 
     # --- account and orders (signed) ----------------------------------------------------
     def get_account(self) -> Account: ...
