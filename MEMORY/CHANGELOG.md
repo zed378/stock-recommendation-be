@@ -2,6 +2,10 @@
 
 Chronological summary of user-visible or operationally significant changes. Coarser than the records.
 
+## 2026-11-18
+
+- Stage 12 A–E: portable Git Bash anchor tests; offline `nft -c` validation of Stage-1 unapplied firewall draft (`nftables v1.1.3`); read-only `inventory-clients.sh` for Stage 2; `aidss-anchor-watch.sh` / R16 (draft cron, not installed); migration & backlog doc sync (firewall remains unapplied; Stage 2 awaits client inventory).
+
 ## 2026-11-17
 
 - Stage 11 V: encrypted off-host cluster-copy tool and isolated restore instructions, fixture-tested only; no real copy made.

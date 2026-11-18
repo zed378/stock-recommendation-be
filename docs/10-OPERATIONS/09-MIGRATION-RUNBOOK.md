@@ -62,8 +62,9 @@ Times below are **estimates, not measurements** (labelled): expect minutes of re
 
 **B. Capture**
 
-4. The dump, streamed and encrypted: `deploy/trader/backup_offhost.sh` when it exists; until then, on the old host
-   `docker exec stocks-postgres-1 pg_dumpall -U aidss --quote-all-identifiers | gzip -6 | openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -out dump.sql.gz.enc` (passphrase typed at the prompt) and copy the file with `scp`. Note the `sha256sum`.
+4. The dump, streamed and encrypted: from Git Bash / POSIX bash on the owner's workstation, run
+   `bash deploy/trader/backup_offhost.sh [--dest DIR] [--host infra@10.1.200.13]`
+   (prompts twice for a passphrase with no echo, streams `docker exec stocks-postgres-1 pg_dumpall -U aidss --quote-all-identifiers | gzip -6` over SSH into `openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt`, writes `.enc` + `.sha256`, and stream-verifies without writing plaintext to disk). Note the `.sha256` sidecar.
 5. The `.env`, the master key file and (if present) `anchor.jsonl`: **separate channels**, your own credentials, never chat, never the dump's channel. Keep the master key out of every backup.
 
 **C. Restore on the new host**
@@ -87,7 +88,7 @@ the Admin AI providers page lists the providers and a test call works (proves th
 11. With the same Cloudflare tunnel: install `cloudflared` on the new host with the same tunnel token (`/etc/cloudflared/token`, a systemd unit), start it, check `curl -sI https://aidss.zedth.my.id/`, then stop and disable it on the old host. Two connectors for one tunnel run side by side, so there is no gap.
     The tunnel's service points at `127.0.0.1:5173`, which is where the new frontend listens.
 12. Another way in (a reverse proxy or a new tunnel) means a DNS change; use the lowered TTL and check from outside the LAN.
-13. Install the cron for `aidss-anchor`, copy `anchor.jsonl`, `chattr +a` it, run it once. Re-apply the firewall plan (`08-HOST-FIREWALL-PLAN.md`) and the NTP and backup arrangements.
+13. Install the cron for `aidss-anchor`, copy `anchor.jsonl`, `chattr +a` it, run it once. Re-apply the firewall plan (`08-HOST-FIREWALL-PLAN.md`) and the NTP and backup arrangements. Because the Stage 1 firewall answers (SSH `22` and Portainer `8000`, `9443` from `10.1.101.0/24` and `wt0`) depend on the current host's subnets and interfaces, re-render the draft for the new host before applying it.
 
 **Rollback.** Until the new host has accepted a write the old one is intact: start its containers (`docker start stocks-api-1 stocks-worker-1 stocks-frontend-1 stocks-trader-1`), start its `cloudflared`, stop the new one. After the new host has accepted writes the databases diverge:
 rolling back means losing them, or dumping the new one and restoring it back with this same procedure in the other direction. Keep the old host untouched, and stopped, for a stated period (suggested: two weeks) before it is wiped.

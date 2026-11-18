@@ -201,9 +201,9 @@ TASKS/                        what will be done (phases, progress, backlog)
 | `03-RELEASE-AND-ROLLBACK.md` | Procedure; the unprotected window |
 | `04-BACKUP-RESTORE-AND-RECOVERY.md` | Schema backup, restore, rehearsal |
 | `05-SELF-OBSERVABILITY.md` | Logs, metrics, the watchdog problem |
-| `06-RUNBOOKS.md` | R1 to R12 for the owner under stress |
+| `06-RUNBOOKS.md` | R1 to R16 for the owner under stress (including R14 liveness, R15 lock update, R16 anchor watch) |
 | `07-INCIDENT-AND-ESCALATION.md` | Severity, response, post-incident records |
-| `08-HOST-FIREWALL-PLAN.md` | Unapplied host/Docker firewall proposal, owner questions and rollback |
+| `08-HOST-FIREWALL-PLAN.md` | Unapplied host/Docker firewall proposal (Stage 1 rendered, Stage 2 awaits client inventory), owner questions and rollback |
 | `09-MIGRATION-RUNBOOK.md` | Production migration kit, source equivalence and recovery gates |
 
 ### `11-TESTING-QUALITY/` (8)
