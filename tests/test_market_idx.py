@@ -491,3 +491,65 @@ def test_a_retryable_refusal_survives_the_queues_backoff() -> None:
     from aidss.jobs.queue import retry_delay
 
     assert [retry_delay(n) for n in (1, 2, 3)] == [30, 60, 120]
+
+
+# --- outbound proxy (datacenter addresses are treated differently by the endpoint) -------------
+
+PROXY = "socks5h://proxyuser:proxysecret@proxy.invalid:1080"
+
+
+def test_a_configured_proxy_is_handed_to_the_session(monkeypatch) -> None:
+    seen: dict = {}
+
+    class Capture:
+        def __init__(self, **options) -> None:
+            seen.update(options)
+
+        def get(self, *a, **k):
+            return FakeResponse({"data": []})
+
+    import curl_cffi.requests as curl_requests
+
+    monkeypatch.setattr(curl_requests, "Session", Capture)
+    IDXMarketDataProvider(proxy_url=PROXY, min_request_interval=0)._client()
+    assert seen["proxies"] == {"http": PROXY, "https": PROXY}
+
+
+def test_without_a_proxy_no_proxies_option_is_sent(monkeypatch) -> None:
+    seen: dict = {}
+
+    class Capture:
+        def __init__(self, **options) -> None:
+            seen.update(options)
+
+    import curl_cffi.requests as curl_requests
+
+    monkeypatch.setattr(curl_requests, "Session", Capture)
+    IDXMarketDataProvider(min_request_interval=0)._client()
+    assert "proxies" not in seen
+
+
+@pytest.mark.parametrize("bad", ["proxy.invalid:1080", "ftp://proxy.invalid:21", "http://"])
+def test_a_malformed_proxy_is_refused_without_repeating_it(bad: str) -> None:
+    with pytest.raises(ValueError) as caught:
+        IDXMarketDataProvider(proxy_url=bad)
+    assert bad not in str(caught.value)
+
+
+def test_a_transport_error_never_repeats_the_proxy_credentials() -> None:
+    adapter, _ = provider(
+        RuntimeError(f"Failed to connect via {PROXY} as proxyuser with proxysecret"),
+        proxy_url=PROXY,
+    )
+    with pytest.raises(ProviderUnavailableError) as caught:
+        adapter.get_fundamentals("BBCA")
+    text = str(caught.value)
+    assert "proxysecret" not in text and "proxyuser" not in text and "proxy.invalid" not in text
+    assert "<proxy>" in text
+
+
+def test_the_setting_reaches_the_adapter() -> None:
+    from aidss.config import Settings
+
+    adapter = IDXMarketDataProvider.from_settings(Settings(idx_proxy_url=PROXY))
+    assert adapter._proxy_url == PROXY

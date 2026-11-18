@@ -49,6 +49,7 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, ClassVar
+from urllib.parse import urlsplit
 
 from aidss.config import Settings
 from aidss.domain.types import Candle, FundamentalPoint, Quote, Timeframe
@@ -69,6 +70,22 @@ RATIO_REFERER = (
 #: How many past years to look back through when the current one has no filing
 #: yet. Bounded: without a limit, a delisted ticker would walk back forever.
 MAX_YEARS_BACK = 3
+
+
+PROXY_SCHEMES = frozenset({"http", "https", "socks5", "socks5h"})
+
+
+def _checked_proxy(url: str | None) -> str | None:
+    """Refuse a malformed proxy at construction. The message never repeats the value."""
+    if not url:
+        return None
+    parts = urlsplit(url)
+    if parts.scheme not in PROXY_SCHEMES or not parts.hostname:
+        raise ValueError(
+            "idx proxy URL must look like scheme://[user:pass@]host:port "
+            f"with scheme one of {', '.join(sorted(PROXY_SCHEMES))}"
+        )
+    return url
 
 
 def _billions(value: Decimal) -> Decimal:
@@ -182,6 +199,7 @@ class IDXMarketDataProvider(MarketDataProvider):
         self,
         *,
         impersonate: str = "chrome",
+        proxy_url: str | None = None,
         timeout: float = 30.0,
         session: Any | None = None,
         min_request_interval: float | None = None,
@@ -189,6 +207,7 @@ class IDXMarketDataProvider(MarketDataProvider):
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._impersonate = impersonate
+        self._proxy_url = _checked_proxy(proxy_url)
         self._timeout = timeout
         self._session = session
         self._interval = (
@@ -200,7 +219,7 @@ class IDXMarketDataProvider(MarketDataProvider):
 
     @classmethod
     def from_settings(cls, settings: Settings) -> IDXMarketDataProvider:
-        return cls(impersonate=settings.idx_impersonate)
+        return cls(impersonate=settings.idx_impersonate, proxy_url=settings.idx_proxy_url)
 
     # --- transport -------------------------------------------------------
 
@@ -222,10 +241,21 @@ class IDXMarketDataProvider(MarketDataProvider):
                 "an ordinary HTTP client is refused by the endpoint",
                 retryable=False,
             ) from exc
-        self._session = curl_requests.Session(
-            impersonate=self._impersonate, timeout=self._timeout
-        )
+        options: dict[str, Any] = {"impersonate": self._impersonate, "timeout": self._timeout}
+        if self._proxy_url:
+            options["proxies"] = {"http": self._proxy_url, "https": self._proxy_url}
+        self._session = curl_requests.Session(**options)
         return self._session
+
+    def _without_proxy(self, text: str) -> str:
+        """The proxy URL may carry a username and password; a transport error must not repeat it."""
+        if not self._proxy_url:
+            return text
+        parts = urlsplit(self._proxy_url)
+        for secret in (self._proxy_url, parts.password, parts.username):
+            if secret:
+                text = text.replace(secret, "<proxy>")
+        return text
 
     def _drop_session(self) -> None:
         """Throw away the cached connection after a refusal.
@@ -266,7 +296,9 @@ class IDXMarketDataProvider(MarketDataProvider):
             )
         except Exception as exc:  # noqa: BLE001 - curl_cffi raises its own hierarchy
             raise ProviderUnavailableError(
-                self.name, f"request failed: {type(exc).__name__}: {exc}", retryable=True
+                self.name,
+                f"request failed: {type(exc).__name__}: {self._without_proxy(str(exc))}",
+                retryable=True,
             ) from exc
 
         status = response.status_code

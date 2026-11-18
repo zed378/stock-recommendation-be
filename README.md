@@ -865,6 +865,7 @@ matter most:
 | `AIDSS_COMPOSITE_PRICE_PROVIDER` | `yahoo` | Read only when the provider is `composite`. Neither half may itself be `composite` — refused at startup. |
 | `AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER` | `idx` | The half that answers `get_fundamentals`, and the name a stored metric is attributed to. `idx` for Indonesian equities; `alphavantage` for US. |
 | `AIDSS_IDX_IMPERSONATE` | `chrome` | The `curl_cffi` browser profile. The first thing to change when the IDX adapter starts getting refused. |
+| `AIDSS_IDX_PROXY_URL` | unset | Optional outbound proxy for the IDX adapter only (`scheme://[user:pass@]host:port`; http, https, socks5, socks5h). For when the endpoint's bot management refuses a datacenter address. It can hold credentials, so it is never logged or shown in an error. |
 | `AIDSS_AI_EMBEDDING_MODEL` | `text-embedding-3-small` | **Empty means lexical-only retrieval**, which is a supported configuration rather than a broken one — see above. |
 | `AIDSS_FUNDAMENTALS_DAILY_QUOTA` | `25` | Outbound fundamentals calls per UTC day per provider account. `0` means no ceiling — *unlimited*, not "spend nothing". |
 | `AIDSS_FUNDAMENTALS_REFRESH_INTERVAL_DAYS` | `30` | How stale a figure may get before it is queued. Refetching faster than filings change spends an allowance to rewrite identical numbers. |

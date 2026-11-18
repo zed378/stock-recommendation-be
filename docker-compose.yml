@@ -50,6 +50,7 @@ x-aidss-env: &aidss-env
   # The browser profile curl_cffi presents to IDX. The first thing to change
   # when that adapter starts getting refused.
   AIDSS_IDX_IMPERSONATE: ${AIDSS_IDX_IMPERSONATE:-chrome}
+  AIDSS_IDX_PROXY_URL: ${AIDSS_IDX_PROXY_URL:-}
 
   # Alpha Vantage covers US equities and publishes nothing for IDX symbols.
   # `premium` changes behaviour rather than just limits: `outputsize=full` is

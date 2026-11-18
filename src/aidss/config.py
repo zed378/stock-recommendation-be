@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     #: this breaks.
     idx_impersonate: str = "chrome"
 
+    #: Optional outbound proxy for the IDX adapter only, `scheme://[user:pass@]host:port`
+    #: with scheme http, https, socks5 or socks5h. A datacenter address is treated differently
+    #: by the endpoint's bot management; this lets the owner send those requests out through a
+    #: network of their own. It can carry credentials, so it is never logged or put in an error.
+    idx_proxy_url: str | None = None
+
     ai_base_url: str = "https://api.openai.com/v1"
     ai_api_key: str | None = None
     ai_chat_model: str = "gpt-4o-mini"
