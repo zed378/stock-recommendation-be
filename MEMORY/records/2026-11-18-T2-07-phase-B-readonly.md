@@ -11,3 +11,5 @@ Observed:
 
 Not observed and still open: field names in history and trade rows (the report records shapes only for the error cases), order creation and cancel (phase C, needs a Trade key, T5-06), `timeInForce`, order status values, create-order rate limit, visibility lag, B8 and the Deadman Switch. The Read+Trade key held by the Trader has therefore still never placed an order.
 Owner steps after the run: revoke the Read-only key; delete the raw directory (`~/livecheck/raw`, it holds account responses); the redacted output can stay or go.
+
+Owner steps done (stated by the owner, 2026-11-18): the raw responses were deleted and the Read-only key was revoked. Not checked by the agent.
