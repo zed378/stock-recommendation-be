@@ -128,13 +128,24 @@ python -m aidss_trader live-check --phase A --raw-dir C:\scratch\raw --out C:\sc
 ```
 
 Phase B (a Read-only key made for this check, set in **your own terminal session only**, never typed into a command
-line or chat):
+line or chat). Type the key and secret at a prompt that does not echo, so they do not enter the shell history
+(Git Bash; run from the repository root, with the output directories outside any repository):
 
 ```
-$env:AIDSS_LIVECHECK_KEY = "<read-only key>"; $env:AIDSS_LIVECHECK_SECRET = "<its secret>"
-python -m aidss_trader live-check --phase B --raw-dir C:\scratch\raw --out C:\scratch\out --i-understand-this-calls-the-real-exchange
-Remove-Item Env:AIDSS_LIVECHECK_KEY, Env:AIDSS_LIVECHECK_SECRET
+read -rs -p "Read-only API key: " AIDSS_LIVECHECK_KEY; echo
+read -rs -p "Secret: " AIDSS_LIVECHECK_SECRET; echo
+export AIDSS_LIVECHECK_KEY AIDSS_LIVECHECK_SECRET
+mkdir -p ~/livecheck/raw ~/livecheck/out
+.venv/Scripts/python -m aidss_trader live-check --phase B \
+  --raw-dir "$(cygpath -w ~/livecheck/raw)" --out "$(cygpath -w ~/livecheck/out)" \
+  --i-understand-this-calls-the-real-exchange
+unset AIDSS_LIVECHECK_KEY AIDSS_LIVECHECK_SECRET
 ```
+
+If the key is restricted by source address, allow the workstation's address for this key while it runs (the
+calls leave from the workstation, not from the server); a `-2015` stops the script. (Corrected 2026-11-18: the
+earlier example put the key in the command line, which is stored in shell history. First run: 2026-11-18,
+phases A and B, `MEMORY/records/2026-11-18-T2-07-*`.)
 
 Afterwards: revoke the key, read `report-phase-*.json` and `record-draft-phase-*.md`, delete the raw directory, copy
 only what is safe into `tests/trader/fixtures/recorded/`, correct the mock first with a test that would have caught

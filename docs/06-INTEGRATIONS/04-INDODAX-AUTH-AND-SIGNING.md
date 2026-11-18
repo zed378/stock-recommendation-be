@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Draft, 2026-11-14 |
+| **Status** | Draft, 2026-11-14; signed GET observed 2026-11-18 |
 | **Owner** | Integration Engineer, Security Engineer |
 | **Decided by** | ADR-002 |
 | **Open items** | OQ-18 (decided, ADR-038) |
 
-Source: `INDODAX-TradeAPI-2-Private.md`. **Documented, not yet observed.** The two-key scheme of the legacy
+Source: `INDODAX-TradeAPI-2-Private.md`. **Documented; the signing of a GET request was observed to be accepted on 2026-11-18** (see Observed below). Signing of a POST body has not been observed. The two-key scheme of the legacy
 API is a different thing and is not described here.
 
 ## Request Headers
@@ -77,6 +77,15 @@ headers = {"Accept": "application/json", "X-APIKEY": api_key, "Sign": sign,
 
 `-2015` is the signal for a key whose permission or version is wrong; the Trader stays `DISABLED` and
 alerts (`08`).
+
+## Observed (2026-11-18, T2-07 phase B)
+
+With a Read-only key, the Trader's signing (HMAC-SHA256 over the transmitted query string, `X-APIKEY` and `Sign`
+headers, `timestamp`) was accepted: `GET /api/v2/account` answered 200. A deliberately wrong signature answered
+**HTTP 401, `-1002`** (not `-1022`). A stale timestamp with a tiny `recvWindow` answered 400, `-1021`. A request
+carrying both `timestamp` and `nonce` answered 200. Not observed: a signed POST (create order), the `-1022` code
+and a missing signature. Evidence: `MEMORY/records/2026-11-18-T2-07-phase-B-readonly.md`; items D1, D13, D21 in
+`11`.
 
 ## Rules
 

@@ -47,12 +47,12 @@ rather than only a mention in a chat or a record.
 
 | Gap | Where | Action |
 |---|---|---|
-| Indodax documentation disagrees with itself in about twenty places | `06/11` | Verify live at T2-07; correct docs by the deviation protocol |
+| Indodax documentation disagrees with itself in about twenty places | `06/11` | Phases A and B of T2-07 ran on 2026-11-18 and settled D1, D3 (read side), D10 to D13, D17, D18, D20, D21 (`06/11` Resolved); D2, D4 to D9, D14 to D16, D19 need phase C (a Trade key, T5-06) or stay documentation-only |
 | The platform's `Timeframe` includes `H4`, but no market-data adapter was checked for 4H bars | `06/13` | Post-MVP (ADR-032) |
 | Exchange `FILL` versus `FILLED` status in WebSocket examples | `06/11` D5 | Moot while WebSocket is deferred; unknown status halts |
-| The exact interaction of mixed query and body parameters when signing | `06/04` | T2-07 |
+| The exact interaction of mixed query and body parameters when signing | `06/04` | Signed GET observed 2026-11-18; a signed POST (create order) is phase C |
 | `GET order` visibility lag after acceptance is stated but not quantified | `06/06` | T2-07, mock `visibility lag` |
-| No `/api/pairs` fee fields on some pairs | `06/05` | Optional; do not rely on them |
+| No `/api/pairs` fee fields on some pairs | `06/05` | Observed present on all 450 pairs (2026-11-18); still optional, and whether they include tax and clearing is OQ-5 |
 | The analysis API connects to PostgreSQL as the bootstrap superuser, which bypasses every grant, so ADR-021's role isolation is not real until it uses a limited role | `deploy/trader/bootstrap.sql`, `deploy/trader/isolate_analysis_role.sql`, `deploy/trader/rollback_analysis_role.sql`, `deploy/trader/docker-compose.trader.yml` | **Plan and SQL ready (2026-11-15); rehearsed on local PostgreSQL 18 (7/7 `-m postgres` + rollback clean); awaiting owner approval** to run on `10.1.200.13` (`10/06` R13) |
 | Saving an Indodax credential (`PUT /trader/v1/credentials/indodax`) refuses when no exchange URL is configured, because the endpoint tests the candidate key against the exchange before storing | `src/aidss_trader/api/app.py`, `/trader/credentials` | Expected fail-closed behavior; owner must configure `AIDSS_TRADER_INDODAX_BASE_URL` before saving an Indodax key |
 | Frozen price-feed detection (`R5`): a feed returning HTTP 200 with stale/identical prices passes age-based freshness | `MEMORY/DECISIONS.md` ADR-052 (`proposed`, deferred by the owner 2026-11-17) | Owner chooses the option and thresholds after a paper run has produced price data |
@@ -63,6 +63,7 @@ rather than only a mention in a chat or a record.
 | Host firewall Stage 2 (non-AIDSS ports and `java` 6547); Stage 1 (`22`, `8000`, `9443` from `10.1.101.0/24` + `wt0`) rendered & `nft -c` validated (unapplied) | `docs/10-OPERATIONS/08-HOST-FIREWALL-PLAN.md`, `deploy/host/firewall/inventory-clients.sh` | Awaiting read-only host client inventory (`inventory-clients.sh`) and owner per-port decisions before applying |
 | Tamper-evidence design for the audit log | `09/04` | T1-05 ADR |
 | Step-up authentication mechanism for high-impact actions | `09/01` | T5-01 ADR |
+| The promotion gate for the backtest takes `backtest_return_pct` from the request body, typed by the owner, while the paper drawdown is measured from stored equity. A typed figure is not evidence, and the stored `backtest_run` rows are not read by the gate (`latest_backtest_return_pct` takes only the newest row, one arbitrary pair) | `src/aidss_trader/api/app.py` (promote), `promotion/gates.py` | Owner decision: derive the gate's figure from stored BACKTEST rows (an aggregate over the allowlisted pairs, labelled) and refuse a typed override. First backtest, 2026-11-18: 16 trades over 9 pairs, 1 winner, plain sum of per-pair returns about -0.25% |
 
 ## Deliberate Deferrals
 

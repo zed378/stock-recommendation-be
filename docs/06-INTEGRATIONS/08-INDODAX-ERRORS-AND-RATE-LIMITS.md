@@ -20,9 +20,9 @@ Source: `INDODAX-TradeAPI-2-Private.md` and the public docs. **Documented, not y
 | HTTP | Code | Meaning (docs) | Class | Trader response |
 |---|---|---|---|---|
 | 500 | -1001 | Internal error; retry | `UNAVAILABLE` | Retry reads; on a write, outcome unknown |
-| 401 | -1002 | Invalid credentials | `AUTH` | `DISABLED`, alert |
+| 401 | -1002 | Invalid credentials. **Observed 2026-11-18 also for a wrong signature** (`11`, D21) | `AUTH` | `DISABLED`, alert |
 | 400 | -1021 | Timestamp outside `recvWindow` | `CLOCK_SKEW` | Re-sync, retry once, then halt |
-| 400 | -1022 | Invalid nonce or signature | `AUTH` | `DISABLED`; check signing |
+| 400 | -1022 | Invalid nonce or signature (documented; **not observed**: a wrong signature returned -1002) | `AUTH` | `DISABLED`; check signing |
 | 431, 405, 400 | -1000 | Unknown error (header too large, method not allowed, or duplicate request) | `MALFORMED` | Log and investigate; no retry |
 | 400 | -1102 | Mandatory parameter missing or malformed | `VALIDATION` | A bug; no retry |
 | 400 | 1109 | Invalid parameter value | `VALIDATION` | A bug |
