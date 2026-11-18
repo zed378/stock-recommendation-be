@@ -2,6 +2,7 @@
 
 Newest first.
 
+- [2026-11-17 — AA: Portabilitas tes anchor, validasi `nft -c`, inventaris klien, watcher anchor & sinkronisasi dokumen](2026-11-17-AA-anchor-tests-nft-validation-inventory-watch.md) — `SELESAI` (`19e9373`–`5a36b57`: `test_aidss_anchor_script.py` pilih Git Bash; `validate-draft.sh` lolos `nft -c` `nftables v1.1.3` pada `docker-user.nft` tanpa terapkan; `inventory-clients.sh`; `aidss-anchor-watch.sh`/R16; doc sync; `ruff` bersih, `564 passed, 15 deselected`)
 - [2026-11-17 - V/W/X: encrypted off-host tool, unapplied firewall plan, operating instruction sync](2026-11-17-V-W-X-offhost-backup-firewall-plan.md): local preparation complete; owner host execution pending.
 - [2026-11-17 - Z: stage-11 final note](2026-11-17-Z-final.md): verification and limits.
 
