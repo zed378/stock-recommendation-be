@@ -38,8 +38,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from aidss_trader.approvals import ApprovalWorkflow
 from aidss_trader.config import load_risk_limits, unset_risk_fields
 from aidss_trader.config.limits import RiskLimits
-from aidss_trader.connector.client import IndodaxClient, canonical
+from aidss_trader.connector.client import canonical
 from aidss_trader.connector.errors import ConnectorError, ErrorClass
+from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.connector.types import Account, BookTicker
 from aidss_trader.connector.types import Candle as ApiCandle
 from aidss_trader.db.models import (
@@ -140,7 +141,7 @@ class Runtime:
     def __init__(
         self,
         factory: sessionmaker[Session],
-        client: IndodaxClient | None,
+        client: ExchangeClient | None,
         *,
         notifier: Callable[[Session], Notifier] | None = None,
         now: Callable[[], datetime] = _now,
@@ -168,7 +169,7 @@ class Runtime:
     # ----------------------------------------------------------------- public
 
     @property
-    def client(self) -> IndodaxClient | None:
+    def client(self) -> ExchangeClient | None:
         return self._client
 
     @property

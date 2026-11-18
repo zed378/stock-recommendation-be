@@ -35,7 +35,7 @@ from aidss_trader.audit import AuditLogger
 from aidss_trader.auth.stepup import StepUp, StepUpRefused
 from aidss_trader.auth.verify import AuthFailed, Principal, TokenVerifier
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
-from aidss_trader.connector.client import IndodaxClient
+from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.credentials import CredentialStore, CredentialUnreadable
 from aidss_trader.credentials.admin import check_account
 from aidss_trader.db.models import (
@@ -107,8 +107,8 @@ class ApiContext:
     # Credential administration. Each default means "not available", so an app built without
     # them can still serve everything else and refuses credential changes instead of guessing.
     credentials: Callable[[Session], CredentialStore | None] = lambda s: None
-    exchange_client_for: Callable[[str, str], IndodaxClient | None] = lambda k, s: None
-    stored_exchange_client: Callable[[], IndodaxClient | None] = lambda: None
+    exchange_client_for: Callable[[str, str], ExchangeClient | None] = lambda k, s: None
+    stored_exchange_client: Callable[[], ExchangeClient | None] = lambda: None
     telegram_send: Callable[[str, str, str], None] | None = None
 
 

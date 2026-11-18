@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aidss_trader.connector.client import IndodaxClient
 from aidss_trader.connector.errors import ConnectorError
+from aidss_trader.connector.port import ExchangeClient
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +22,7 @@ class AccountCheck:
     reason: str | None = None
 
 
-def check_account(client: IndodaxClient) -> AccountCheck:
+def check_account(client: ExchangeClient) -> AccountCheck:
     try:
         account = client.get_account()
     except ConnectorError as exc:

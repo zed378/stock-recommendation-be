@@ -15,8 +15,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss_trader.connector.client import IndodaxClient
 from aidss_trader.connector.errors import ConnectorError
+from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.db.models import Fill, OrderRow, ReconciliationDifference, ReconciliationRun
 from aidss_trader.killswitch import KillSwitch
 from aidss_trader.orders.state import TERMINAL, OrderState
@@ -39,7 +39,7 @@ def windows(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
 
 def reconcile(
     session: Session,
-    client: IndodaxClient,
+    client: ExchangeClient,
     pairs: list[str],
     *,
     lookback: timedelta = timedelta(days=1),

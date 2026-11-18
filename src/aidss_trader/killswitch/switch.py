@@ -26,8 +26,8 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from aidss_trader.connector.client import IndodaxClient
 from aidss_trader.connector.errors import ConnectorError
+from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.db.models import (
     KillSwitchEvent,
     KillSwitchStep,
@@ -53,7 +53,7 @@ def _now() -> datetime:
 
 class KillSwitch:
     def __init__(
-        self, session: Session, client: IndodaxClient | None, *, now: Callable[[], datetime] = _now
+        self, session: Session, client: ExchangeClient | None, *, now: Callable[[], datetime] = _now
     ) -> None:
         self._s, self._client, self._now = session, client, now
 

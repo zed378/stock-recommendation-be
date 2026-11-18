@@ -21,6 +21,7 @@ from aidss_trader.auth import TokenVerifier
 from aidss_trader.auth.stepup import StepUp
 from aidss_trader.config import TraderSettings
 from aidss_trader.connector.client import IndodaxClient
+from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.connector.throttle import Throttle
 from aidss_trader.credentials import CredentialStore, CredentialUnreadable
 from aidss_trader.killswitch import KillSwitch
@@ -41,7 +42,7 @@ MAX_SKEW_MS = 250  # ADR-041
 
 def build_client(
     settings: TraderSettings, factory: sessionmaker[Session], fernet: Fernet | None
-) -> IndodaxClient | None:
+) -> ExchangeClient | None:
     if not (settings.exchange_base_url and settings.public_base_url):
         logger.warning("no exchange URLs configured: the Trader will observe and halt")
         return None
@@ -61,9 +62,9 @@ def build_client(
     return _client(settings, credentials)
 
 
-def _client(
+def _indodax(
     settings: TraderSettings, credentials: Callable[[], tuple[str, str]]
-) -> IndodaxClient | None:
+) -> ExchangeClient | None:
     if not (settings.exchange_base_url and settings.public_base_url):
         return None
     return IndodaxClient(
@@ -77,7 +78,31 @@ def _client(
     )
 
 
-def build_candidate_client(settings: TraderSettings, key: str, secret: str) -> IndodaxClient | None:
+# The only place a concrete client is named. Adding a spot venue is one adapter that satisfies
+# `ExchangeClient` and one entry here; a derivatives venue needs its own port first (ADR-056).
+VENUES: dict[
+    str, Callable[[TraderSettings, Callable[[], tuple[str, str]]], ExchangeClient | None]
+] = {
+    "indodax": _indodax,
+}
+
+
+def _client(
+    settings: TraderSettings, credentials: Callable[[], tuple[str, str]]
+) -> ExchangeClient | None:
+    try:
+        factory = VENUES[settings.exchange]
+    except KeyError:
+        # Fail closed: a typo must not fall back to some other exchange.
+        raise ValueError(
+            f"unknown exchange {settings.exchange!r}; supported: {', '.join(sorted(VENUES))}"
+        ) from None
+    return factory(settings, credentials)
+
+
+def build_candidate_client(
+    settings: TraderSettings, key: str, secret: str
+) -> ExchangeClient | None:
     """A throwaway client for testing a key before it is stored. Its own throttle, because it
     is used for one read-only call; the key lives only in this closure."""
     return _client(settings, lambda: (key, secret))

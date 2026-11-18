@@ -27,8 +27,8 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from aidss_trader.connector.client import IndodaxClient
 from aidss_trader.connector.errors import ConnectorError, ErrorClass
+from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.connector.types import OrderInfo, TradeFill
 from aidss_trader.db.models import Fill, OrderEvent, OrderRow
 from aidss_trader.intents.builder import Intent, client_order_id
@@ -64,7 +64,7 @@ class OrderManager:
     def __init__(
         self,
         session: Session,
-        client: IndodaxClient,
+        client: ExchangeClient,
         *,
         now: Callable[[], datetime] = _now,
         sleep: Callable[[float], None] = time.sleep,

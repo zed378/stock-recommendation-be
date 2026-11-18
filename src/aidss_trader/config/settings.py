@@ -27,6 +27,9 @@ class TraderSettings(BaseSettings):
     # Configuration, not constants: Indodax's own documentation disagrees about
     # which host serves Trade API 2.0 (docs/06-INTEGRATIONS/11, D1). Unset until
     # the connector exists (T2).
+    # Which venue adapter builds the client. Only "indodax" exists (ADR-056); anything else is
+    # refused at start rather than defaulted.
+    exchange: str = "indodax"
     exchange_base_url: str | None = None
     public_base_url: str | None = None
     analysis_api_url: str | None = None
