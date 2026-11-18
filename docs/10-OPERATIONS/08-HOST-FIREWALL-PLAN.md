@@ -92,6 +92,16 @@ From the owner's computer, check approved service URLs with curl, the public AID
 
 Planning is complete when every proposal and unknown is recorded and drafts have syntax evidence. Application is complete only after owner choices, rendered-policy review, timed rollback rehearsal, second-session tests, project checks, IPv6 checks and persistence rehearsal are recorded. No live hardening completion is claimed here.
 
+## Stage 2 inventory
+
+Before drafting Stage 2 restrictions for non-AIDSS services (including `java` on `6547`), run `deploy/host/firewall/inventory-clients.sh` on the host (read-only, requires `python3`, `ss`, `docker`, `ps`, `systemctl`):
+
+```sh
+sudo sh deploy/host/firewall/inventory-clients.sh [PORT ...]
+```
+
+It reports listening processes (`ss -H -ltnp`), published container port mappings (`docker ps` with `com.docker.compose.project`), established client counts grouped by source IP and IPv4 `/24` (IPv4 and IPv6 separated), and for `6547` prints only the executable name, PID, user, `/proc/<pid>/cwd`, and systemd unit (never `cmdline` or `environ`, and never packet/application data). Because established connections are point-in-time snapshots (zero clients now does not prove a port is unused), repeat the capture at several different hours and retain the outputs privately for Stage 2 owner decisions.
+
 ## Unknowns
 
 Identity and clients of java 6547; other LAN users and their subnet masks; netbird ACLs and IPv6 address allocation; external interface routing; IPv6 Docker publication behavior/backend; UDP consumers; bridge integrations; existing persistence tooling; tunnel paths of other projects; and whether each project can tolerate restrictions. These block a final restrictive policy, not writing this plan.
