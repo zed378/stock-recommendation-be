@@ -366,3 +366,12 @@ On the VM: `pull` alone, `--dry-run`, then `up -d --no-build --no-deps frontend`
 Not verified: the new strings in a real browser. Rollback: `aidss-frontend:603e606` (one `up --no-deps`, not rehearsed). `aidss-frontend` now holds `latest`, `d9a4b58`, `603e606` and `57b8f97`; `57b8f97` is beyond the one-rollback-tag rule and was not deleted.
 
 `aidss-frontend:57b8f97` was deleted on 2026-11-18 at the owner's request (PowerShell, docker-login token, listing checked before and after), restoring the one-rollback-tag rule: `aidss-frontend` holds `latest` = `d9a4b58` and the rollback `603e606`. Rollback to anything older now means rebuilding from the commit.
+
+---
+
+## Redeploys of the Trader at 06ebac0 and 6860bfd (2026-11-18): the clock check
+
+Two Trader images in one day, both from clean `git archive HEAD` exports and the 28-package hash lock, both with the exchange URLs of `2026-11-18-exchange-urls-enabled.md` in the override. `06ebac0` (median of 5 readings) turned out to be the wrong estimator and is deleted from the registry; `6860bfd` (digest `sha256:15df03b4104b6afa67243ac319352913652e9055317b245d2c47a655031989bb`) replaces it. Details and the measurement in `2026-11-18-clock-check-median-and-auth-detail.md`.
+Before the build: Trader, architecture and routing suite 584 passed, 15 deselected; ruff clean. On the VM each time: `pull`, `--dry-run` (only the Trader recreated), `up -d --no-build --no-deps trader`. Verified after `6860bfd`: Trader healthy (healthcheck 0), `trading_state` HALTED, zero credentials, no CLOCK_SKEW in the log, `server_time` requests fell from 10 per cycle to 7 in a minute, the only remaining step failure is `CredentialUnreadable` (expected without a key), api, worker, frontend and PostgreSQL untouched, public `/`, `/api/health`, `/trader` 200, `/trader/v1/status` 401.
+Not verified: any signed request. The owner's key test returned `AUTH (code -1002, HTTP 401)` with the previous image; it has not been repeated on `6860bfd`.
+Registry (PowerShell, docker-login token, listings checked): `aidss-trader:latest` moved to `6860bfd`; `06ebac0` deleted. `aidss-trader` holds `latest` = `6860bfd`, `9b52dfa` (rollback) and `7d03693`, which is kept on purpose: the host's audit-anchor wrapper names it as its image, so deleting it would break that on any host that has to pull it again (a migration, an image prune). Repointing the wrapper to a kept tag would let it go. `aidss-api` and `aidss-frontend` are unchanged (`latest` plus one rollback each). Rollback: `aidss-trader:9b52dfa`.
