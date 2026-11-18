@@ -168,7 +168,14 @@ def load_checker():
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except ModuleNotFoundError as exc:
+        # The checker builds the Trader's own value objects, so it needs the project's packages.
+        raise ImportError_(
+            f"{exc}. Run this with the repository's environment, for example "
+            ".venv/Scripts/python deploy/trader/import_owner_profile.py ..."
+        ) from None
     return module
 
 
