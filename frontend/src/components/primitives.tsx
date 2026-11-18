@@ -4,6 +4,33 @@ import { useI18n } from "@/i18n/context";
 
 /** Small shared pieces, kept in one file so the pages stay about their subject. */
 
+let scrollLocks = 0;
+let overflowBeforeLock = "";
+
+/**
+ * Stop the page behind a dialog from scrolling, for as long as any dialog is open.
+ *
+ * Each dialog used to save `body.style.overflow` when it opened and put that value back when it
+ * closed. With two dialogs open at once (a review dialog and the password dialog above it) the
+ * second one saved "hidden", the two were removed in the order they were mounted, and the last
+ * one to clean up restored "hidden": the page stayed locked after every dialog was gone, and only
+ * a reload brought scrolling back. A count of open dialogs fixes that for any order and any
+ * number: the original value is saved by the first and restored by the last.
+ */
+export function lockScroll(): void {
+  if (scrollLocks === 0) {
+    overflowBeforeLock = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  scrollLocks += 1;
+}
+
+export function unlockScroll(): void {
+  if (scrollLocks === 0) return;
+  scrollLocks -= 1;
+  if (scrollLocks === 0) document.body.style.overflow = overflowBeforeLock;
+}
+
 /**
  * A dialog rendered by the application rather than by the browser.
  *
@@ -57,15 +84,17 @@ export function Modal({
     };
 
     document.addEventListener("keydown", onKeyDown);
-    // The page behind must not scroll under the dialog: a scrollbar that still
-    // works reads as though the dialog is optional.
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  // The page behind must not scroll under the dialog: a scrollbar that still
+  // works reads as though the dialog is optional. Counted, not saved per dialog,
+  // and kept apart from the key handler (whose effect re-runs whenever `onClose`
+  // changes identity): see `lockScroll`.
+  useEffect(() => {
+    lockScroll();
+    return unlockScroll;
+  }, []);
 
   return createPortal(
     <div
