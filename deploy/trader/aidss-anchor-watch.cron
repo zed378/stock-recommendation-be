@@ -1,0 +1,6 @@
+# DRAFT, NOT INSTALLED. Owner must choose cadence and AIDSS_ANCHOR_MAX_AGE_S first.
+# Install a reviewed environment/configuration and wrapper path before uncommenting.
+MAILTO=""
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# OWNER_APPROVED_SCHEDULE infra /usr/local/bin/aidss-anchor-watch

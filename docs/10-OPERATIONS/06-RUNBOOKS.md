@@ -243,3 +243,15 @@ advisory names one of the 28 packages, when `pyproject.toml` raises a bound, or 
 
 The base image is the floating tag `python:3.12-slim`, so the operating-system layer changes with each build; pinning its digest would stop that but also stop OS
 security patches (ADR-050, option 3, not adopted).
+
+## R16 — Anchor stale or failing (ADR-054)
+
+`deploy/trader/aidss-anchor-watch.sh` (draft cron `deploy/trader/aidss-anchor-watch.cron`, not installed) checks `anchor.jsonl` and `anchor.log` under `AIDSS_ANCHOR_DIR` (default `/var/lib/aidss-anchor`) without calling Docker or the database. It requires an explicit positive `AIDSS_ANCHOR_MAX_AGE_S` (no hidden default; owner decision):
+
+- Exit `0`: latest `rc=0` line in `anchor.log` is newer than `AIDSS_ANCHOR_MAX_AGE_S` and latest run succeeded.
+- Exit `1`: latest `rc=0` is stale or missing, or latest run failed with a non-`2` exit code (check cron status, `AIDSS_TRADER_DATABASE_URL`, and `anchor.log`).
+- Exit `2`: latest run exited `2` (`user.crit` logged; audit chain or external anchor verification failed — `HALT` the Trader and investigate DB/anchor integrity before resuming).
+- Exit `3`: `AIDSS_ANCHOR_MAX_AGE_S` is unset or invalid (or test clock invalid).
+- Exit `4`: `anchor.jsonl` or `anchor.log` is missing, empty, or unreadable.
+
+If `AIDSS_ANCHOR_ALERT_CMD` is set to an executable path, the watcher invokes it once with a fixed status message (no log contents, no built-in token or sender).
