@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # --- Provider credentials (Section 26: never hardcoded) ---
     finnhub_api_key: str | None = None
     alphavantage_api_key: str | None = None
+    #: Licensed fundamentals for IDX (adapter `eodhd`). A plan that includes the Fundamentals API
+    #: is required; set `fundamentals_daily_quota` from the plan (a request costs 10 API calls).
+    eodhd_api_key: str | None = None
+    #: EODHD writes the Jakarta exchange as `.JK`, so BBCA is BBCA.JK.
+    eodhd_symbol_suffix: str = ".JK"
 
     #: Market suffix appended to tickers for Yahoo Finance. IDX equities are
     #: `.JK` there (BBCA -> BBCA.JK). Set to an empty string for US symbols;
@@ -252,6 +257,7 @@ class Settings(BaseSettings):
         "ai_api_key",
         "finnhub_api_key",
         "alphavantage_api_key",
+        "eodhd_api_key",
         mode="before",
     )
     @classmethod

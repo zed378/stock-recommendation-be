@@ -38,6 +38,7 @@ SENSITIVE_KEYS = frozenset(
         "ai_api_key",
         "finnhub_api_key",
         "alphavantage_api_key",
+        "eodhd_api_key",
     }
 )
 

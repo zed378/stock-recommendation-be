@@ -47,7 +47,7 @@ def test_a_real_budget_still_parses() -> None:
 
 
 @pytest.mark.parametrize(
-    "field", ["ai_api_key", "finnhub_api_key", "alphavantage_api_key"]
+    "field", ["ai_api_key", "finnhub_api_key", "alphavantage_api_key", "eodhd_api_key"]
 )
 def test_an_empty_credential_is_none_not_an_empty_string(field: str) -> None:
     """So `is None` and falsiness agree about it. One saying set and the other
@@ -57,7 +57,7 @@ def test_an_empty_credential_is_none_not_an_empty_string(field: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "field", ["ai_api_key", "finnhub_api_key", "alphavantage_api_key"]
+    "field", ["ai_api_key", "finnhub_api_key", "alphavantage_api_key", "eodhd_api_key"]
 )
 def test_a_real_credential_is_preserved(field: str) -> None:
     assert getattr(settings(**{field: "sk-abc123"}), field) == "sk-abc123"

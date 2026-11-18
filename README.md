@@ -869,6 +869,7 @@ matter most:
 | `AIDSS_AI_EMBEDDING_MODEL` | `text-embedding-3-small` | **Empty means lexical-only retrieval**, which is a supported configuration rather than a broken one — see above. |
 | `AIDSS_FUNDAMENTALS_DAILY_QUOTA` | `25` | Outbound fundamentals calls per UTC day per provider account. `0` means no ceiling — *unlimited*, not "spend nothing". |
 | `AIDSS_FUNDAMENTALS_REFRESH_INTERVAL_DAYS` | `30` | How stale a figure may get before it is queued. Refetching faster than filings change spends an allowance to rewrite identical numbers. |
+| `AIDSS_EODHD_API_KEY` | unset | Licensed fundamentals for IDX (adapter `eodhd`, set `AIDSS_COMPOSITE_FUNDAMENTALS_PROVIDER=eodhd`). Needs a plan that includes the Fundamentals API; a request costs 10 of its daily API calls, so set `AIDSS_FUNDAMENTALS_DAILY_QUOTA` from the plan. Without a key the adapter refuses to construct. |
 | `AIDSS_ALPHAVANTAGE_API_KEY` | unset | Free key, 25 requests/day. Without it the `alphavantage` adapter refuses to construct rather than failing later at collection time. |
 | `AIDSS_YAHOO_SYMBOL_SUFFIX` | `.JK` | Market suffix for Yahoo symbols; empty for US tickers |
 | `AIDSS_ALPHAVANTAGE_SYMBOL_SUFFIX` | `.JKT` | The same idea, different spelling — Jakarta is `.JKT` here, not `.JK` |

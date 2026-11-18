@@ -53,6 +53,7 @@ x-aidss-env: &aidss-env
   # `premium` changes behaviour rather than just limits: `outputsize=full` is
   # refused outright on a free key, so asking for it returns no data at all.
   AIDSS_ALPHAVANTAGE_API_KEY: ${AIDSS_ALPHAVANTAGE_API_KEY:-}
+  AIDSS_EODHD_API_KEY: ${AIDSS_EODHD_API_KEY:-}
   AIDSS_ALPHAVANTAGE_PREMIUM: ${AIDSS_ALPHAVANTAGE_PREMIUM:-false}
   AIDSS_FINNHUB_API_KEY: ${AIDSS_FINNHUB_API_KEY:-}
 
