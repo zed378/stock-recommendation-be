@@ -23,8 +23,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from aidss_trader.audit import AuditLogger
+from aidss_trader.backtest.evidence import backtest_evidence
 from aidss_trader.db.models import (
-    BacktestRunRow,
     BreakerEvent,
     Fill,
     KillSwitchEvent,
@@ -148,23 +148,14 @@ class Promotion:
                 )
                 or 0
             )
-            bt_return = supplied.backtest_return_pct
-            if bt_return is None:
-                bt_row = self._s.scalar(
-                    select(BacktestRunRow)
-                    .where(
-                        BacktestRunRow.strategy_id == strategy_id,
-                        BacktestRunRow.strategy_version == row.version,
-                    )
-                    .order_by(BacktestRunRow.ran_at.desc())
-                    .limit(1)
-                )
-                if bt_row is not None:
-                    bt_return = Decimal(str(bt_row.total_return_pct))
+            # Read from the stored BACKTEST runs, never from a figure typed in: see
+            # `backtest.evidence` (ADR-059). `supplied.backtest_return_pct` is ignored.
+            evidence = backtest_evidence(self._s, strategy_id, row.version)
+            bt_return = None if evidence is None else evidence.return_pct
             out += [
                 _gate(
                     "backtest",
-                    bt_return,
+                    None if evidence is None else evidence.describe(),
                     thresholds.backtest_min_return_pct,
                     lambda: bt_return >= thresholds.backtest_min_return_pct,
                 ),

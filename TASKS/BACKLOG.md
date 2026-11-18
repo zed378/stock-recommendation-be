@@ -63,7 +63,7 @@ rather than only a mention in a chat or a record.
 | Host firewall Stage 2 (non-AIDSS ports and `java` 6547); Stage 1 (`22`, `8000`, `9443` from `10.1.101.0/24` + `wt0`) rendered & `nft -c` validated (unapplied) | `docs/10-OPERATIONS/08-HOST-FIREWALL-PLAN.md`, `deploy/host/firewall/inventory-clients.sh` | Awaiting read-only host client inventory (`inventory-clients.sh`) and owner per-port decisions before applying |
 | Tamper-evidence design for the audit log | `09/04` | T1-05 ADR |
 | Step-up authentication mechanism for high-impact actions | `09/01` | T5-01 ADR |
-| The promotion gate for the backtest takes `backtest_return_pct` from the request body, typed by the owner, while the paper drawdown is measured from stored equity. A typed figure is not evidence, and the stored `backtest_run` rows are not read by the gate (`latest_backtest_return_pct` takes only the newest row, one arbitrary pair) | `src/aidss_trader/api/app.py` (promote), `promotion/gates.py` | Owner decision: derive the gate's figure from stored BACKTEST rows (an aggregate over the allowlisted pairs, labelled) and refuse a typed override. First backtest, 2026-11-18: 16 trades over 9 pairs, 1 winner, plain sum of per-pair returns about -0.25% |
+| The promotion gate for the backtest now reads stored BACKTEST runs (ADR-059, 2026-11-18) and refuses a typed figure. **Still typed by the owner:** `live_capital_used_idr` and `slippage_vs_paper_pct` for APPROVAL to AUTO, both measurable from the ledger and the paper book | `src/aidss_trader/api/app.py` (promote), `promotion/gates.py` | Owner decision, before any APPROVAL period produces evidence; a true portfolio backtest (with the open-position and exposure limits) would replace the per-pair sum |
 
 ## Deliberate Deferrals
 

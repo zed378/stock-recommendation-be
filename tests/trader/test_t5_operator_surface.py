@@ -462,10 +462,45 @@ def paper_sells(session, n: int, when: datetime) -> None:
     session.commit()
 
 
+def store_backtest(
+    session, version: str, pair: str, return_pct: Decimal, at: datetime, *, trades: int = 3
+) -> None:
+    """A stored BACKTEST run: the only source of the backtest figure the gate reads."""
+    from aidss_trader.db.models import BacktestRunRow
+
+    start = D("100000000")
+    session.add(
+        BacktestRunRow(
+            origin="BACKTEST",
+            strategy_id="ema_adx",
+            strategy_version=version,
+            pair=pair,
+            timeframe="4H",
+            candles_used=300,
+            trades=trades,
+            wins=1,
+            win_rate_pct=D("33"),
+            total_return_pct=return_pct,
+            max_drawdown_pct=D("1"),
+            profit_factor=D("1"),
+            start_equity_idr=start,
+            final_equity_idr=start * (1 + return_pct / 100),
+            cost_model={},
+            parameters={},
+            data_fingerprint="f" * 64,
+            ran_at=at,
+            ran_by="test",
+        )
+    )
+    session.flush()
+
+
 @pytest.fixture
 def promo(session, clock):
     p = Promotion(session, now=clock)
     p.register("ema_adx", "v1")
+    # The evidence the gate reads (ADR-059): a stored BACKTEST run, not a typed figure.
+    store_backtest(session, "v1", "BTCIDR", D("4"), clock.t)
     return p
 
 

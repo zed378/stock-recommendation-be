@@ -6,8 +6,11 @@ from aidss_trader.backtest.engine import (
     record_backtest,
     run_backtest,
 )
+from aidss_trader.backtest.evidence import BacktestEvidence, backtest_evidence
 
 __all__ = [
+    "BacktestEvidence",
+    "backtest_evidence",
     "BacktestConfig",
     "BacktestResult",
     "Trade",

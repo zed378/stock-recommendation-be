@@ -1071,6 +1071,16 @@ def create_app(ctx: ApiContext) -> FastAPI:
     ):
         from decimal import Decimal
 
+        if body.backtest_return_pct is not None:
+            # A figure the owner types could be edited until it passes. The gate reads the
+            # stored backtest runs instead (ADR-059), so a typed one is refused, not ignored.
+            raise ApiError(
+                400,
+                "VALIDATION",
+                "typed_evidence_refused",
+                "the backtest figure is read from the stored backtest runs; a typed value is "
+                "not accepted",
+            )
         row = s.get(StrategyRow, strategy_id)
         if row is None:
             raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
@@ -1084,7 +1094,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         # Paper drawdown is measured from the stored simulated equity, never typed in: a figure
         # the owner could edit before promoting would be no evidence at all.
         supplied = SuppliedEvidence(
-            d(body.backtest_return_pct),
+            None,  # the backtest figure comes from stored runs (ADR-059), never from the caller
             paper_drawdown_pct(s, row.since),
             d(body.live_capital_used_idr),
             d(body.slippage_vs_paper_pct),

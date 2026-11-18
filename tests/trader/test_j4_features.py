@@ -144,7 +144,8 @@ def test_record_backtest_persists_evidence_and_feeds_promotion_gate(session) -> 
         SuppliedEvidence(paper_drawdown_pct=D("2")),
     )
     bt_gate_after = next(g for g in gates_after if g.name == "backtest")
-    assert bt_gate_after.passed and bt_gate_after.measured == str(row.total_return_pct)
+    assert bt_gate_after.passed
+    assert (bt_gate_after.measured or "").startswith(f"{row.total_return_pct:.3f}")
 
     promo.register("ema_adx", "new-version-v2")
     clock.advance(weeks=5)
