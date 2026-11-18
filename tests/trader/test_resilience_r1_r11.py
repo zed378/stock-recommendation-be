@@ -534,6 +534,7 @@ def test_soak_a_long_paper_run_with_periodic_failures_stays_bounded() -> None:
     """
     w = World("PAPER")
     w.runtime = Runtime(w.factory, w.env.client, now=w.now, candle_poll_s=300)
+    start_ms = w.env.mock.now_ms
     for _ in range(60):  # warm-up so one-time allocations are not counted as growth
         w.cycle()
     tracemalloc.start()
@@ -555,7 +556,8 @@ def test_soak_a_long_paper_run_with_periodic_failures_stays_bounded() -> None:
     grown = sum(s.size_diff for s in tracemalloc.take_snapshot().compare_to(base, "filename"))
     tracemalloc.stop()
     assert grown < 40 * 1024 * 1024, grown
-    minutes = (60 + cycles_run) * 11 / 60
+    # Simulated time, not 11 s per cycle: the throttle's waits advance the mock clock too.
+    minutes = (w.env.mock.now_ms - start_ms) / 60000
     assert (
         len(w.rows(EquitySnapshot)) <= minutes + 5
         and len(w.rows(PaperEquitySnapshot)) <= minutes + 5

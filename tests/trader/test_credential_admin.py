@@ -38,6 +38,11 @@ class Setup:
         self.telegram_fails = False
         env = self.w.env
 
+        def tick(seconds: float) -> None:
+            # The throttle waits on a clock that only moves when something advances it; a no-op
+            # sleep would make a client that sends several requests wait forever.
+            env.mock.advance(int(seconds * 1000) + 1)
+
         def candidate(key: str, secret: str) -> IndodaxClient | None:
             if not exchange:
                 return None
@@ -45,12 +50,12 @@ class Setup:
                 exchange_base_url="https://exchange.test",
                 public_base_url="https://public.test",
                 credentials=lambda: (key, secret),
-                throttle=Throttle(0.5, clock=lambda: env.mock.now_ms / 1000, sleep=lambda s: None),
+                throttle=Throttle(0.5, clock=lambda: env.mock.now_ms / 1000, sleep=tick),
                 timeout_s=5,
                 clock_check_interval_s=60,
                 max_skew_ms=250,
                 clock=env.mock.client_clock(0),
-                sleep=lambda s: None,
+                sleep=tick,
                 transport=env.mock.transport(),
             )
 
@@ -337,3 +342,39 @@ def test_credential_changes_need_the_permission_and_a_viewer_sees_only_the_mask(
     view = st.call("GET", "/credentials", token="tok-viewer")
     assert view.status_code == 200 and TEST_KEY not in view.text and TEST_SECRET not in view.text
     assert st.put(token="tok-admin").status_code == 200  # admin holds the permission (ADR-048)
+
+
+class _Refusing:
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    def get_account(self):
+        raise self._error
+
+
+def test_a_refusal_reports_class_code_and_status_but_never_the_exchange_text() -> None:
+    from aidss_trader.connector.errors import ConnectorError, ErrorClass
+    from aidss_trader.credentials.admin import check_account
+
+    error = ConnectorError(
+        ErrorClass.AUTH,
+        "secret-looking text from the exchange",
+        operation="get_account",
+        code=-1022,
+        http_status=400,
+    )
+    res = check_account(_Refusing(error))  # type: ignore[arg-type]
+    assert res.ok is False
+    assert res.reason == "the exchange refused the request (AUTH, code -1022, HTTP 400)"
+    assert "secret-looking" not in res.reason
+
+
+def test_a_code_that_is_not_a_number_is_left_out() -> None:
+    from aidss_trader.connector.errors import ConnectorError, ErrorClass
+    from aidss_trader.credentials.admin import check_account
+
+    error = ConnectorError(
+        ErrorClass.MALFORMED, "x", operation="get_account", code="<script>", http_status=None
+    )
+    res = check_account(_Refusing(error))  # type: ignore[arg-type]
+    assert res.reason == "the exchange refused the request (MALFORMED)"

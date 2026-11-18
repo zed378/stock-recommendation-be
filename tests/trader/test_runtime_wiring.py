@@ -428,6 +428,18 @@ def test_a_clock_beyond_tolerance_halts() -> None:
 
 def test_a_sustained_outage_trips_the_stale_data_breaker_but_one_failed_poll_does_not() -> None:
     w = World("PAPER")
+    # The reconciler also reads the account and halts on a failed read. Its 60 s timer is moved
+    # out of the way so the breaker under test is the one that trips: the clock check's throttle
+    # waits advance the mock clock, which otherwise lets the reconciler get there first.
+    w.runtime = Runtime(
+        w.factory,
+        w.env.client,
+        notifier=lambda s: Notifier(s, w.chan, now=w.now),
+        now=w.now,
+        price_poll_s=10,
+        reconcile_s=3600,
+        candle_poll_s=1,
+    )
     warm(w, 2)
     fail(w, "GET", "/api/v2/account")
     w.cycle()

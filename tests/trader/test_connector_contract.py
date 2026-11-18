@@ -177,7 +177,44 @@ def test_clock_skew_beyond_tolerance_halts_before_any_signed_request() -> None:
     with pytest.raises(ConnectorError) as exc:
         env.client.get_account()
     assert exc.value.error_class is ErrorClass.CLOCK_SKEW
-    assert [r["path"] for r in env.mock.requests] == ["/api/server_time"]  # nothing was signed
+    assert {r["path"] for r in env.mock.requests} == {"/api/server_time"}  # nothing was signed
+
+
+def _stale_server_time(env: Env, stale: set[int], readings: int = 5) -> None:
+    """Indodax serves server_time through caches; some readings come back about 1 s old.
+    `stale` holds the 1-based readings (in order) that are a second behind."""
+    for n in range(1, readings + 1):
+        behind = 1000 if n in stale else 0
+        env.mock.inject(
+            "GET",
+            "/api/server_time",
+            lambda behind=behind: httpx.Response(
+                200, json={"timezone": "UTC", "server_time": env.mock.now_ms - behind}
+            ),
+        )
+
+
+def test_a_minority_of_stale_readings_does_not_halt() -> None:
+    env = Env(skew_ms=0)
+    _stale_server_time(env, {2, 4})  # 2 of 5 readings are a second old
+    assert abs(env.client.check_clock()) <= 250
+    env.client.get_account()
+
+
+def test_a_majority_of_stale_or_skewed_readings_still_halts() -> None:
+    env = Env(skew_ms=0)
+    # 3 of 5 stale in the first measurement AND in the re-measurement: the median is a second off
+    # twice in a row.
+    _stale_server_time(env, {1, 2, 3, 6, 7, 8}, readings=10)
+    with pytest.raises(ConnectorError) as exc:
+        env.client.check_clock()
+    assert exc.value.error_class is ErrorClass.CLOCK_SKEW and "median of 5" in str(exc.value)
+
+
+def test_one_bad_measurement_is_measured_again_before_it_halts() -> None:
+    env = Env(skew_ms=0)
+    _stale_server_time(env, {1, 2, 3}, readings=5)  # first measurement bad, the second is clean
+    assert abs(env.client.check_clock()) <= 250
 
 
 def test_small_skew_within_the_limit_is_accepted() -> None:

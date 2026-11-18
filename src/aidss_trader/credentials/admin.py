@@ -22,11 +22,31 @@ class AccountCheck:
     reason: str | None = None
 
 
+def _numeric(code: object) -> int | None:
+    """Only a whole number is shown: the code comes from the exchange's body."""
+    try:
+        return int(code)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return None
+
+
 def check_account(client: ExchangeClient) -> AccountCheck:
     try:
         account = client.get_account()
     except ConnectorError as exc:
-        return AccountCheck(False, f"the exchange refused the request ({exc.error_class})")
+        # The class, the exchange's numeric code and the HTTP status say which kind of refusal it
+        # was (a bad key, a bad signature, a clock). They are not secrets; the exchange's own
+        # message text is left out because nothing guarantees what it contains.
+        detail = ", ".join(
+            part
+            for part in (
+                str(exc.error_class),
+                f"code {_numeric(exc.code)}" if _numeric(exc.code) is not None else "",
+                f"HTTP {exc.http_status}" if exc.http_status is not None else "",
+            )
+            if part
+        )
+        return AccountCheck(False, f"the exchange refused the request ({detail})")
     except Exception:
         return AccountCheck(False, "the key could not be used")
     if account.can_withdraw or account.can_withdraw_fiat:

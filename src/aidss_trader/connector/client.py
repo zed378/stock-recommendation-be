@@ -24,6 +24,7 @@ import hashlib
 import hmac
 import logging
 import re
+import statistics
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -69,6 +70,10 @@ ALLOWED_METHODS = frozenset(
         "check_clock",
     }
 )
+
+#: Readings per clock check; odd, so the median is one of them. See `check_clock`.
+CLOCK_SAMPLES = 5
+CLOCK_RETRY_PAUSE_S = 0.5
 
 _CLIENT_ORDER_ID = re.compile(r"^[A-Za-z0-9_-]{1,36}$")
 _TIMEFRAMES = {"4H": "240", "1D": "1D"}  # the OHLC endpoint has no 5 minute timeframe
@@ -295,19 +300,37 @@ class IndodaxClient:
         at the midpoint of the round trip so network latency is not mistaken for
         skew.
         """
-        server_ms = self.get_server_time()
-        # Only the time on the wire counts. Measuring around the call would include the
-        # throttle's wait, and a drained bucket would read as a clock skew that is not there.
-        t0, t1 = self._wire.span
-        offset = server_ms - (t0 + t1) // 2
+        # Two layers against a noisy reference, neither of which loosens the limit (ADR-041).
+        # Indodax serves `/api/server_time` through caches: from the VM most readings sat within
+        # 50 ms of the host clock (NTP-synced, a few ms off) but about one in six was a stale value
+        # off by roughly one second, which a single sample reports as a skew and halts on.
+        #  1. The offset is the median of several readings. A clock that really is off moves every
+        #     reading, so the median moves with it; a stale minority does not.
+        #  2. A median beyond the limit is measured once more before it counts (docs 06/08: re-sync,
+        #     retry once, then halt). Two bad measurements in a row halt; one does not.
+        offset = self._median_offset()
+        if abs(offset) > self._max_skew_ms:
+            self._sleep(CLOCK_RETRY_PAUSE_S)
+            offset = self._median_offset()
         if abs(offset) > self._max_skew_ms:
             raise ConnectorError(
                 ErrorClass.CLOCK_SKEW,
-                f"clock offset {offset} ms exceeds the {self._max_skew_ms} ms limit",
+                f"clock offset {offset} ms (median of {CLOCK_SAMPLES}, measured twice) exceeds "
+                f"the {self._max_skew_ms} ms limit",
                 operation="check_clock",
             )
         self._last_clock_ok = self._clock()
         return offset
+
+    def _median_offset(self) -> int:
+        offsets: list[int] = []
+        for _ in range(CLOCK_SAMPLES):
+            server_ms = self.get_server_time()
+            # Only the time on the wire counts. Measuring around the call would include the
+            # throttle's wait, and a drained bucket would read as a clock skew that is not there.
+            t0, t1 = self._wire.span
+            offsets.append(server_ms - (t0 + t1) // 2)
+        return int(statistics.median(offsets))
 
     def _ensure_clock(self, operation: str) -> None:
         if self._last_clock_ok is None or (
