@@ -1226,7 +1226,7 @@ export const id = {
   "trader.limits.changed": "Diubah",
   "trader.limits.emptyMeans": "Kosong berarti belum diisi dan trading nonaktif.",
   "trader.limits.emptyOptional": "Kosong berarti selalu terbuka.",
-  "trader.limits.readOnly": "Tetap: tengah malam WIB (keputusan ADR-034)",
+  "trader.limits.readOnly": "Tetap: tengah malam WIB",
   "trader.limits.review": "Tinjau perubahan",
   "trader.limits.reset": "Batalkan perubahan",
   "trader.limits.noChanges": "Tidak ada perubahan.",
@@ -1453,9 +1453,9 @@ export const id = {
   "trader.paper.taker.label": "Biaya taker",
   "trader.paper.taker.hint": "Dikenakan pada order market (stop dan exit sinyal).",
   "trader.paper.tax.label": "Pajak",
-  "trader.paper.tax.hint": "Persen dari nilai transaksi. Ini asumsi yang perlu dicek terhadap fill nyata (OQ-5).",
+  "trader.paper.tax.hint": "Persentase dari nilai transaksi. Perlu disesuaikan dengan biaya transaksi nyata di bursa.",
   "trader.paper.clearing.label": "Biaya kliring",
-  "trader.paper.clearing.hint": "Persen dari nilai transaksi. Ini asumsi yang perlu dicek terhadap fill nyata (OQ-5).",
+  "trader.paper.clearing.hint": "Persentase dari nilai transaksi. Perlu disesuaikan dengan biaya kliring nyata di bursa.",
 
   // --- trader credentials ---------------------------------------------------
   "nav.traderCredentials": "Kredensial",
@@ -1494,7 +1494,7 @@ export const id = {
   "trader.cred.fieldsNote": "Isian dikosongkan setelah setiap percobaan, berhasil atau tidak.",
 
   // --- trader promotion thresholds, portfolio, backtests, export ------------
-  "trader.thresholds.title": "Ambang promosi (OQ-12)",
+  "trader.thresholds.title": "Ambang promosi",
   "trader.thresholds.intro": "Setiap ambang adalah angka pemilik tanpa nilai bawaan. Ambang yang kosong memblokir gerbang promosi terkait. Melonggarkan ambang atau mengisi ambang yang sebelumnya kosong memerlukan kata sandi sekali lagi dan tercatat di audit.",
   "trader.thresholds.unsetCount": "{count} ambang belum diisi; gerbang promosi terkait tetap terkunci.",
   "trader.thresholds.allSet": "Semua ambang promosi sudah diisi.",
@@ -1511,7 +1511,7 @@ export const id = {
   "trader.thresholds.field.backtest_min_return_pct.label": "Imbal hasil backtest minimum (PAPER → APPROVAL)",
   "trader.thresholds.field.backtest_min_return_pct.hint": "Persentase total return minimum dari backtest yang tersimpan untuk versi strategi ini.",
   "trader.thresholds.field.max_live_capital_idr.label": "Modal live maksimum (APPROVAL → AUTO)",
-  "trader.thresholds.field.max_live_capital_idr.hint": "Batas modal nyata yang dipakai selama periode APPROVAL (OQ-16).",
+  "trader.thresholds.field.max_live_capital_idr.hint": "Batas modal nyata yang digunakan selama periode APPROVAL.",
   "trader.thresholds.field.max_slippage_pct.label": "Slippage vs paper maksimum (APPROVAL → AUTO)",
   "trader.thresholds.field.max_slippage_pct.hint": "Selisih slippage eksekusi nyata terhadap asumsi paper maksimum yang diizinkan.",
 
@@ -2727,7 +2727,7 @@ export const en: Record<MessageKey, string> = {
   "trader.limits.changed": "Changed",
   "trader.limits.emptyMeans": "Empty means unset and trading is disabled.",
   "trader.limits.emptyOptional": "Empty means always open.",
-  "trader.limits.readOnly": "Fixed: midnight WIB (decision ADR-034)",
+  "trader.limits.readOnly": "Fixed: midnight WIB",
   "trader.limits.review": "Review changes",
   "trader.limits.reset": "Discard changes",
   "trader.limits.noChanges": "No changes.",
@@ -2954,9 +2954,9 @@ export const en: Record<MessageKey, string> = {
   "trader.paper.taker.label": "Taker fee",
   "trader.paper.taker.hint": "Charged on a market order (stops and signal exits).",
   "trader.paper.tax.label": "Tax",
-  "trader.paper.tax.hint": "A percentage of trade value. An assumption to check against real fills (OQ-5).",
+  "trader.paper.tax.hint": "Percentage of trade value. Adjust this to match your actual exchange fills.",
   "trader.paper.clearing.label": "Clearing fee",
-  "trader.paper.clearing.hint": "A percentage of trade value. An assumption to check against real fills (OQ-5).",
+  "trader.paper.clearing.hint": "Percentage of trade value. Adjust this to match your actual exchange clearing fees.",
 
   // --- trader credentials ---------------------------------------------------
   "nav.traderCredentials": "Credentials",
@@ -2995,7 +2995,7 @@ export const en: Record<MessageKey, string> = {
   "trader.cred.fieldsNote": "The fields are cleared after every attempt, whether it worked or not.",
 
   // --- trader promotion thresholds, portfolio, backtests, export ------------
-  "trader.thresholds.title": "Promotion thresholds (OQ-12)",
+  "trader.thresholds.title": "Promotion thresholds",
   "trader.thresholds.intro": "Every threshold is an owner number with no default. An unset threshold blocks its promotion gate. Loosening a threshold or setting one that was previously unset requires your password once more and is recorded in the audit log.",
   "trader.thresholds.unsetCount": "{count} threshold(s) unset; the corresponding promotion gates remain locked.",
   "trader.thresholds.allSet": "All promotion thresholds are set.",
@@ -3012,7 +3012,7 @@ export const en: Record<MessageKey, string> = {
   "trader.thresholds.field.backtest_min_return_pct.label": "Minimum backtest return (PAPER → APPROVAL)",
   "trader.thresholds.field.backtest_min_return_pct.hint": "Minimum total return percentage from a stored backtest for this strategy version.",
   "trader.thresholds.field.max_live_capital_idr.label": "Maximum live capital (APPROVAL → AUTO)",
-  "trader.thresholds.field.max_live_capital_idr.hint": "Live capital ceiling used during the APPROVAL period (OQ-16).",
+  "trader.thresholds.field.max_live_capital_idr.hint": "Maximum live capital used during the APPROVAL period.",
   "trader.thresholds.field.max_slippage_pct.label": "Maximum slippage vs paper (APPROVAL → AUTO)",
   "trader.thresholds.field.max_slippage_pct.hint": "Maximum allowed live execution slippage above the paper assumption.",
 
