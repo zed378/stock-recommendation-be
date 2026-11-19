@@ -147,13 +147,14 @@ Every strategy result so far comes from about 300 four-hour bars per pair (about
 
 ---
 
-## Open Questions
+## Decisions (owner, 2026-11-19)
 
-1. **Holdout size.** The most recent 25 percent of the history (about 4.5 months), a fixed recent window, or another split.
-2. **Promotion gate.** Should the `backtest` gate read the holdout result once a holdout is set?
-3. **Gaps.** Use the latest contiguous segment and report the rest, or refuse any pair with a gap.
-4. **Backfill depth.** As far back as the exchange serves, or a shorter fixed span.
-5. **Regime coverage.** About 18 months is one bear and one recovery at most; the holdout will be one regime. Is a single chronological holdout enough, or does the owner want several (walk-forward) windows? Walk-forward is a larger design and is not specified here.
+1. **Holdout size:** the most recent 25 percent of the common history. The date is computed once from the data and then stored as `holdout_start` (an owner setting, audited); it does not slide as new candles arrive.
+2. **Promotion gate:** the `backtest` gate reads the holdout result of the registered version once a holdout exists. With no holdout set it keeps today's behaviour and says the evidence is not held out.
+3. **Gaps:** use the latest contiguous segment of each pair and report how many bars were dropped.
+4. **Backfill depth:** as far back as the exchange serves.
+
+Still open and not blocking phase A: whether one chronological holdout is enough or walk-forward windows are wanted (a larger design, not specified here).
 
 ---
 
