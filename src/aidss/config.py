@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     #: Cloudflare and refuses an ordinary HTTP client. Configurable because the
     #: profile that gets through is the thing most likely to need changing when
     #: this breaks.
-    idx_impersonate: str = "chrome"
+    idx_impersonate: str = "chrome120"
 
     #: Optional outbound proxy for the IDX adapter only, `scheme://[user:pass@]host:port`
     #: with scheme http, https, socks5 or socks5h. A datacenter address is treated differently
