@@ -173,3 +173,44 @@ def lowest(values: Sequence[Decimal], period: int, end: int) -> Decimal | None:
     if end < period:
         return None
     return min(values[end - period : end])
+
+
+def directional_lines(
+    candles: Sequence[Candle], period: int
+) -> tuple[list[Decimal | None], list[Decimal | None]]:
+    """Wilder's +DI and -DI, as percentages, aligned to the candles (None before `period`)."""
+    n = len(candles)
+    plus: list[Decimal | None] = [None] * n
+    minus: list[Decimal | None] = [None] * n
+    if n < period + 1:
+        return plus, minus
+    pdm: list[Decimal] = [ZERO]
+    mdm: list[Decimal] = [ZERO]
+    for prev, cur in zip(candles, candles[1:], strict=False):
+        up, down = cur.high - prev.high, prev.low - cur.low
+        pdm.append(up if up > down and up > 0 else ZERO)
+        mdm.append(down if down > up and down > 0 else ZERO)
+    trs = [t or ZERO for t in true_ranges(candles)]
+    s_tr = sum(trs[1 : period + 1], ZERO)
+    s_p = sum(pdm[1 : period + 1], ZERO)
+    s_m = sum(mdm[1 : period + 1], ZERO)
+    for i in range(period, n):
+        if i > period:
+            s_tr = s_tr - s_tr / period + trs[i]
+            s_p = s_p - s_p / period + pdm[i]
+            s_m = s_m - s_m / period + mdm[i]
+        plus[i] = ZERO if s_tr == 0 else Decimal(100) * s_p / s_tr
+        minus[i] = ZERO if s_tr == 0 else Decimal(100) * s_m / s_tr
+    return plus, minus
+
+
+def efficiency_ratio(values: Sequence[Decimal], period: int) -> list[Decimal | None]:
+    """Kaufman's efficiency ratio: net move over `period` bars divided by the path travelled.
+
+    Near 1 the price went one way (trending), near 0 it went nowhere for all its movement (ranging).
+    """
+    out: list[Decimal | None] = [None] * len(values)
+    for i in range(period, len(values)):
+        path = sum((abs(values[k] - values[k - 1]) for k in range(i - period + 1, i + 1)), ZERO)
+        out[i] = ZERO if path == 0 else abs(values[i] - values[i - period]) / path
+    return out

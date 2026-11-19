@@ -512,6 +512,9 @@ class BacktestRunRow(Base):
     cost_model: Mapped[dict[str, Any]] = mapped_column(JSON)
     parameters: Mapped[dict[str, Any]] = mapped_column(JSON)
     data_fingerprint: Mapped[str] = mapped_column(String(64))
+    #: Raw sums behind expectancy, average win and loss, holding time and fees (migration 0010).
+    #: NULL on a run stored before they existed; run it again to fill them.
+    extra_metrics: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     ran_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     ran_by: Mapped[str] = mapped_column(String(64))
 

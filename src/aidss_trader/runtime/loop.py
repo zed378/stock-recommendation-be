@@ -1116,6 +1116,13 @@ class Runtime:
             ),
         )
         equity = equity_override if equity_override is not None else snap.equity
+        if (
+            mode == "PAPER"
+            and pos is not None
+            and signal.kind is SignalKind.NONE
+            and signal.stop_hint is not None
+        ):
+            self._trail_paper_stop(s, pair, signal.stop_hint)
         if signal.kind is SignalKind.NONE or equity is None:
             return
         book = snap.books.get(pair)
@@ -1202,6 +1209,15 @@ class Runtime:
         row = s.scalar(select(OrderIntentRow).where(OrderIntentRow.identity == intent.identity))
         if row is not None:
             row.state = "SENT" if result.order is not None else "REFUSED"
+
+    def _trail_paper_stop(self, s: Session, pair: str, proposed: Decimal) -> None:
+        """A trailing strategy's stop follows the price up and never down (ADR-007)."""
+        stop = s.scalar(
+            select(PositionStop).where(PositionStop.pair == pair, PositionStop.origin == "PAPER")
+        )
+        if stop is not None and proposed > stop.stop_price:
+            stop.stop_price, stop.updated_at = proposed, self._now()
+            s.commit()
 
     # ----------------------------------------------------------------- context
 

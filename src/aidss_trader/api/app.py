@@ -545,6 +545,8 @@ class StrategyDefModel(BaseModel):
     backtest_ran_at: str | None
     paper_enabled: bool = False
     paper_owned_pairs: list[str] = []
+    backtest_expectancy_idr: str | None = None
+    backtest_fees_pct: str | None = None
 
 
 class PaperToggleBody(BaseModel):
@@ -567,10 +569,26 @@ class StrategyPaperData(BaseModel):
     max_enabled: int
 
 
+class BacktestSummaryModel(BaseModel):
+    pairs: int
+    trades: int
+    wins: int
+    win_rate_pct: str | None
+    profit_factor: str | None
+    expectancy_idr: str | None
+    avg_win_idr: str | None
+    avg_loss_idr: str | None
+    avg_hold_hours: str | None
+    fees_pct_of_start: str | None
+    worst_drawdown_pct: str | None
+    complete: bool
+
+
 class StrategyBacktestData(BaseModel):
     strategy_id: str
     version: str | None
     pairs: list[BacktestPairModel]
+    summary: BacktestSummaryModel | None = None
 
 
 class BacktestJobSummaryModel(BaseModel):
@@ -789,6 +807,64 @@ def _own_paper_drawdown(s: Session, strategy_id: str, since: datetime):
         return None
     stats = found.get(strategy_id)
     return None if stats is None else stats.drawdown_pct
+
+
+def _backtest_summary(rows: list[BacktestRunRow]) -> dict[str, Any] | None:
+    """What a strategy's latest runs say together, from raw sums (never an average of averages).
+
+    The expectancy, average win and loss, holding time and fee figures need the sums stored since
+    migration 0010; if any run predates it those figures are None rather than a partial number.
+    """
+    from decimal import Decimal
+
+    if not rows:
+        return None
+    trades = sum(r.trades for r in rows)
+    wins = sum(r.wins for r in rows)
+    full = all(r.extra_metrics for r in rows)
+
+    def total(key: str) -> Decimal:
+        return sum((Decimal(str(r.extra_metrics[key])) for r in rows), Decimal(0))
+
+    def fmt(v: Decimal | None, places: str = "0.01") -> str | None:
+        return None if v is None else format(v.quantize(Decimal(places)), "f")
+
+    win_sum = total("win_sum_idr") if full else None
+    loss_sum = total("loss_sum_idr") if full else None
+    losses = trades - wins
+    return {
+        "pairs": len(rows),
+        "trades": trades,
+        "wins": wins,
+        "win_rate_pct": fmt(Decimal(wins) / trades * 100) if trades else None,
+        "profit_factor": (
+            fmt(win_sum / -loss_sum) if full and loss_sum is not None and loss_sum < 0 else None
+        ),
+        "expectancy_idr": fmt(total("closed_pnl_idr") / trades) if full and trades else None,
+        "avg_win_idr": fmt(win_sum / wins) if full and wins and win_sum is not None else None,
+        "avg_loss_idr": (
+            fmt(loss_sum / losses) if full and losses and loss_sum is not None else None
+        ),
+        "avg_hold_hours": fmt(total("hold_hours_total") / trades, "0.1")
+        if full and trades
+        else None,
+        "fees_pct_of_start": (
+            fmt(
+                sum(
+                    (
+                        Decimal(str(r.extra_metrics["fees_idr"])) / r.start_equity_idr * 100
+                        for r in rows
+                    ),
+                    Decimal(0),
+                ),
+                "0.001",
+            )
+            if full
+            else None
+        ),
+        "worst_drawdown_pct": fmt(max(r.max_drawdown_pct for r in rows), "0.001"),
+        "complete": full,
+    }
 
 
 def create_app(ctx: ApiContext) -> FastAPI:
@@ -1693,6 +1769,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         for d in list_strategy_defs(s):
             version, error = _def_version(d)
             rows = [] if version is None else _latest_rows(s, d.id, version)
+            summary = _backtest_summary(rows)
             row = s.get(StrategyRow, d.id) if d.legacy else None
             out.append(
                 {
@@ -1712,6 +1789,8 @@ def create_app(ctx: ApiContext) -> FastAPI:
                     "backtest_ran_at": _cell(max(x.ran_at for x in rows)) if rows else None,
                     "paper_enabled": d.id in enabled,
                     "paper_owned_pairs": sorted(owned.get(d.id, [])),
+                    "backtest_expectancy_idr": (summary or {}).get("expectancy_idr"),
+                    "backtest_fees_pct": (summary or {}).get("fees_pct_of_start"),
                 }
             )
         return envelope(out, origin="PAPER")
@@ -1978,6 +2057,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
                     )
                     for x in rows
                 ],
+                "summary": _backtest_summary(rows),
             },
             origin="BACKTEST",
         )

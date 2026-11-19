@@ -26,6 +26,18 @@ from aidss_trader.strategy.library import (
     RsiParams,
     RsiReversion,
 )
+from aidss_trader.strategy.variants import (
+    AtrFilterParams,
+    DiParams,
+    EmaAdxAtrFilter,
+    EmaAdxDi,
+    EmaAdxRegime,
+    EmaAdxRising,
+    EmaAdxTrail,
+    RegimeParams,
+    RisingParams,
+    TrailParams,
+)
 
 #: A strategy id is lowercase letters, digits and underscores, so it can be told apart from the
 #: hash in a version id (`<id>-<hash>`).
@@ -113,6 +125,44 @@ KINDS: dict[str, KindSpec] = {
         lambda v: MacdTrend(MacdTrendParams(**v)),  # type: ignore[arg-type]
     ),
 }
+
+
+_EMA = KINDS["ema_adx"].fields
+
+KINDS.update(
+    {
+        "ema_adx_rising": KindSpec(
+            "ema_adx_rising",
+            "trend",
+            (*_EMA, _int("rise_bars", 1, 20, 3)),
+            lambda v: EmaAdxRising(RisingParams(**v)),  # type: ignore[arg-type]
+        ),
+        "ema_adx_di": KindSpec(
+            "ema_adx_di",
+            "trend",
+            (*_EMA, _dec("di_margin", "0", "99", "0")),
+            lambda v: EmaAdxDi(DiParams(**v)),  # type: ignore[arg-type]
+        ),
+        "ema_adx_atr_filter": KindSpec(
+            "ema_adx_atr_filter",
+            "trend",
+            (*_EMA, _dec("min_atr_pct", "0.01", "50", "0.5")),
+            lambda v: EmaAdxAtrFilter(AtrFilterParams(**v)),  # type: ignore[arg-type]
+        ),
+        "ema_adx_trail": KindSpec(
+            "ema_adx_trail",
+            "trend",
+            (*_EMA, _dec("trail_atr_multiple", "0.1", "20", "3")),
+            lambda v: EmaAdxTrail(TrailParams(**v)),  # type: ignore[arg-type]
+        ),
+        "ema_adx_regime": KindSpec(
+            "ema_adx_regime",
+            "trend",
+            (*_EMA, _int("er_period", 2, 100, 10), _dec("er_min", "0.01", "1", "0.3")),
+            lambda v: EmaAdxRegime(RegimeParams(**v)),  # type: ignore[arg-type]
+        ),
+    }
+)
 
 
 class ParameterError(ValueError):

@@ -44,6 +44,11 @@ def test_kinds_list_every_rule_with_bounds_and_no_defaults() -> None:
         "rsi_reversion",
         "bollinger_reversion",
         "macd_trend",
+        "ema_adx_rising",
+        "ema_adx_di",
+        "ema_adx_atr_filter",
+        "ema_adx_trail",
+        "ema_adx_regime",
     }
     assert {f["name"] for f in kinds["rsi_reversion"]["fields"]} >= {"rsi_period", "oversold"}
 

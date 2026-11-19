@@ -15,6 +15,7 @@ import type {
   BacktestJob,
   Strategy,
   StrategyBacktests,
+  BacktestSummary as Summary,
   StrategyDef,
   StrategyKind,
   StrategyPaper,
@@ -202,7 +203,7 @@ function CompareTab({
         <Empty message={t("trader.strategies.empty")} />
       ) : (
         <div className="-mx-4 overflow-x-auto px-4">
-          <table className="w-full min-w-[44rem] text-left text-sm">
+          <table className="w-full min-w-[54rem] text-left text-sm">
             <thead className="text-xs text-muted">
               <tr>
                 <th className="pb-2 pr-3 font-medium">{t("trader.strat.col.name")}</th>
@@ -211,6 +212,8 @@ function CompareTab({
                 <th className="pb-2 pr-3 font-medium">{t("trader.strat.col.paper")}</th>
                 <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.return")}</th>
                 <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.trades")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.expectancy")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.fees")}</th>
                 <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.pairs")}</th>
                 <th className="pb-2 font-medium">{t("trader.strat.col.ranAt")}</th>
               </tr>
@@ -238,6 +241,8 @@ function CompareTab({
                   </td>
                   <td className="py-2 pr-3 text-right font-mono tnum">{pct(d.backtest_return_pct)}</td>
                   <td className="py-2 pr-3 text-right font-mono tnum">{d.backtest_pairs ? d.backtest_trades : "-"}</td>
+                  <td className="py-2 pr-3 text-right font-mono tnum">{d.backtest_expectancy_idr ?? "-"}</td>
+                  <td className="py-2 pr-3 text-right font-mono tnum">{pct(d.backtest_fees_pct)}</td>
                   <td className="py-2 pr-3 text-right font-mono tnum">{d.backtest_pairs || "-"}</td>
                   <td className="py-2 text-xs text-muted">
                     {d.backtest_ran_at ? dateTime(d.backtest_ran_at) : t("trader.strat.neverRun")}
@@ -359,6 +364,8 @@ function StrategyPanel({
             data.pairs.length === 0 ? (
               <Empty message={t("trader.strat.noResults")} />
             ) : (
+              <div className="space-y-5">
+                {data.summary && <BacktestSummary summary={data.summary} />}
               <div className="-mx-4 overflow-x-auto px-4">
                 <table className="w-full min-w-[32rem] text-left text-sm">
                   <thead className="text-xs text-muted">
@@ -384,6 +391,7 @@ function StrategyPanel({
                     ))}
                   </tbody>
                 </table>
+              </div>
               </div>
             )
           }
@@ -515,5 +523,35 @@ function PaperCard({ def }: { def: StrategyDef }) {
         />
       )}
     </Card>
+  );
+}
+
+function BacktestSummary({ summary }: { summary: Summary }) {
+  const { t } = useI18n();
+  const money = (v: string | null) => v ?? "-";
+  const items: [string, string][] = [
+    [t("trader.strat.sum.trades"), String(summary.trades)],
+    [t("trader.strat.sum.winRate"), pct(summary.win_rate_pct)],
+    [t("trader.strat.sum.profitFactor"), money(summary.profit_factor)],
+    [t("trader.strat.sum.expectancy"), money(summary.expectancy_idr)],
+    [t("trader.strat.sum.avgWin"), money(summary.avg_win_idr)],
+    [t("trader.strat.sum.avgLoss"), money(summary.avg_loss_idr)],
+    [t("trader.strat.sum.avgHold"), money(summary.avg_hold_hours)],
+    [t("trader.strat.sum.fees"), pct(summary.fees_pct_of_start)],
+    [t("trader.strat.sum.drawdown"), pct(summary.worst_drawdown_pct)],
+  ];
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted">{t("trader.strat.sum.title")}</h3>
+      <dl className="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-4 border-b border-line py-1.5 text-sm">
+            <dt className="text-xs text-muted">{label}</dt>
+            <dd className="font-mono tnum text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {!summary.complete && <p className="text-xs text-watch">{t("trader.strat.sum.incomplete")}</p>}
+    </div>
   );
 }

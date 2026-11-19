@@ -833,6 +833,33 @@ export interface components {
             /** Strategy Ids */
             strategy_ids?: string[] | null;
         };
+        /** BacktestSummaryModel */
+        BacktestSummaryModel: {
+            /** Avg Hold Hours */
+            avg_hold_hours: string | null;
+            /** Avg Loss Idr */
+            avg_loss_idr: string | null;
+            /** Avg Win Idr */
+            avg_win_idr: string | null;
+            /** Complete */
+            complete: boolean;
+            /** Expectancy Idr */
+            expectancy_idr: string | null;
+            /** Fees Pct Of Start */
+            fees_pct_of_start: string | null;
+            /** Pairs */
+            pairs: number;
+            /** Profit Factor */
+            profit_factor: string | null;
+            /** Trades */
+            trades: number;
+            /** Win Rate Pct */
+            win_rate_pct: string | null;
+            /** Wins */
+            wins: number;
+            /** Worst Drawdown Pct */
+            worst_drawdown_pct: string | null;
+        };
         /** CatalogData */
         CatalogData: {
             /** Pairs */
@@ -1612,6 +1639,7 @@ export interface components {
             pairs: components["schemas"]["BacktestPairModel"][];
             /** Strategy Id */
             strategy_id: string;
+            summary?: components["schemas"]["BacktestSummaryModel"] | null;
             /** Version */
             version: string | null;
         };
@@ -1630,6 +1658,10 @@ export interface components {
         };
         /** StrategyDefModel */
         StrategyDefModel: {
+            /** Backtest Expectancy Idr */
+            backtest_expectancy_idr?: string | null;
+            /** Backtest Fees Pct */
+            backtest_fees_pct?: string | null;
             /** Backtest Pairs */
             backtest_pairs: number;
             /** Backtest Ran At */

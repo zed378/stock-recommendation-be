@@ -75,6 +75,22 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
         assert {"seq", "prev_hash", "hash", "before", "after"} <= columns
 
 
+def test_0010_adds_the_extra_metrics_column_and_keeps_old_rows() -> None:
+    import sqlalchemy as sa
+
+    tenth = _load("0010_backtest_extra_metrics.py")
+    assert tenth.down_revision == "0009_intent_strategy_id"
+    engine = create_engine("sqlite+pysqlite://", poolclass=StaticPool)
+    with engine.begin() as conn:
+        conn.execute(sa.text("CREATE TABLE backtest_run (id INTEGER PRIMARY KEY, pair TEXT)"))
+        conn.execute(sa.text("INSERT INTO backtest_run (pair) VALUES ('BTCIDR')"))
+        with Operations.context(MigrationContext.configure(conn)):
+            tenth.upgrade()
+            tenth.upgrade()
+        assert "extra_metrics" in {c["name"] for c in inspect(conn).get_columns("backtest_run")}
+        assert conn.execute(sa.text("SELECT extra_metrics FROM backtest_run")).scalar() is None
+
+
 def test_0009_adds_the_intent_column_to_a_table_that_lacks_it_and_keeps_old_rows() -> None:
     import sqlalchemy as sa
 

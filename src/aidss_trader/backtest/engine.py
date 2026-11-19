@@ -61,6 +61,7 @@ class Trade:
     exit_price: Decimal
     pnl_net: Decimal
     exit_reason: str
+    fees: Decimal = ZERO  # entry and exit costs together; `pnl_net` is already after them
 
 
 @dataclass(slots=True)
@@ -122,18 +123,28 @@ def run_backtest(
     position = Position()
     stop: Decimal | None = None
     entry_time: datetime | None = None
-    entry_cost_basis = ZERO
+    entry_cost = ZERO
     last_exit_at: datetime | None = None
 
     def close_position(when: datetime, price: Decimal, reason: str, cost: Decimal) -> None:
-        nonlocal cash, position, stop, entry_time, last_exit_at, entry_cost_basis
+        nonlocal cash, position, stop, entry_time, last_exit_at, entry_cost
         qty = position.quantity
         new_pos, realised = apply_fill(position, "SELL", qty, price, cost)
         cash += qty * price - cost
         assert entry_time is not None
         result.trades.append(
-            Trade(entry_time, when, qty, position.avg_cost, price, realised, reason)
+            Trade(
+                entry_time,
+                when,
+                qty,
+                position.avg_cost,
+                price,
+                realised,
+                reason,
+                fees=entry_cost + cost,
+            )
         )
+        entry_cost = ZERO
         position, stop, entry_time, last_exit_at = new_pos, None, None, when
 
     for i, candle in enumerate(candles):
@@ -154,6 +165,15 @@ def run_backtest(
             history, PositionState(position.quantity > 0, None, last_exit_at)
         )
         nxt = candles[i + 1]
+
+        if (
+            signal.kind is SignalKind.NONE
+            and position.quantity > 0
+            and stop is not None
+            and signal.stop_hint is not None
+            and signal.stop_hint > stop
+        ):
+            stop = signal.stop_hint  # a trailing stop only ever rises (ADR-007)
 
         if signal.kind is SignalKind.EXIT and position.quantity > 0:
             fill = paper.market("SELL", position.quantity, nxt.open)
@@ -179,7 +199,7 @@ def run_backtest(
                 continue  # one candle to fill, then abandoned
             position, _ = apply_fill(position, "BUY", fill.quantity, fill.price, fill.cost)
             cash -= fill.quantity * fill.price + fill.cost
-            stop, entry_time = intent.stop_price, nxt.open_time
+            stop, entry_time, entry_cost = intent.stop_price, nxt.open_time, fill.cost
             if stop is not None and nxt.low <= stop:  # pessimistic: the stop is assumed hit
                 exit_price = paper.market("SELL", position.quantity, min(nxt.open, stop))
                 close_position(nxt.open_time, exit_price.price, "stop_same_candle", exit_price.cost)
@@ -200,6 +220,10 @@ def _metrics(result: BacktestResult, start: Decimal) -> dict[str, Decimal | int]
             max_dd = max(max_dd, (peak - eq) / peak * 100)
     gross_loss = -sum(losses, ZERO)
     count = len(result.trades)
+    hold_hours = sum(
+        (Decimal((t.exit_time - t.entry_time).total_seconds()) / 3600 for t in result.trades),
+        ZERO,
+    )
     return {
         "trades": count,
         "wins": len(wins),
@@ -207,7 +231,17 @@ def _metrics(result: BacktestResult, start: Decimal) -> dict[str, Decimal | int]
         "total_return_pct": (result.final_equity - start) / start * 100 if start else ZERO,
         "max_drawdown_pct": max_dd,
         "profit_factor": (sum(wins, ZERO) / gross_loss) if gross_loss > 0 else Decimal(-1),
+        # Raw sums, so results of several pairs can be added up and the averages taken afterwards
+        # (an average of per-pair averages would weight a one-trade pair like a fifty-trade one).
+        "closed_pnl_idr": sum((t.pnl_net for t in result.trades), ZERO),
+        "win_sum_idr": sum(wins, ZERO),
+        "loss_sum_idr": sum(losses, ZERO),
+        "hold_hours_total": hold_hours,
+        "fees_idr": sum((t.fees for t in result.trades), ZERO),
     }
+
+
+EXTRA_METRICS = ("closed_pnl_idr", "win_sum_idr", "loss_sum_idr", "hold_hours_total", "fees_idr")
 
 
 def _json_safe(value: object) -> object:
@@ -255,6 +289,7 @@ def record_backtest(
         cost_model=cost_model,
         parameters=parameters,
         data_fingerprint=result.data_fingerprint,
+        extra_metrics={k: str(result.metrics.get(k, ZERO)) for k in EXTRA_METRICS},
         ran_at=at,
         ran_by=by,
     )
