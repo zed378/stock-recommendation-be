@@ -20,6 +20,11 @@ GIT_USR_BIN = Path(r"C:\Program Files\Git\usr\bin")
 pytestmark = pytest.mark.skipif(BASH is None, reason="needs a POSIX shell")
 
 STUB = """#!/bin/sh
+if [ "$1" = inspect ]; then
+    printf '%s\n' "$@" > "$STUB_DIR/inspect_args.txt"
+    [ -n "${STUB_INSPECT:-}" ] && echo "$STUB_INSPECT"
+    exit "${STUB_INSPECT_RC:-0}"
+fi
 printf '%s\n' "$@" > "$STUB_DIR/args.txt"
 env | grep '^AIDSS_' | sed 's/=.*//' > "$STUB_DIR/env_names.txt"
 echo "${STUB_OUT:-anchored seq=1 head_hash=abc file=/anchor/anchor.jsonl}"
@@ -27,7 +32,14 @@ exit "${STUB_RC:-0}"
 """
 
 
-def run(tmp_path: Path, env_lines: list[str], *, rc: int = 0, out: str | None = None):
+def run(
+    tmp_path: Path,
+    env_lines: list[str],
+    *,
+    rc: int = 0,
+    out: str | None = None,
+    extra_env: dict[str, str] | None = None,
+):
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
     docker = stub_dir / "docker"
@@ -53,6 +65,7 @@ def run(tmp_path: Path, env_lines: list[str], *, rc: int = 0, out: str | None = 
     }
     if out is not None:
         env["STUB_OUT"] = out
+    env.update(extra_env or {})
     done = subprocess.run(
         [BASH, str(SCRIPT)], env=env, capture_output=True, text=True, timeout=30
     )
@@ -86,7 +99,7 @@ def test_the_container_is_locked_down_and_writes_only_the_anchor_directory(tmp_p
     args = (tmp_path / "args.txt").read_text().split()
     for flag in ("--rm", "--read-only", "--cap-drop", "ALL", "no-new-privileges"):
         assert flag in args
-    assert "zed378/aidss-trader:7d03693" in args and "latest" not in " ".join(args)
+    assert "zed378/aidss-trader:latest" in args  # the fallback: the stub reports no running Trader
     assert args[args.index("--out") + 1] == "/anchor/anchor.jsonl"
     assert any(a.endswith(":/anchor") for a in args)
 
@@ -118,3 +131,60 @@ def test_a_missing_url_anchors_nothing_and_says_so(tmp_path) -> None:
     assert done.returncode == 3
     assert not (tmp_path / "args.txt").exists()  # docker was never called
     assert "not found" in (anchor_dir / "anchor.log").read_text()
+
+
+def _image_arg(tmp_path: Path) -> str:
+    args = (tmp_path / "args.txt").read_text().splitlines()
+    return args[args.index("python") - 1]
+
+
+def test_it_runs_the_image_the_trader_container_is_running(tmp_path) -> None:
+    done, _ = run(
+        tmp_path,
+        ["AIDSS_TRADER_DATABASE_URL=postgresql://t:p@db/x"],
+        extra_env={"STUB_INSPECT": "zed378/aidss-trader:9ae191a"},
+    )
+    assert done.returncode == 0
+    assert _image_arg(tmp_path) == "zed378/aidss-trader:9ae191a"
+    inspected = (tmp_path / "inspect_args.txt").read_text().splitlines()
+    assert inspected[0] == "inspect" and inspected[-1] == "stocks-trader-1"
+    log = (tmp_path / "anchor" / "anchor.log").read_text()
+    assert "image=zed378/aidss-trader:9ae191a" in log
+
+
+def test_without_a_running_trader_it_falls_back_to_latest(tmp_path) -> None:
+    done, _ = run(
+        tmp_path,
+        ["AIDSS_TRADER_DATABASE_URL=postgresql://t:p@db/x"],
+        extra_env={"STUB_INSPECT_RC": "1"},
+    )
+    assert done.returncode == 0
+    assert _image_arg(tmp_path) == "zed378/aidss-trader:latest"
+
+
+def test_an_odd_image_name_from_inspect_is_not_used(tmp_path) -> None:
+    done, _ = run(
+        tmp_path,
+        ["AIDSS_TRADER_DATABASE_URL=postgresql://t:p@db/x"],
+        extra_env={"STUB_INSPECT": "evil; rm -rf /"},
+    )
+    assert done.returncode == 0
+    assert _image_arg(tmp_path) == "zed378/aidss-trader:latest"
+
+
+def test_an_explicit_image_wins_and_a_bad_one_is_refused(tmp_path) -> None:
+    done, _ = run(
+        tmp_path,
+        ["AIDSS_TRADER_DATABASE_URL=postgresql://t:p@db/x"],
+        extra_env={"AIDSS_ANCHOR_IMAGE": "zed378/aidss-trader:473436d", "STUB_INSPECT": "x:y"},
+    )
+    assert done.returncode == 0 and _image_arg(tmp_path) == "zed378/aidss-trader:473436d"
+    other = tmp_path / "second"
+    other.mkdir()
+    done, _ = run(
+        other,
+        ["AIDSS_TRADER_DATABASE_URL=postgresql://t:p@db/x"],
+        extra_env={"AIDSS_ANCHOR_IMAGE": "bad image; x"},
+    )
+    assert done.returncode == 3
+    assert not (other / "args.txt").exists()  # nothing was started
