@@ -195,6 +195,8 @@ def _plain(params: dict[str, Any]) -> dict[str, str]:
 def list_strategy_defs(session: Session) -> list[StrategyDef]:
     out: list[StrategyDef] = []
     for row in session.scalars(select(TraderSetting).order_by(TraderSetting.key)):
+        if row.value.get("deleted") is True:
+            continue  # a removed definition (see `delete_strategy_def`)
         if row.key.startswith(STRATEGY_PREFIX):
             sid = row.key[len(STRATEGY_PREFIX) :]
             out.append(StrategyDef(sid, "ema_adx", sid, _plain(row.value), legacy=True))
@@ -235,26 +237,32 @@ def set_strategy_def(
 def delete_strategy_def(
     session: Session, strategy_id: str, *, by: str, now: datetime | None = None
 ) -> bool:
-    """Remove a definition, wherever it is stored. Backtest rows and every audit entry stay."""
+    """Remove a definition, wherever it is stored. Backtest rows and every audit entry stay.
+
+    The row is replaced by a tombstone, never deleted: `trader_rw` has no DELETE on
+    `trader_setting` (it is not meant to), and the audit entry keeps the old value. Every reader
+    treats a tombstone as "not defined", and the id can be created again later.
+    """
     existing = get_strategy_def(session, strategy_id)
     if existing is None:
         return False
     key = (STRATEGY_PREFIX if existing.legacy else STRATEGY_DEF_PREFIX) + strategy_id
     row = session.get(TraderSetting, key)
     assert row is not None
+    when = now or datetime.now(UTC)
     before = row.value
-    session.delete(row)
+    row.value, row.updated_at, row.updated_by = {"deleted": True}, when, by
     flag = session.get(TraderSetting, STRATEGY_ENABLED_PREFIX + strategy_id)
     if flag is not None:
-        session.delete(flag)
+        flag.value, flag.updated_at, flag.updated_by = {"enabled": False}, when, by
     AuditLogger(session).record(
         actor=by,
         action="setting.delete",
         subject_type="setting",
         subject_id=key,
         before=before,
-        after=None,
-        at=now or datetime.now(UTC),
+        after={"deleted": True},
+        at=when,
     )
     session.flush()
     return True
@@ -356,7 +364,7 @@ def set_strategy_params(
 def load_strategy(session: Session, strategy_id: str = "ema_adx") -> EmaAdxStrategy | None:
     """The configured strategy, or None when unset or invalid. Never a guessed one."""
     row = session.get(TraderSetting, STRATEGY_PREFIX + strategy_id)
-    if row is None:
+    if row is None or row.value.get("deleted") is True:
         return None
     v = row.value
     try:
@@ -457,7 +465,7 @@ def set_paper_settings(
 def get_strategy_params(session: Session, strategy_id: str) -> dict[str, str] | None:
     """The stored parameters as plain strings for display, or None when never set."""
     row = session.get(TraderSetting, STRATEGY_PREFIX + strategy_id)
-    if row is None:
+    if row is None or row.value.get("deleted") is True:
         return None
     return {k: ("" if v is None else str(v)) for k, v in row.value.items()}
 

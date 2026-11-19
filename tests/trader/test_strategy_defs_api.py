@@ -124,3 +124,52 @@ def test_a_backtest_without_the_owners_numbers_fails_with_a_reason() -> None:
     assert job["state"] == "FAILED" and job["error"]
     assert call("POST", "/backtests", {"strategy_ids": ["nope"]}).status_code == 404
     assert call("GET", "/backtests/missing").status_code == 404
+
+
+def test_deleting_a_strategy_never_issues_a_sql_delete() -> None:
+    """`trader_rw` has no DELETE on `trader_setting`; a real delete answered 500 on the VM. The
+    SQLite tests cannot see a missing privilege, so this watches the statements instead."""
+    from sqlalchemy import event
+
+    w = World("PAPER", configured=True)
+    call = api_for(w)
+    _create(call)
+    call("PUT", "/strategies/ema_adx/parameters", EMA_BODY)
+    statements: list[str] = []
+    event.listen(
+        w.engine, "before_cursor_execute", lambda c, cur, stmt, *a: statements.append(stmt)
+    )
+    assert call("DELETE", "/strategy-defs/my_breakout").status_code == 200
+    assert call("DELETE", "/strategy-defs/ema_adx").status_code == 200
+    # (the idempotency table is the one `trader_rw` may delete from)
+    deletes = [x for x in statements if x.lstrip().upper().startswith("DELETE")]
+    assert not [x for x in deletes if "trader_setting" in x]
+
+
+def test_a_deleted_strategy_is_gone_everywhere_and_its_id_can_be_reused() -> None:
+    w = World("PAPER", configured=True)
+    call = api_for(w)
+    _create(call)
+    call("PUT", "/strategy-defs/my_breakout/paper", {"enabled": True})
+    assert call("DELETE", "/strategy-defs/my_breakout").status_code == 200
+    ids = {d["id"] for d in call("GET", "/strategy-defs").json()["data"]}
+    assert "my_breakout" not in ids
+    assert call("GET", "/strategy-defs/my_breakout/paper").status_code == 404
+    assert call("DELETE", "/strategy-defs/ema_adx").status_code == 200
+    got = call("GET", "/strategies/ema_adx/parameters").json()["data"]
+    assert got["configured"] is False and got["params"] is None
+    again = _create(call)
+    assert again.status_code == 201
+    listed = {d["id"]: d for d in call("GET", "/strategy-defs").json()["data"]}
+    assert listed["my_breakout"]["paper_enabled"] is False  # the old switch did not come back
+
+
+EMA_BODY = {
+    "ema_fast": 3,
+    "ema_slow": 6,
+    "adx_period": 3,
+    "adx_threshold": "30",
+    "atr_period": 3,
+    "atr_stop_multiple": "2",
+    "cooldown_s": 0,
+}
