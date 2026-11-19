@@ -209,3 +209,70 @@ class EmaAdxRegime(_Variant):
         if ratio is None or ratio < p.er_min:
             return "ranging_market", snapshot(efficiency_ratio=ratio, er_min=p.er_min)
         return None
+
+
+# --------------------------------------------------------------- combined (ADR-063)
+#
+# The reference with the DI confirmation (D2) as the parent, plus one more filter each. The DI check
+# runs first, so a blocked entry reports the first filter that refused it. Because every filter only
+# removes entries, a combined variant enters exactly where both single-filter variants enter.
+
+
+@dataclass(frozen=True, slots=True)
+class DiRisingParams(DiParams):
+    rise_bars: int
+
+    def __post_init__(self) -> None:
+        DiParams.__post_init__(self)
+        if self.rise_bars < 1:
+            raise ValueError("rise_bars must be at least 1")
+
+
+class EmaAdxDiRising(EmaAdxDi):
+    """D6: +DI above -DI, and ADX rising."""
+
+    name = "ema_adx_di_rising"
+    strategy_id = name
+
+    def _extra_history(self) -> int:
+        p = self.params
+        return 2 * p.adx_period + p.rise_bars
+
+    def _blocked(self, candles):
+        blocked = super()._blocked(candles)
+        if blocked is not None:
+            return blocked
+        p = self.params
+        series = adx(candles, p.adx_period)
+        now, before = series[-1], series[-1 - p.rise_bars]
+        if now is None or before is None or now <= before:
+            return "adx_not_rising", snapshot(adx_now=now, adx_before=before)
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class DiAtrParams(DiParams):
+    min_atr_pct: Decimal
+
+    def __post_init__(self) -> None:
+        DiParams.__post_init__(self)
+        if not 0 < self.min_atr_pct < 100:
+            raise ValueError("min_atr_pct must be above 0 and below 100")
+
+
+class EmaAdxDiAtrFilter(EmaAdxDi):
+    """D7: +DI above -DI, and enough volatility."""
+
+    name = "ema_adx_di_atr_filter"
+    strategy_id = name
+
+    def _blocked(self, candles):
+        blocked = super()._blocked(candles)
+        if blocked is not None:
+            return blocked
+        p = self.params
+        vol, close = atr(candles, p.atr_period)[-1], candles[-1].close
+        share = None if vol is None or close <= 0 else vol / close * 100
+        if share is None or share < p.min_atr_pct:
+            return "volatility_too_low", snapshot(atr_pct=share, min_atr_pct=p.min_atr_pct)
+        return None

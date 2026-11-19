@@ -351,3 +351,63 @@ def test_the_paper_stop_follows_a_trailing_strategy_up_and_never_down() -> None:
         w.runtime._trail_paper_stop(s, "AAAIDR", D("105"))  # lower: ignored
         stops = {x.origin: x.stop_price for x in s.query(PositionStop)}
     assert stops == {"PAPER": D("110"), "LIVE": D("100")}  # the live stop is never touched
+
+
+# ------------------------------------------------------------------- combined
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_combined_variant_enters_exactly_where_both_of_its_filters_do(seed: int) -> None:
+    from aidss_trader.strategy.variants import (
+        DiAtrParams,
+        DiRisingParams,
+        EmaAdxDiAtrFilter,
+        EmaAdxDiRising,
+    )
+
+    cs = walk(seed)
+    di = EmaAdxDi(DiParams(**BASE, di_margin=D("0")))
+    rising = EmaAdxRising(RisingParams(**BASE, rise_bars=2))
+    vol = EmaAdxAtrFilter(AtrFilterParams(**BASE, min_atr_pct=D("1.5")))
+    d6 = EmaAdxDiRising(DiRisingParams(**BASE, di_margin=D("0"), rise_bars=2))
+    d7 = EmaAdxDiAtrFilter(DiAtrParams(**BASE, di_margin=D("0"), min_atr_pct=D("1.5")))
+    start = max(s.min_history() for s in (di, rising, vol, d6, d7))
+
+    def enters(strategy):
+        return {
+            i
+            for i in range(start, len(cs) + 1)
+            if strategy.evaluate(cs[:i], FLAT).kind is SignalKind.ENTRY
+        }
+
+    assert enters(d6) == enters(di) & enters(rising)
+    assert enters(d7) == enters(di) & enters(vol)
+
+
+def test_a_combined_variant_reports_the_first_filter_that_refused_and_keeps_the_exit() -> None:
+    from aidss_trader.strategy.variants import DiAtrParams, EmaAdxDiAtrFilter
+
+    core = EmaAdxStrategy(PARAMS)
+    d7 = EmaAdxDiAtrFilter(DiAtrParams(**BASE, di_margin=D("0"), min_atr_pct=D("99")))
+    reasons, saw_exit = set(), False
+    for seed in SEEDS:
+        cs = walk(seed)
+        for i in range(d7.min_history(), len(cs) + 1):
+            if core.evaluate(cs[:i], FLAT).kind is SignalKind.ENTRY:
+                reasons.add(d7.evaluate(cs[:i], FLAT).reason)
+            if core.evaluate(cs[:i], LONG).kind is SignalKind.EXIT:
+                saw_exit = d7.evaluate(cs[:i], LONG).kind is SignalKind.EXIT
+    assert reasons <= {"di_not_confirming", "volatility_too_low"} and reasons
+    assert saw_exit
+
+
+def test_the_builder_offers_the_combined_kinds_and_refuses_missing_numbers() -> None:
+    parent = {k: str(v) for k, v in BASE.items()}
+    d6 = build_strategy("ema_adx_di_rising", {**parent, "di_margin": "0", "rise_bars": "3"})
+    d7 = build_strategy("ema_adx_di_atr_filter", {**parent, "di_margin": "0", "min_atr_pct": "0.5"})
+    assert d6.version_id().startswith("ema_adx_di_rising-")
+    assert d7.version_id().startswith("ema_adx_di_atr_filter-")
+    with pytest.raises(ParameterError, match="rise_bars"):
+        build_strategy("ema_adx_di_rising", {**parent, "di_margin": "0"})
+    with pytest.raises(ParameterError, match="min_atr_pct"):
+        build_strategy("ema_adx_di_atr_filter", {**parent, "di_margin": "0"})

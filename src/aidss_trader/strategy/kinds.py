@@ -28,9 +28,13 @@ from aidss_trader.strategy.library import (
 )
 from aidss_trader.strategy.variants import (
     AtrFilterParams,
+    DiAtrParams,
     DiParams,
+    DiRisingParams,
     EmaAdxAtrFilter,
     EmaAdxDi,
+    EmaAdxDiAtrFilter,
+    EmaAdxDiRising,
     EmaAdxRegime,
     EmaAdxRising,
     EmaAdxTrail,
@@ -142,6 +146,18 @@ KINDS.update(
             "trend",
             (*_EMA, _dec("di_margin", "0", "99", "0")),
             lambda v: EmaAdxDi(DiParams(**v)),  # type: ignore[arg-type]
+        ),
+        "ema_adx_di_rising": KindSpec(
+            "ema_adx_di_rising",
+            "trend",
+            (*_EMA, _dec("di_margin", "0", "99", "0"), _int("rise_bars", 1, 20, 3)),
+            lambda v: EmaAdxDiRising(DiRisingParams(**v)),  # type: ignore[arg-type]
+        ),
+        "ema_adx_di_atr_filter": KindSpec(
+            "ema_adx_di_atr_filter",
+            "trend",
+            (*_EMA, _dec("di_margin", "0", "99", "0"), _dec("min_atr_pct", "0.01", "50", "0.5")),
+            lambda v: EmaAdxDiAtrFilter(DiAtrParams(**v)),  # type: ignore[arg-type]
         ),
         "ema_adx_atr_filter": KindSpec(
             "ema_adx_atr_filter",
