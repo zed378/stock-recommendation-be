@@ -24,9 +24,19 @@ class CostModel:
     tax_pct: Decimal
     clearing_pct: Decimal
 
-    def cost(self, quote_value: Decimal, *, maker: bool) -> Decimal:
+    def cost(self, quote_value: Decimal, *, maker: bool, side: str) -> Decimal:
+        """Fee and bourse (clearing) fee on every fill, tax on a **sale** only.
+
+        This mirrors Indodax's own breakdown for the IDR market, read from the owner's account
+        screen on 2026-11-19: buying costs the service fee plus the bourse fee (tax 0%); selling
+        adds the 0.21% income tax on top. Charging the tax on both sides, as this model first did,
+        counted it twice per round trip.
+        """
+        if side not in ("BUY", "SELL"):
+            raise ValueError("side must be BUY or SELL")
         fee = self.maker_fee_pct if maker else self.taker_fee_pct
-        return quote_value * (fee + self.tax_pct + self.clearing_pct) / 100
+        tax = self.tax_pct if side == "SELL" else Decimal(0)
+        return quote_value * (fee + tax + self.clearing_pct) / 100
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +78,9 @@ class PaperExecutor:
         if not through:
             return None
         qty = remaining * self._cfg.partial_fill_fraction
-        return PaperFill(price, qty, True, self._cfg.costs.cost(qty * price, maker=True))
+        return PaperFill(
+            price, qty, True, self._cfg.costs.cost(qty * price, maker=True, side=side)
+        )
 
     def check_moc(self, side: str, price: Decimal, book: BookTicker) -> None:
         crosses = price >= book.ask_price if side == "BUY" else price <= book.bid_price
@@ -80,5 +92,5 @@ class PaperExecutor:
         slip = self._cfg.slippage_pct / 100
         price = reference * (1 + slip) if side == "BUY" else reference * (1 - slip)
         return PaperFill(
-            price, quantity, False, self._cfg.costs.cost(quantity * price, maker=False)
+            price, quantity, False, self._cfg.costs.cost(quantity * price, maker=False, side=side)
         )

@@ -38,8 +38,8 @@
     "partial_fill_fraction": "0.50",
     "maker_fee_pct": "0.10",
     "taker_fee_pct": "0.20",
-    "tax_pct": "0.25",
-    "clearing_pct": "0.05",
+    "tax_pct": "0.21",
+    "clearing_pct": "0.00555",
     "start_equity_idr": "1000000"
   },
   "allowlist": {

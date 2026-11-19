@@ -39,7 +39,10 @@ def test_every_starter_profile_is_proposed_or_owner_accepted_and_has_no_problem(
         if profile["status"] == "accepted":
             # Only the owner's decision may flip it, and the record must say so.
             assert profile["decision"]["accepted_by"] == "owner", path.name
-            assert "tax_pct" in profile["decision"]["unverified"], path.name
+            # The paper costs are the ones read from the owner's account screen, not placeholders.
+            assert "account screen" in profile["decision"]["paper_costs"], path.name
+            assert profile["paper"]["tax_pct"] == "0.21", path.name
+            assert profile["paper"]["clearing_pct"] == "0.00555", path.name
         assert _checker().problems(profile) == [], path.name
 
 

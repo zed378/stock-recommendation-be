@@ -349,3 +349,30 @@ def test_a_gap_down_through_the_stop_exits_at_the_gap_not_at_the_stop() -> None:
 def test_backtest_needs_every_cost_so_it_cannot_run_on_a_guess() -> None:
     with pytest.raises(TypeError):
         CostModel(D("0.1"), D("0.2"))  # type: ignore[call-arg]
+
+
+def test_the_tax_is_charged_on_a_sale_only_as_indodax_does() -> None:
+    """Read from the owner's account screen (IDR market): buy = service fee + bourse fee, tax 0%;
+    sell = service fee + 0.21% tax + bourse fee. The model first charged the tax on both sides."""
+    costs = CostModel(D("0.1"), D("0.2"), D("0.21"), D("0.00555"))
+    value = D("1000000")
+    assert costs.cost(value, maker=True, side="BUY") == value * D("0.10555") / 100
+    assert costs.cost(value, maker=False, side="BUY") == value * D("0.20555") / 100
+    assert costs.cost(value, maker=True, side="SELL") == value * D("0.31555") / 100
+    assert costs.cost(value, maker=False, side="SELL") == value * D("0.41555") / 100
+
+
+def test_a_round_trip_pays_the_tax_once() -> None:
+    costs = CostModel(D("0.1"), D("0.2"), D("0.21"), D("0.00555"))
+    value = D("100000")
+    round_trip = costs.cost(value, maker=True, side="BUY") + costs.cost(
+        value, maker=True, side="SELL"
+    )
+    assert round_trip == value * D("0.42110") / 100  # 0.10555 + 0.31555, not 0.10555 + 0.52555
+
+
+def test_a_cost_needs_a_known_side() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        CostModel(D("0.1"), D("0.2"), D("0.21"), D("0.005")).cost(D("1"), maker=True, side="HOLD")

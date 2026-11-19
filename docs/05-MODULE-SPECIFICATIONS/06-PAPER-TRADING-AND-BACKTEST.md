@@ -14,7 +14,7 @@ Both exist to produce **evidence**, not reassurance. Neither can establish that 
 - Same strategy code, same Intent Builder, same Risk Engine, same order state machine as live. Only the
   final step differs.
 - Output is `origin = PAPER` or `BACKTEST` everywhere, and is never shown as real (FR-T28, FR-T30).
-- The **cost model** includes maker and taker fees, tax, and clearing for the owner's account. Its values
+- The **cost model** includes maker and taker fees, tax, and clearing for the owner's account. The fee and the bourse (clearing) fee apply to every fill; the **tax applies to sales only** (ADR-060, read from the owner's Indodax account screen on 2026-11-19). Its values
   are not known (OQ-5); a backtest cannot run until they are configured, and the values used are stored with
   the run.
 

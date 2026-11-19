@@ -131,7 +131,8 @@ def test_a_fill_is_a_paper_order_and_paper_fill_with_costs_and_a_stop(session) -
     fill = session.scalar(select(Fill))
     assert order.origin == "PAPER" and order.purpose == "ENTRY" and order.state == "FILLED"
     assert fill.origin == "PAPER" and fill.price == D("100") and fill.quantity == D("2")
-    assert close(fill.commission, D("200") * D("0.21") / 100) and fill.is_maker is True
+    # A buy pays the fee and the bourse fee, never the tax (0.1 + 0.01 here; the tax is 0.1).
+    assert close(fill.commission, D("200") * D("0.11") / 100) and fill.is_maker is True
     assert fill.exchange_trade_id.startswith("paper-") and order.client_order_id.startswith("pp")
     stop = session.scalar(select(PositionStop))
     assert stop.origin == "PAPER" and stop.stop_price == D("90")

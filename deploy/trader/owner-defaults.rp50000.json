@@ -5,8 +5,8 @@
     "accepted_by": "owner",
     "accepted_on": "2026-11-18",
     "scope": "all values as written, chosen over the Rp 1,000,000 profile in a multiple-choice answer",
-    "unverified": "paper.tax_pct (0.25) and paper.clearing_pct (0.05) are placeholders, not observed values (OQ-5); every paper result built on them is an estimate",
-    "applied": "not yet: the owner runs import_owner_profile.py, dry run first, then --apply with their own password"
+    "paper_costs": "revised 2026-11-19 from the owner's own Indodax account screen (IDR market, PRO): buy = service fee 0.1% (maker) or 0.2% (taker) + bourse fee 0.00555%, tax 0%; sell = the same + tax 0.21%. So tax_pct 0.21 is charged on sales only and clearing_pct 0.00555 is the bourse fee (ADR-060). This replaces the placeholders 0.25 and 0.05; OQ-5 is answered for the IDR market",
+    "applied": "the first version was applied by the owner on 2026-11-18; the revised paper costs are not applied until the owner runs import_owner_profile.py again, dry run first, then --apply (lowering costs asks for the password)"
   },
   "basis": {
     "equity_idr": "50000",
@@ -45,8 +45,8 @@
     "partial_fill_fraction": "0.50",
     "maker_fee_pct": "0.10",
     "taker_fee_pct": "0.20",
-    "tax_pct": "0.25",
-    "clearing_pct": "0.05",
+    "tax_pct": "0.21",
+    "clearing_pct": "0.00555",
     "start_equity_idr": "50000"
   },
   "allowlist": {

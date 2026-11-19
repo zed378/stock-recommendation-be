@@ -1481,10 +1481,10 @@ export const id = {
   "trader.paper.maker.hint": "Dikenakan pada order limit yang terisi (entry).",
   "trader.paper.taker.label": "Biaya taker",
   "trader.paper.taker.hint": "Dikenakan pada order market (stop dan exit sinyal).",
-  "trader.paper.tax.label": "Pajak",
-  "trader.paper.tax.hint": "Persentase dari nilai transaksi. Perlu disesuaikan dengan biaya transaksi nyata di bursa.",
-  "trader.paper.clearing.label": "Biaya kliring",
-  "trader.paper.clearing.hint": "Persentase dari nilai transaksi. Perlu disesuaikan dengan biaya kliring nyata di bursa.",
+  "trader.paper.tax.label": "Pajak (hanya saat jual)",
+  "trader.paper.tax.hint": "Persentase dari nilai penjualan. Pajak penghasilan final dipungut hanya saat jual; pembelian tidak dikenai. Baca angkanya dari layar biaya trading akun Anda di Indodax.",
+  "trader.paper.clearing.label": "Biaya bursa (kliring)",
+  "trader.paper.clearing.hint": "Persentase dari nilai transaksi, dikenakan saat beli maupun jual. Ditulis \"Bourse Fee\" di layar biaya trading Indodax.",
 
   // --- trader credentials ---------------------------------------------------
   "nav.traderCredentials": "Kredensial",
@@ -3011,10 +3011,10 @@ export const en: Record<MessageKey, string> = {
   "trader.paper.maker.hint": "Charged on a limit order that fills (entries).",
   "trader.paper.taker.label": "Taker fee",
   "trader.paper.taker.hint": "Charged on a market order (stops and signal exits).",
-  "trader.paper.tax.label": "Tax",
-  "trader.paper.tax.hint": "Percentage of trade value. Adjust this to match your actual exchange fills.",
-  "trader.paper.clearing.label": "Clearing fee",
-  "trader.paper.clearing.hint": "Percentage of trade value. Adjust this to match your actual exchange clearing fees.",
+  "trader.paper.tax.label": "Tax (sales only)",
+  "trader.paper.tax.hint": "Percentage of the sale value. The final income tax is charged on sales only; purchases carry none. Read it from the trading fee screen of your Indodax account.",
+  "trader.paper.clearing.label": "Bourse (clearing) fee",
+  "trader.paper.clearing.hint": "Percentage of trade value, charged on both buys and sells. Shown as \"Bourse Fee\" on the Indodax trading fee screen.",
 
   // --- trader credentials ---------------------------------------------------
   "nav.traderCredentials": "Credentials",
