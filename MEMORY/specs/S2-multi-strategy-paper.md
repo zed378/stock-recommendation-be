@@ -135,12 +135,14 @@ None. Paper never calls the exchange. LIVE behaviour is unchanged, and an archit
 
 ---
 
-## Open Questions
+## Decisions (owner, 2026-11-19)
 
-1. **Shared account or split capital.** Proposed: shared (one account, strategies compete for the same equity and limits), because it mirrors a single real account. Split capital would isolate strategies but is a different test, and the owner's account is Rp 74,000, too small to split.
-2. **`max_open_positions` in paper.** If the stored value is 1, only one strategy holds a position at any time across the whole market, so most strategies would be starved and the comparison would mostly measure who signals first. Options: keep paper at the live value (honest to what live could do, poor for comparing strategies), or give paper its own higher value (good for comparison, but then paper no longer mirrors live limits and the evidence for promotion is looser). This is a loss-limiting number and is not defaulted here: the owner chooses.
-3. **Tie-break on a same-candle collision.** Proposed: ascending `strategy_id`. Alternatives: skip both (nobody enters, unfair to nobody), or rotate by candle. Ascending id is simple and deterministic but favours early ids.
-4. **Cap of 8 enabled strategies.** Confirm or change.
+1. **Shared paper account.** One account, one equity, one set of limits.
+2. **Paper obeys the live `max_open_positions`.** The stored value on the VM is **1** (read 2026-11-19; the exposure caps are 40% per pair and 40% in total). Consequence the owner accepted: with a limit of 1, only one strategy holds a position at any time across all pairs, so a paper comparison between strategies measures partly who signals first, not only how good the rules are. The owner may later raise the limit (a deliberate, password-protected change) or ask for a paper-only number; that is not decided here.
+3. **Same-candle collision: ascending `strategy_id`.**
+4. **At most 8 strategies enabled at once.**
+
+Nothing else is open. The implementation is not started.
 
 ---
 
