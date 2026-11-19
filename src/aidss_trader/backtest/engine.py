@@ -37,15 +37,14 @@ from aidss_trader.intents.builder import build_entry_intent
 from aidss_trader.ledger.position import Position, apply_fill
 from aidss_trader.market_data.pairs import PairRules
 from aidss_trader.paper.executor import PaperConfig, PaperExecutor
-from aidss_trader.strategy.base import PositionState, SignalKind
-from aidss_trader.strategy.ema_adx import EmaAdxStrategy
+from aidss_trader.strategy.base import PositionState, SignalKind, Strategy
 
 ZERO = Decimal(0)
 
 
 @dataclass(frozen=True, slots=True)
 class BacktestConfig:
-    strategy: EmaAdxStrategy
+    strategy: Strategy
     limits: RiskLimits
     rules: PairRules
     paper: PaperConfig

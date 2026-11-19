@@ -34,6 +34,7 @@ from aidss_trader.approvals import ApprovalRefused, ApprovalWorkflow, intent_has
 from aidss_trader.audit import AuditLogger
 from aidss_trader.auth.stepup import StepUp, StepUpRefused
 from aidss_trader.auth.verify import AuthFailed, Principal, TokenVerifier
+from aidss_trader.backtest.jobs import BacktestJobs, summarise
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
 from aidss_trader.connector.errors import ConnectorError
 from aidss_trader.connector.port import ExchangeClient
@@ -59,6 +60,7 @@ from aidss_trader.export import export_audit, export_ledger
 from aidss_trader.intents import Intent, intent_from_row
 from aidss_trader.killswitch import KillSwitch, KillSwitchRefused
 from aidss_trader.notify import Notifier
+from aidss_trader.orders.state import TERMINAL
 from aidss_trader.paper import CostModel, PaperConfig
 from aidss_trader.promotion import Promotion, PromotionRefused, SuppliedEvidence, Thresholds
 from aidss_trader.runtime.accounting import (
@@ -76,21 +78,27 @@ from aidss_trader.runtime.settings_store import (
     Allowlist,
     LiquidityFilter,
     PaperSettings,
+    StrategyDef,
+    delete_strategy_def,
     get_allowlist,
     get_pair_groups,
     get_paper_settings,
     get_promotion_thresholds,
+    get_strategy_def,
     get_strategy_params,
+    list_strategy_defs,
     paper_flatters,
     set_allowlist,
     set_pair_groups,
     set_paper_settings,
     set_promotion_thresholds,
+    set_strategy_def,
     set_strategy_params,
     threshold_problem,
     thresholds_loosen,
 )
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
+from aidss_trader.strategy.kinds import ID_PATTERN, KINDS, MAX_LABEL, ParameterError, build_strategy
 
 PREFIX = "/trader/v1"
 MAX_PAIR_GROUPS = 50
@@ -469,6 +477,87 @@ class StrategyParamsData(BaseModel):
 class PutParametersData(BaseModel):
     version: str
     mode: ModeLiteral
+
+
+class StrategyDefBody(BaseModel):
+    id: str
+    label: str
+    kind: str
+    params: dict[str, str]
+
+
+class StrategyDefUpdateBody(BaseModel):
+    label: str
+    params: dict[str, str]
+
+
+class BacktestStartBody(BaseModel):
+    strategy_ids: list[str] | None = None  # None: every defined strategy
+
+
+class KindFieldModel(BaseModel):
+    name: str
+    kind: Literal["int", "decimal"]
+    minimum: str
+    maximum: str
+    suggested: str
+
+
+class KindModel(BaseModel):
+    kind: str
+    family: str
+    fields: list[KindFieldModel]
+
+
+class BacktestPairModel(BaseModel):
+    pair: str
+    trades: int
+    wins: int
+    total_return_pct: str
+    max_drawdown_pct: str
+    start_equity_idr: str
+    ran_at: str
+    ran_by: str
+
+
+class StrategyDefModel(BaseModel):
+    id: str
+    label: str
+    kind: str
+    params: dict[str, str]
+    legacy: bool
+    version: str | None
+    error: str | None
+    mode: ModeLiteral | None
+    backtest_pairs: int
+    backtest_trades: int
+    backtest_return_pct: str | None
+    backtest_ran_at: str | None
+
+
+class StrategyBacktestData(BaseModel):
+    strategy_id: str
+    version: str | None
+    pairs: list[BacktestPairModel]
+
+
+class BacktestJobSummaryModel(BaseModel):
+    strategy_id: str
+    version: str
+    return_pct: str
+    pairs: int
+    trades: int
+    skipped: list[str]
+
+
+class BacktestJobData(BaseModel):
+    id: str
+    state: Literal["RUNNING", "DONE", "FAILED"]
+    error: str | None
+    current: str | None
+    strategy_ids: list[str]
+    done_strategies: int
+    results: list[BacktestJobSummaryModel]
 
 
 class CredentialItemModel(BaseModel):
@@ -1463,6 +1552,315 @@ def create_app(ctx: ApiContext) -> FastAPI:
         s.commit()
         # A new version always starts again in PAPER (ADR-020); the response says so.
         return envelope({"version": version, "mode": "PAPER"})
+
+    # ------------------------------------------------------ strategy library and backtests
+
+    jobs = BacktestJobs(ctx.session_factory)  # type: ignore[arg-type]
+
+    def _def_version(d: StrategyDef) -> tuple[str | None, str | None]:
+        try:
+            return build_strategy(d.kind, d.params).version_id(), None
+        except ParameterError as exc:
+            return None, str(exc)
+
+    def _latest_rows(s: Session, strategy_id: str, version: str) -> list[BacktestRunRow]:
+        rows = s.scalars(
+            select(BacktestRunRow)
+            .where(
+                BacktestRunRow.strategy_id == strategy_id,
+                BacktestRunRow.strategy_version == version,
+            )
+            .order_by(BacktestRunRow.ran_at.desc())
+        ).all()
+        seen: dict[str, BacktestRunRow] = {}
+        for row in rows:
+            seen.setdefault(row.pair, row)
+        return sorted(seen.values(), key=lambda x: x.pair)
+
+    def _validated(kind: str, params: dict[str, str]) -> str:
+        """Build the strategy the owner described, or say precisely why it cannot exist."""
+        try:
+            strategy = build_strategy(kind, params)
+        except ParameterError as exc:
+            raise ApiError(400, "VALIDATION", "bad_parameters", str(exc)) from None
+        needed = strategy.min_history()
+        if needed > MAX_HISTORY_BARS:
+            raise ApiError(
+                400,
+                "VALIDATION",
+                "bad_parameters",
+                f"these periods need {needed} candles of history but only "
+                f"{MAX_HISTORY_BARS} are kept, so the strategy could never evaluate",
+            )
+        return strategy.version_id()
+
+    def _label(label: str) -> str:
+        text = " ".join(label.split())
+        if not text or len(text) > MAX_LABEL:
+            raise ApiError(
+                400, "VALIDATION", "bad_label", f"a name is 1 to {MAX_LABEL} characters"
+            )
+        return text
+
+    @app.get(f"{r}/strategy-kinds", response_model=Envelope[list[KindModel]])
+    def strategy_kinds(_: Principal = Depends(need(perm.VIEW))):
+        return envelope(
+            [
+                {
+                    "kind": k.kind,
+                    "family": k.family,
+                    "fields": [
+                        {
+                            "name": f.name,
+                            "kind": f.kind,
+                            "minimum": f.minimum,
+                            "maximum": f.maximum,
+                            "suggested": f.suggested,
+                        }
+                        for f in k.fields
+                    ],
+                }
+                for k in KINDS.values()
+            ],
+            origin="BACKTEST",
+        )
+
+    @app.get(f"{r}/strategy-defs", response_model=Envelope[list[StrategyDefModel]])
+    def strategy_defs(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        out = []
+        for d in list_strategy_defs(s):
+            version, error = _def_version(d)
+            rows = [] if version is None else _latest_rows(s, d.id, version)
+            row = s.get(StrategyRow, d.id) if d.legacy else None
+            out.append(
+                {
+                    "id": d.id,
+                    "label": d.label,
+                    "kind": d.kind,
+                    "params": d.params,
+                    "legacy": d.legacy,
+                    "version": version,
+                    "error": error,
+                    "mode": None if row is None else row.mode,
+                    "backtest_pairs": len(rows),
+                    "backtest_trades": sum(x.trades for x in rows),
+                    "backtest_return_pct": (
+                        _cell(sum((x.total_return_pct for x in rows), ZERO)) if rows else None
+                    ),
+                    "backtest_ran_at": _cell(max(x.ran_at for x in rows)) if rows else None,
+                }
+            )
+        return envelope(out, origin="PAPER")
+
+    @app.post(f"{r}/strategy-defs", response_model=Envelope[StrategyDefModel], status_code=201)
+    def create_strategy_def(
+        body: StrategyDefBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        import re
+
+        if not re.fullmatch(ID_PATTERN, body.id):
+            raise ApiError(
+                400,
+                "VALIDATION",
+                "bad_id",
+                "an id is 2 to 32 characters: lowercase letters, digits and underscores, "
+                "starting with a letter",
+            )
+        if body.id == "ema_adx":
+            raise ApiError(
+                409, "CONFLICT", "reserved_id", "ema_adx is the reference strategy; edit it instead"
+            )
+        if get_strategy_def(s, body.id) is not None:
+            raise ApiError(409, "CONFLICT", "strategy_exists", "a strategy with this id exists")
+        label = _label(body.label)
+        version = _validated(body.kind, body.params)
+        set_strategy_def(
+            s, StrategyDef(body.id, body.kind, label, dict(body.params)), by=who.user_id
+        )
+        s.commit()
+        d = get_strategy_def(s, body.id)
+        assert d is not None
+        return envelope(
+            {
+                "id": d.id,
+                "label": d.label,
+                "kind": d.kind,
+                "params": d.params,
+                "legacy": False,
+                "version": version,
+                "error": None,
+                "mode": None,
+                "backtest_pairs": 0,
+                "backtest_trades": 0,
+                "backtest_return_pct": None,
+                "backtest_ran_at": None,
+            },
+            origin="PAPER",
+        )
+
+    @app.put(f"{r}/strategy-defs/{{strategy_id}}", response_model=Envelope[StrategyDefModel])
+    def update_strategy_def(
+        strategy_id: str,
+        body: StrategyDefUpdateBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        existing = get_strategy_def(s, strategy_id)
+        if existing is None:
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        if existing.legacy:
+            # The reference strategy's parameters are tied to its mode and promotion state, so
+            # they keep their own route, which also returns it to PAPER.
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "use_parameters_route",
+                f"edit this strategy through PUT {PREFIX}/strategies/{strategy_id}/parameters",
+            )
+        label = _label(body.label)
+        version = _validated(existing.kind, body.params)
+        set_strategy_def(
+            s, StrategyDef(strategy_id, existing.kind, label, dict(body.params)), by=who.user_id
+        )
+        s.commit()
+        rows = _latest_rows(s, strategy_id, version)
+        return envelope(
+            {
+                "id": strategy_id,
+                "label": label,
+                "kind": existing.kind,
+                "params": dict(body.params),
+                "legacy": False,
+                "version": version,
+                "error": None,
+                "mode": None,
+                "backtest_pairs": len(rows),
+                "backtest_trades": sum(x.trades for x in rows),
+                "backtest_return_pct": (
+                    _cell(sum((x.total_return_pct for x in rows), ZERO)) if rows else None
+                ),
+                "backtest_ran_at": _cell(max(x.ran_at for x in rows)) if rows else None,
+            },
+            origin="PAPER",
+        )
+
+    @app.delete(f"{r}/strategy-defs/{{strategy_id}}", response_model=Envelope[dict[str, bool]])
+    def delete_strategy(
+        strategy_id: str,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        existing = get_strategy_def(s, strategy_id)
+        if existing is None:
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        if existing.legacy:
+            # The runtime trades this one. Removing its parameters while a position or an order
+            # is open would leave something open that nothing manages.
+            holding = [
+                origin
+                for origin in ("PAPER", "LIVE")
+                if any(p.quantity > 0 for p in replay_origin(s, origin)[0].values())
+            ]
+            pending = s.scalar(
+                select(func.count())
+                .select_from(OrderRow)
+                .where(OrderRow.state.notin_([st.value for st in TERMINAL]))
+            )
+            if holding or pending:
+                raise ApiError(
+                    409,
+                    "CONFLICT",
+                    "strategy_in_use",
+                    "this strategy has an open position or an unfinished order; "
+                    "close it first",
+                )
+        delete_strategy_def(s, strategy_id, by=who.user_id)
+        s.commit()
+        return envelope({"deleted": True}, origin="PAPER")
+
+    @app.get(
+        f"{r}/strategy-defs/{{strategy_id}}/backtests",
+        response_model=Envelope[StrategyBacktestData],
+    )
+    def strategy_backtests(
+        strategy_id: str, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
+    ):
+        d = get_strategy_def(s, strategy_id)
+        if d is None:
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        version, _err = _def_version(d)
+        rows = [] if version is None else _latest_rows(s, strategy_id, version)
+        return envelope(
+            {
+                "strategy_id": strategy_id,
+                "version": version,
+                "pairs": [
+                    _row(
+                        x,
+                        (
+                            "pair",
+                            "trades",
+                            "wins",
+                            "total_return_pct",
+                            "max_drawdown_pct",
+                            "start_equity_idr",
+                            "ran_at",
+                            "ran_by",
+                        ),
+                    )
+                    for x in rows
+                ],
+            },
+            origin="BACKTEST",
+        )
+
+    def _job_data(job: Any) -> dict[str, Any]:
+        return {
+            "id": job.id,
+            "state": job.state,
+            "error": job.error,
+            "current": job.current,
+            "strategy_ids": job.strategy_ids,
+            "done_strategies": job.done_strategies,
+            "results": [summarise(x) for x in job.results],
+        }
+
+    @app.post(f"{r}/backtests", response_model=Envelope[BacktestJobData], status_code=202)
+    def start_backtests(
+        body: BacktestStartBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        if jobs.active() is not None:
+            raise ApiError(
+                409, "CONFLICT", "backtest_running", "a backtest is already running; wait for it"
+            )
+        defs = {d.id: d for d in list_strategy_defs(s)}
+        wanted = body.strategy_ids if body.strategy_ids is not None else sorted(defs)
+        if not wanted:
+            raise ApiError(400, "VALIDATION", "nothing_to_run", "there is no strategy to run")
+        if len(set(wanted)) != len(wanted) or any(w not in defs for w in wanted):
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        for sid in wanted:
+            _validated(defs[sid].kind, defs[sid].params)
+        picked = [
+            (sid, (lambda d=defs[sid]: build_strategy(d.kind, d.params))) for sid in wanted
+        ]
+        job = jobs.start(picked, by=f"user:{who.user_id}")
+        return envelope(_job_data(job), origin="BACKTEST")
+
+    @app.get(f"{r}/backtests/{{job_id}}", response_model=Envelope[BacktestJobData])
+    def backtest_job(job_id: str, _: Principal = Depends(need(perm.VIEW))):
+        job = jobs.get(job_id)
+        if job is None:
+            raise ApiError(404, "NOT_FOUND", "unknown_job", "no such backtest job")
+        return envelope(_job_data(job), origin="BACKTEST")
 
     # ------------------------------------------------------------ credentials
 

@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aidss_trader.audit import AuditLogger
@@ -167,6 +168,93 @@ def set_pair_groups(
         by,
         now or datetime.now(UTC),
     )
+
+
+STRATEGY_DEF_PREFIX = "strategy_def:"
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyDef:
+    """A strategy the owner defined: a kind and its parameters, as data (see `strategy.kinds`).
+
+    `legacy` marks the reference strategy, which keeps its original storage
+    (`strategy_params:ema_adx`) so everything that already reads it keeps working.
+    """
+
+    id: str
+    kind: str
+    label: str
+    params: dict[str, str]
+    legacy: bool = False
+
+
+def _plain(params: dict[str, Any]) -> dict[str, str]:
+    return {str(k): ("" if v is None else str(v)) for k, v in params.items()}
+
+
+def list_strategy_defs(session: Session) -> list[StrategyDef]:
+    out: list[StrategyDef] = []
+    for row in session.scalars(select(TraderSetting).order_by(TraderSetting.key)):
+        if row.key.startswith(STRATEGY_PREFIX):
+            sid = row.key[len(STRATEGY_PREFIX) :]
+            out.append(StrategyDef(sid, "ema_adx", sid, _plain(row.value), legacy=True))
+        elif row.key.startswith(STRATEGY_DEF_PREFIX):
+            sid = row.key[len(STRATEGY_DEF_PREFIX) :]
+            v = row.value
+            out.append(
+                StrategyDef(
+                    sid,
+                    str(v.get("kind", "")),
+                    str(v.get("label", sid)),
+                    _plain(v.get("params", {})),
+                )
+            )
+    return sorted(out, key=lambda d: (not d.legacy, d.id))
+
+
+def get_strategy_def(session: Session, strategy_id: str) -> StrategyDef | None:
+    return next((d for d in list_strategy_defs(session) if d.id == strategy_id), None)
+
+
+def set_strategy_def(
+    session: Session, d: StrategyDef, *, by: str, now: datetime | None = None
+) -> None:
+    """Create or replace a user-built strategy. The reference strategy is set through
+    `set_strategy_params`, which also registers its version and returns it to PAPER."""
+    if d.legacy:
+        raise ValueError("the reference strategy is set through set_strategy_params")
+    _put(
+        session,
+        STRATEGY_DEF_PREFIX + d.id,
+        {"kind": d.kind, "label": d.label, "params": dict(d.params)},
+        by,
+        now or datetime.now(UTC),
+    )
+
+
+def delete_strategy_def(
+    session: Session, strategy_id: str, *, by: str, now: datetime | None = None
+) -> bool:
+    """Remove a definition, wherever it is stored. Backtest rows and every audit entry stay."""
+    existing = get_strategy_def(session, strategy_id)
+    if existing is None:
+        return False
+    key = (STRATEGY_PREFIX if existing.legacy else STRATEGY_DEF_PREFIX) + strategy_id
+    row = session.get(TraderSetting, key)
+    assert row is not None
+    before = row.value
+    session.delete(row)
+    AuditLogger(session).record(
+        actor=by,
+        action="setting.delete",
+        subject_type="setting",
+        subject_id=key,
+        before=before,
+        after=None,
+        at=now or datetime.now(UTC),
+    )
+    session.flush()
+    return True
 
 
 def _text(value: Decimal | None) -> str | None:

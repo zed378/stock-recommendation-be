@@ -75,3 +75,4 @@ One line per record, newest first. Add new entries at the top.
 - [Starter profiles for the owner numbers (2026-11-16)](records/2026-11-16-owner-numbers-starter-profiles.md) — draft profiles for Rp 50,000 and Rp 1,000,000, checker, ADR-055 proposed
 - [Provider form: model dropdown fetched from the endpoint (2026-11-17)](records/2026-11-17-ai-model-dropdown.md) — list_models on three adapters, POST /admin/ai-providers/models, auto-fetch dropdown; not deployed
 - [Migration kit: moving AIDSS to another host (2026-11-17)](records/2026-11-17-migration-kit.md) — production compose proven equal to the running stack, preflight/restore/fingerprint, runbook; no real move done
+- [Strategy library, builder and tabs (2026-11-19)](records/2026-11-19-strategy-library-builder.md) — four extra rules, template builder, backtest jobs, Compare and per-strategy tabs; backtest only, not deployed

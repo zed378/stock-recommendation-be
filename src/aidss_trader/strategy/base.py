@@ -54,6 +54,9 @@ class Strategy(Protocol):
     def version_id(self) -> str:  # pragma: no cover - protocol
         ...
 
+    def min_history(self) -> int:  # pragma: no cover - protocol
+        ...
+
 
 def snapshot(**values: Any) -> dict[str, str]:
     return {k: ("None" if v is None else str(v)) for k, v in values.items()}

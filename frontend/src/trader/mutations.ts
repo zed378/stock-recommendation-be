@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { idempotencyKey, traderApi, unwrap, TraderError } from "@/trader/client";
-import type { CredentialKind, KillResult, PromotionThresholds } from "@/trader/types";
+import type { BacktestJob, CredentialKind, KillResult, PromotionThresholds, StrategyDef } from "@/trader/types";
 import type { PairGroup } from "@/trader/pairGroups";
 
 /**
@@ -404,6 +404,63 @@ export function useSaveThresholds() {
             },
           },
           body: values,
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useSaveStrategyDef() {
+  const refresh = useAfterMutation();
+  return useMutation<
+    StrategyDef,
+    TraderError,
+    { id: string; label: string; kind: string; params: Record<string, string>; existing: boolean }
+  >({
+    mutationFn: async ({ id, label, kind, params, existing }) => {
+      const headers = { "Idempotency-Key": idempotencyKey() };
+      const out = existing
+        ? await unwrap<StrategyDef>(
+            traderApi.PUT("/trader/v1/strategy-defs/{strategy_id}", {
+              params: { path: { strategy_id: id }, header: headers },
+              body: { label, params },
+            }),
+          )
+        : await unwrap<StrategyDef>(
+            traderApi.POST("/trader/v1/strategy-defs", {
+              params: { header: headers },
+              body: { id, label, kind, params },
+            }),
+          );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useDeleteStrategyDef() {
+  const refresh = useAfterMutation();
+  return useMutation<unknown, TraderError, { id: string }>({
+    mutationFn: ({ id }) =>
+      unwrap(
+        traderApi.DELETE("/trader/v1/strategy-defs/{strategy_id}", {
+          params: { path: { strategy_id: id }, header: { "Idempotency-Key": idempotencyKey() } },
+        }),
+      ),
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useStartBacktests() {
+  const refresh = useAfterMutation();
+  return useMutation<BacktestJob, TraderError, { strategyIds: string[] | null }>({
+    mutationFn: async ({ strategyIds }) => {
+      const out = await unwrap<BacktestJob>(
+        traderApi.POST("/trader/v1/backtests", {
+          params: { header: { "Idempotency-Key": idempotencyKey() } },
+          body: { strategy_ids: strategyIds },
         }),
       );
       return out.data;

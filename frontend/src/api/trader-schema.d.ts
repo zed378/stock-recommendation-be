@@ -39,6 +39,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/backtests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Backtests */
+        post: operations["start_backtests_trader_v1_backtests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/backtests/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backtest Job */
+        get: operations["backtest_job_trader_v1_backtests__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/credentials": {
         parameters: {
             query?: never;
@@ -530,6 +564,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/strategy-defs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Strategy Defs */
+        get: operations["strategy_defs_trader_v1_strategy_defs_get"];
+        put?: never;
+        /** Create Strategy Def */
+        post: operations["create_strategy_def_trader_v1_strategy_defs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/strategy-defs/{strategy_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Strategy Def */
+        put: operations["update_strategy_def_trader_v1_strategy_defs__strategy_id__put"];
+        post?: never;
+        /** Delete Strategy */
+        delete: operations["delete_strategy_trader_v1_strategy_defs__strategy_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/strategy-defs/{strategy_id}/backtests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Strategy Backtests */
+        get: operations["strategy_backtests_trader_v1_strategy_defs__strategy_id__backtests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/strategy-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Strategy Kinds */
+        get: operations["strategy_kinds_trader_v1_strategy_kinds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -610,6 +714,60 @@ export interface components {
             /** Subject Type */
             subject_type: string | null;
         };
+        /** BacktestJobData */
+        BacktestJobData: {
+            /** Current */
+            current: string | null;
+            /** Done Strategies */
+            done_strategies: number;
+            /** Error */
+            error: string | null;
+            /** Id */
+            id: string;
+            /** Results */
+            results: components["schemas"]["BacktestJobSummaryModel"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "RUNNING" | "DONE" | "FAILED";
+            /** Strategy Ids */
+            strategy_ids: string[];
+        };
+        /** BacktestJobSummaryModel */
+        BacktestJobSummaryModel: {
+            /** Pairs */
+            pairs: number;
+            /** Return Pct */
+            return_pct: string;
+            /** Skipped */
+            skipped: string[];
+            /** Strategy Id */
+            strategy_id: string;
+            /** Trades */
+            trades: number;
+            /** Version */
+            version: string;
+        };
+        /** BacktestPairModel */
+        BacktestPairModel: {
+            /** Max Drawdown Pct */
+            max_drawdown_pct: string;
+            /** Pair */
+            pair: string;
+            /** Ran At */
+            ran_at: string;
+            /** Ran By */
+            ran_by: string;
+            /** Start Equity Idr */
+            start_equity_idr: string;
+            /** Total Return Pct */
+            total_return_pct: string;
+            /** Trades */
+            trades: number;
+            /** Wins */
+            wins: number;
+        };
         /** BacktestRunItem */
         BacktestRunItem: {
             /** Candles Used */
@@ -651,6 +809,11 @@ export interface components {
             win_rate_pct: string;
             /** Wins */
             wins: number;
+        };
+        /** BacktestStartBody */
+        BacktestStartBody: {
+            /** Strategy Ids */
+            strategy_ids?: string[] | null;
         };
         /** CatalogData */
         CatalogData: {
@@ -762,6 +925,11 @@ export interface components {
             data: components["schemas"]["ApproveData"];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[BacktestJobData] */
+        Envelope_BacktestJobData_: {
+            data: components["schemas"]["BacktestJobData"];
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[CatalogData] */
         Envelope_CatalogData_: {
             data: components["schemas"]["CatalogData"];
@@ -867,9 +1035,27 @@ export interface components {
             data: components["schemas"]["StepUpData"];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[StrategyBacktestData] */
+        Envelope_StrategyBacktestData_: {
+            data: components["schemas"]["StrategyBacktestData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[StrategyDefModel] */
+        Envelope_StrategyDefModel_: {
+            data: components["schemas"]["StrategyDefModel"];
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[StrategyParamsData] */
         Envelope_StrategyParamsData_: {
             data: components["schemas"]["StrategyParamsData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[dict[str, bool]] */
+        Envelope_dict_str__bool__: {
+            /** Data */
+            data: {
+                [key: string]: boolean;
+            };
             meta: components["schemas"]["MetaModel"];
         };
         /** Envelope[list[AuditItem]] */
@@ -884,6 +1070,12 @@ export interface components {
             data: components["schemas"]["IntentItem"][];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[list[KindModel]] */
+        Envelope_list_KindModel__: {
+            /** Data */
+            data: components["schemas"]["KindModel"][];
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[list[LedgerItem]] */
         Envelope_list_LedgerItem__: {
             /** Data */
@@ -894,6 +1086,12 @@ export interface components {
         Envelope_list_OrderItem__: {
             /** Data */
             data: components["schemas"]["OrderItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[StrategyDefModel]] */
+        Envelope_list_StrategyDefModel__: {
+            /** Data */
+            data: components["schemas"]["StrategyDefModel"][];
             meta: components["schemas"]["MetaModel"];
         };
         /** Envelope[list[StrategyItem]] */
@@ -971,6 +1169,31 @@ export interface components {
              * @enum {string}
              */
             tier: "HALT" | "CANCEL" | "FLATTEN";
+        };
+        /** KindFieldModel */
+        KindFieldModel: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "int" | "decimal";
+            /** Maximum */
+            maximum: string;
+            /** Minimum */
+            minimum: string;
+            /** Name */
+            name: string;
+            /** Suggested */
+            suggested: string;
+        };
+        /** KindModel */
+        KindModel: {
+            /** Family */
+            family: string;
+            /** Fields */
+            fields: components["schemas"]["KindFieldModel"][];
+            /** Kind */
+            kind: string;
         };
         /** LedgerItem */
         LedgerItem: {
@@ -1344,6 +1567,66 @@ export interface components {
             /** Valid For S */
             valid_for_s: number;
         };
+        /** StrategyBacktestData */
+        StrategyBacktestData: {
+            /** Pairs */
+            pairs: components["schemas"]["BacktestPairModel"][];
+            /** Strategy Id */
+            strategy_id: string;
+            /** Version */
+            version: string | null;
+        };
+        /** StrategyDefBody */
+        StrategyDefBody: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Params */
+            params: {
+                [key: string]: string;
+            };
+        };
+        /** StrategyDefModel */
+        StrategyDefModel: {
+            /** Backtest Pairs */
+            backtest_pairs: number;
+            /** Backtest Ran At */
+            backtest_ran_at: string | null;
+            /** Backtest Return Pct */
+            backtest_return_pct: string | null;
+            /** Backtest Trades */
+            backtest_trades: number;
+            /** Error */
+            error: string | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Legacy */
+            legacy: boolean;
+            /** Mode */
+            mode: ("PAPER" | "APPROVAL" | "AUTO") | null;
+            /** Params */
+            params: {
+                [key: string]: string;
+            };
+            /** Version */
+            version: string | null;
+        };
+        /** StrategyDefUpdateBody */
+        StrategyDefUpdateBody: {
+            /** Label */
+            label: string;
+            /** Params */
+            params: {
+                [key: string]: string;
+            };
+        };
         /** StrategyItem */
         StrategyItem: {
             /**
@@ -1501,6 +1784,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_list_AuditItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_backtests_trader_v1_backtests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacktestStartBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BacktestJobData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    backtest_job_trader_v1_backtests__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BacktestJobData_"];
                 };
             };
             /** @description Validation Error */
@@ -2656,6 +3008,209 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_PromotionData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    strategy_defs_trader_v1_strategy_defs_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_StrategyDefModel__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_strategy_def_trader_v1_strategy_defs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StrategyDefBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_StrategyDefModel_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_strategy_def_trader_v1_strategy_defs__strategy_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StrategyDefUpdateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_StrategyDefModel_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_strategy_trader_v1_strategy_defs__strategy_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_dict_str__bool__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    strategy_backtests_trader_v1_strategy_defs__strategy_id__backtests_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_StrategyBacktestData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    strategy_kinds_trader_v1_strategy_kinds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_KindModel__"];
                 };
             };
             /** @description Validation Error */

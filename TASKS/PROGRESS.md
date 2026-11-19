@@ -39,6 +39,7 @@ Deployed on the project's host as images `zed378/aidss-api` and `zed378/aidss-fr
 | `trading` schema, roles, migrations | eight migrations (`0001..0008`, `30` tables) applied on VM PostgreSQL; `3` `trader_rw` privilege tests passed on VM scratch DB, `7/7` `-m postgres` tests passed on local PostgreSQL 18; `aidss_app` isolation was applied on VM on 2026-11-16 (host-backup record, steps 1/2) |
 | Indodax connector, mock exchange | exist; mock is synthetic, the connector has never touched the real API |
 | Order code | exists and is wired into the run loop (mock-tested only); starts `HALTED`, every owner number unset, no exchange URL configured, so it trades nothing |
+| Strategy library and builder (2026-11-19, not deployed) | four extra rules, template builder, `/trader/v1/strategy-defs` and `/backtests`, tabs on the Strategies screen; **backtest only**, the paper loop still runs `ema_adx` alone (ADR-061) |
 | Documentation | exists (T0) |
 | Indodax API key | none; none has been seen |
 | Live response from Indodax | none captured |
