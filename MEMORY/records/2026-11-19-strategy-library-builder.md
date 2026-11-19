@@ -21,3 +21,5 @@ Deployed `zed378/aidss-trader:eae6bc2` and `zed378/aidss-frontend:latest` (= `ea
 | bollinger_reversion | -33.537 | 134 | 20 |
 
 The pairs themselves fell a mean 9.29% over the same bars. Every rule lost; the sample is one falling market. The four new rows are stored under their catalog ids but no definition exists on the VM, so they have no tab until created in the builder with the same numbers (the same numbers give the same version, so the stored results then show).
+
+The four library strategies were then stored as definitions on the VM with `deploy/trader/add_library_strategies.py` (catalog numbers; versions identical to the recorded backtests, so each tab shows its stored result). Delete any of them from its tab if unwanted.
