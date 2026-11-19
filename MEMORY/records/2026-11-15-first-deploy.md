@@ -398,3 +398,11 @@ Not verified: the scroll fix in a real browser; a promotion attempt (none made).
 Registry (not tidied, no request this time): `aidss-trader` holds `latest` = `9ae191a`, `473436d`, `6860bfd`, `7d03693` (anchor wrapper); `aidss-frontend` holds `latest` = `9ae191a`, `473436d`, `d9a4b58`. Beyond the one-rollback-tag rule: `6860bfd`, `7d03693` and `d9a4b58`.
 
 Registry tidy-up after `9ae191a` (owner's request, 2026-11-18; PowerShell, docker-login token, listings checked before and after): deleted `aidss-trader:6860bfd` and `aidss-frontend:d9a4b58`. Nothing new needed deploying: the working tree was clean and no code had changed since the images already running (`aidss-trader` and `aidss-frontend` `9ae191a`, `aidss-api` `7878f7c`). Remaining: `aidss-api` `latest` = `7878f7c` and rollback `93a1151`; `aidss-frontend` `latest` = `9ae191a` and rollback `473436d`; `aidss-trader` `latest` = `9ae191a`, rollback `473436d`, and `7d03693`, still kept because the host's audit-anchor wrapper names it as its image. Rollback to anything older now means rebuilding from the commit.
+
+---
+
+## Redeploy of the frontend at commit 1e68c59 (2026-11-19): the Trader page tidied
+
+Image `aidss-frontend:1e68c59` (digest `sha256:62d324d568580fa516ca9140dffc67e2fa4f7f2fc37696728a27bae45e4e58e6`), clean `git archive HEAD frontend`; `latest` moved to the same digest. Content: rounded figures, compact origin badges and the phone overflow fix on the Trader portfolio block (`2026-11-19-trader-page-tidy.md`). Only the frontend changed; the Trader (`9ae191a`), api and worker were not rebuilt.
+Before the build: tsc clean, oxlint exit 0, Vitest 131 passed; the page was also checked in Chrome at 1440 and 390 px against a mocked API. In the image: `nginx -t` passes. On the VM: `pull` alone, `--dry-run` (only the frontend recreated), then `up -d --no-build --no-deps frontend` with the override on stdin. Verified after: the container runs the new digest, healthy, bound to `127.0.0.1:5173`, the Trader still `RUNNING` in `PAPER`, public `/`, `/login`, `/trader`, `/trader/limits`, `/api/health` 200, `/trader/v1/status` 401. Not verified: the page on the live site with a signed-in session. Rollback: `aidss-frontend:9ae191a`.
+Registry (not tidied, no request): `aidss-frontend` holds `latest` = `1e68c59`, `9ae191a` and `473436d`; `473436d` is beyond the one-rollback-tag rule.
