@@ -44,6 +44,7 @@ export type Portfolio = Schemas["PortfolioData"];
 export type StrategyDef = Schemas["StrategyDefModel"];
 export type StrategyKind = Schemas["KindModel"];
 export type StrategyBacktests = Schemas["StrategyBacktestData"];
+export type StrategyPaper = Schemas["StrategyPaperData"];
 export type BacktestJob = Schemas["BacktestJobData"];
 export type Order = Schemas["OrderItem"];
 export type LedgerEntry = Schemas["LedgerItem"];

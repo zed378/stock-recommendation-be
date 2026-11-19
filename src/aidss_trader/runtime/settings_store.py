@@ -244,6 +244,9 @@ def delete_strategy_def(
     assert row is not None
     before = row.value
     session.delete(row)
+    flag = session.get(TraderSetting, STRATEGY_ENABLED_PREFIX + strategy_id)
+    if flag is not None:
+        session.delete(flag)
     AuditLogger(session).record(
         actor=by,
         action="setting.delete",
@@ -255,6 +258,62 @@ def delete_strategy_def(
     )
     session.flush()
     return True
+
+
+STRATEGY_ENABLED_PREFIX = "strategy_enabled:"
+#: A resource limit, not a loss limit (ADR-062): every enabled strategy is evaluated on every
+#: active pair each cycle.
+MAX_ENABLED_STRATEGIES = 8
+
+
+def enabled_strategy_ids(session: Session) -> list[str]:
+    """Strategies the owner has switched on in the paper loop, in the order they are evaluated
+    (ascending id, which is also how a same-candle collision is settled)."""
+    out = [
+        row.key[len(STRATEGY_ENABLED_PREFIX) :]
+        for row in session.scalars(
+            select(TraderSetting).where(TraderSetting.key.startswith(STRATEGY_ENABLED_PREFIX))
+        )
+        if row.value.get("enabled") is True
+    ]
+    return sorted(out)
+
+
+def set_strategy_enabled(
+    session: Session, strategy_id: str, enabled: bool, *, by: str, now: datetime | None = None
+) -> None:
+    _put(
+        session,
+        STRATEGY_ENABLED_PREFIX + strategy_id,
+        {"enabled": enabled},
+        by,
+        now or datetime.now(UTC),
+    )
+
+
+def duplicate_strategy_def(
+    session: Session, kind: str, params: dict[str, str], *, exclude: str | None = None
+) -> str | None:
+    """The id of another definition with the same kind and the same numbers, if there is one.
+
+    Two such definitions would build identical versions and identical intent identities, so one
+    would silently shadow the other (ADR-062). Parameters that do not build are never duplicates.
+    """
+    from aidss_trader.strategy.kinds import ParameterError, build_strategy
+
+    try:
+        version = build_strategy(kind, params).version_id()
+    except ParameterError:
+        return None
+    for d in list_strategy_defs(session):
+        if d.id == exclude:
+            continue
+        try:
+            if build_strategy(d.kind, d.params).version_id() == version:
+                return d.id
+        except ParameterError:
+            continue
+    return None
 
 
 def _text(value: Decimal | None) -> str | None:

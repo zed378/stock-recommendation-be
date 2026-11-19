@@ -8,7 +8,7 @@ import { OriginBadge, PanelBody } from "@/trader/components";
 import { traderApi } from "@/trader/client";
 import { roundDecimal, trimZeros } from "@/trader/format";
 import { useTraderQuery } from "@/trader/hooks";
-import { useDeleteStrategyDef, useStartBacktests } from "@/trader/mutations";
+import { useDeleteStrategyDef, useSetStrategyPaper, useStartBacktests } from "@/trader/mutations";
 import { StrategyBuilder, type BuilderStart } from "@/trader/StrategyBuilder";
 import { StrategyCard } from "@/trader/StrategyCard";
 import type {
@@ -17,6 +17,7 @@ import type {
   StrategyBacktests,
   StrategyDef,
   StrategyKind,
+  StrategyPaper,
 } from "@/trader/types";
 
 const COMPARE = "__compare__";
@@ -201,12 +202,13 @@ function CompareTab({
         <Empty message={t("trader.strategies.empty")} />
       ) : (
         <div className="-mx-4 overflow-x-auto px-4">
-          <table className="w-full min-w-[40rem] text-left text-sm">
+          <table className="w-full min-w-[44rem] text-left text-sm">
             <thead className="text-xs text-muted">
               <tr>
                 <th className="pb-2 pr-3 font-medium">{t("trader.strat.col.name")}</th>
                 <th className="pb-2 pr-3 font-medium">{t("trader.strat.col.kind")}</th>
                 <th className="pb-2 pr-3 font-medium">{t("trader.strat.col.version")}</th>
+                <th className="pb-2 pr-3 font-medium">{t("trader.strat.col.paper")}</th>
                 <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.return")}</th>
                 <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.trades")}</th>
                 <th className="pb-2 pr-3 text-right font-medium">{t("trader.strat.col.pairs")}</th>
@@ -227,6 +229,13 @@ function CompareTab({
                   </td>
                   <td className="py-2 pr-3 text-xs text-muted">{t(`trader.strat.kind.${d.kind}` as MessageKey)}</td>
                   <td className="py-2 pr-3 font-mono text-xs text-muted">{d.version?.slice(-12) ?? "-"}</td>
+                  <td className="py-2 pr-3 text-xs text-muted">
+                    {d.legacy
+                      ? t("trader.strat.paper.follows")
+                      : d.paper_enabled
+                        ? t("trader.strat.paper.yes")
+                        : t("trader.strat.paper.no")}
+                  </td>
                   <td className="py-2 pr-3 text-right font-mono tnum">{pct(d.backtest_return_pct)}</td>
                   <td className="py-2 pr-3 text-right font-mono tnum">{d.backtest_pairs ? d.backtest_trades : "-"}</td>
                   <td className="py-2 pr-3 text-right font-mono tnum">{d.backtest_pairs || "-"}</td>
@@ -335,6 +344,8 @@ function StrategyPanel({
         )}
       </Card>
 
+      <PaperCard def={def} />
+
       <Card
         title={
           <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
@@ -403,5 +414,106 @@ function StrategyPanel({
         />
       )}
     </div>
+  );
+}
+
+function PaperCard({ def }: { def: StrategyDef }) {
+  const { t } = useI18n();
+  const paper = useTraderQuery<StrategyPaper>(["strategy-paper", def.id], () =>
+    traderApi.GET("/trader/v1/strategy-defs/{strategy_id}/paper", {
+      params: { path: { strategy_id: def.id } },
+    }),
+  );
+  const toggle = useSetStrategyPaper();
+  const [confirm, setConfirm] = useState(false);
+  const name = def.label || def.id;
+  return (
+    <Card
+      title={
+        <h2 className="flex items-center gap-2 text-sm font-medium text-ink">
+          {t("trader.strat.paper.title")}
+          <OriginBadge origin="PAPER" />
+        </h2>
+      }
+    >
+      <p className="mb-4 max-w-prose text-sm text-muted">{t("trader.strat.paper.intro")}</p>
+      <PanelBody query={paper}>
+        {(data) => (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm font-medium text-ink">
+                {def.legacy
+                  ? t("trader.strat.paper.reference")
+                  : data.enabled
+                    ? t("trader.strat.paper.on")
+                    : t("trader.strat.paper.off")}
+              </p>
+              {!def.legacy &&
+                (data.enabled ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    busy={toggle.isPending}
+                    onClick={() => toggle.mutate({ id: def.id, enabled: false })}
+                  >
+                    {t("trader.strat.paper.disable")}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    busy={toggle.isPending}
+                    disabled={def.error !== null}
+                    onClick={() => setConfirm(true)}
+                  >
+                    {t("trader.strat.paper.enable")}
+                  </Button>
+                ))}
+            </div>
+            <p className="text-sm text-ink">
+              {data.owned_pairs.length > 0
+                ? t("trader.strat.paper.owned", { pairs: data.owned_pairs.join(", ") })
+                : t("trader.strat.paper.none")}
+            </p>
+            {data.claimed_pairs.length > 0 && (
+              <p className="text-sm text-muted">
+                {t("trader.strat.paper.claimed", { pairs: data.claimed_pairs.join(", ") })}
+              </p>
+            )}
+            <p className="font-mono text-sm tnum text-ink">
+              {data.stats.trades === 0
+                ? t("trader.strat.paper.noStats")
+                : t("trader.strat.paper.stats", {
+                    trades: data.stats.trades,
+                    wins: data.stats.wins,
+                    pnl: trimZeros(roundDecimal(data.stats.pnl_idr, 2)),
+                    drawdown: pct(data.stats.drawdown_pct),
+                  })}
+            </p>
+            {!def.legacy && (
+              <p className="text-xs text-muted">
+                {t("trader.strat.paper.disableNote")} {t("trader.strat.paper.limit", { max: data.max_enabled })}
+              </p>
+            )}
+            {toggle.error && (
+              <p role="alert" className="text-sm text-fall">
+                {toggle.error.message}
+              </p>
+            )}
+          </div>
+        )}
+      </PanelBody>
+      {confirm && (
+        <ConfirmDialog
+          title={t("trader.strat.paper.enableTitle")}
+          message={t("trader.strat.paper.enableConfirm", { name })}
+          confirmLabel={t("trader.strat.paper.enable")}
+          busy={toggle.isPending}
+          onCancel={() => setConfirm(false)}
+          onConfirm={() =>
+            toggle.mutate({ id: def.id, enabled: true }, { onSettled: () => setConfirm(false) })
+          }
+        />
+      )}
+    </Card>
   );
 }

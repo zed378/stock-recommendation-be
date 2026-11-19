@@ -617,6 +617,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/strategy-defs/{strategy_id}/paper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Strategy Paper */
+        get: operations["strategy_paper_trader_v1_strategy_defs__strategy_id__paper_get"];
+        /** Set Strategy Paper */
+        put: operations["set_strategy_paper_trader_v1_strategy_defs__strategy_id__paper_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/strategy-kinds": {
         parameters: {
             query?: never;
@@ -1045,6 +1063,11 @@ export interface components {
             data: components["schemas"]["StrategyDefModel"];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[StrategyPaperData] */
+        Envelope_StrategyPaperData_: {
+            data: components["schemas"]["StrategyPaperData"];
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[StrategyParamsData] */
         Envelope_StrategyParamsData_: {
             data: components["schemas"]["StrategyParamsData"];
@@ -1366,6 +1389,22 @@ export interface components {
             /** Tax Pct */
             tax_pct?: string | null;
         };
+        /** PaperToggleBody */
+        PaperToggleBody: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** PaperTradeStats */
+        PaperTradeStats: {
+            /** Drawdown Pct */
+            drawdown_pct: string | null;
+            /** Pnl Idr */
+            pnl_idr: string;
+            /** Trades */
+            trades: number;
+            /** Wins */
+            wins: number;
+        };
         /** ParametersBody */
         ParametersBody: {
             /** Adx Period */
@@ -1611,6 +1650,16 @@ export interface components {
             legacy: boolean;
             /** Mode */
             mode: ("PAPER" | "APPROVAL" | "AUTO") | null;
+            /**
+             * Paper Enabled
+             * @default false
+             */
+            paper_enabled: boolean;
+            /**
+             * Paper Owned Pairs
+             * @default []
+             */
+            paper_owned_pairs: string[];
             /** Params */
             params: {
                 [key: string]: string;
@@ -1640,6 +1689,20 @@ export interface components {
             strategy_id: string;
             /** Version */
             version: string;
+        };
+        /** StrategyPaperData */
+        StrategyPaperData: {
+            /** Claimed Pairs */
+            claimed_pairs: string[];
+            /** Enabled */
+            enabled: boolean;
+            /** Max Enabled */
+            max_enabled: number;
+            /** Owned Pairs */
+            owned_pairs: string[];
+            stats: components["schemas"]["PaperTradeStats"];
+            /** Strategy Id */
+            strategy_id: string;
         };
         /** StrategyParamsData */
         StrategyParamsData: {
@@ -3180,6 +3243,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_StrategyBacktestData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    strategy_paper_trader_v1_strategy_defs__strategy_id__paper_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_StrategyPaperData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_strategy_paper_trader_v1_strategy_defs__strategy_id__paper_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaperToggleBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_StrategyPaperData_"];
                 };
             };
             /** @description Validation Error */

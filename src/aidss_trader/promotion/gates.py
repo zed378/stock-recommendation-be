@@ -26,7 +26,6 @@ from aidss_trader.audit import AuditLogger
 from aidss_trader.backtest.evidence import backtest_evidence
 from aidss_trader.db.models import (
     BreakerEvent,
-    Fill,
     KillSwitchEvent,
     ModeChange,
     ReconciliationDifference,
@@ -140,14 +139,18 @@ class Promotion:
         )
         out.append(Gate("data_integrity", str(diffs), "0", diffs == 0))
         if to_mode == "APPROVAL":
-            trades = (
-                self._s.scalar(
-                    select(func.count())
-                    .select_from(Fill)
-                    .where(Fill.origin == "PAPER", Fill.side == "SELL", Fill.executed_at >= since)
+            # This strategy's own paper sales: several strategies share the paper book (ADR-062),
+            # so counting every PAPER sale would credit one strategy with another's trades.
+            from aidss_trader.runtime.ownership import OwnershipError, paper_ownership
+
+            try:
+                trades = sum(
+                    1
+                    for t in paper_ownership(self._s).trades
+                    if t.strategy_id == strategy_id and t.at >= since
                 )
-                or 0
-            )
+            except OwnershipError:
+                trades = 0  # an unattributable book is no evidence
             # Read from the stored BACKTEST runs, never from a figure typed in: see
             # `backtest.evidence` (ADR-059). `supplied.backtest_return_pct` is ignored.
             evidence = backtest_evidence(self._s, strategy_id, row.version)

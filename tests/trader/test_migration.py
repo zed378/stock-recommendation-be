@@ -26,7 +26,7 @@ def _load(name: str = "0001_foundation.py"):
 
 
 def test_upgrades_create_exactly_the_declared_tables() -> None:
-    first, second, third, fourth, fifth, sixth, seventh, eighth = (
+    first, second, third, fourth, fifth, sixth, seventh, eighth, ninth = (
         _load("0001_foundation.py"),
         _load("0002_market_data.py"),
         _load("0003_trading_core.py"),
@@ -35,12 +35,14 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
         _load("0006_paper_lifecycle.py"),
         _load("0007_backtest_runs.py"),
         _load("0008_indexes_idempotency.py"),
+        _load("0009_intent_strategy_id.py"),
     )
     assert second.down_revision == first.revision and third.down_revision == second.revision
     assert fourth.down_revision == third.revision and fifth.down_revision == fourth.revision
     assert sixth.down_revision == fifth.revision
     assert seventh.down_revision == sixth.revision
     assert eighth.down_revision == seventh.revision
+    assert ninth.down_revision == eighth.revision
     engine = create_engine("sqlite+pysqlite://", poolclass=StaticPool).execution_options(
         schema_translate_map={"trading": None}
     )
@@ -54,6 +56,7 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
             sixth.upgrade()
             seventh.upgrade()
             eighth.upgrade()
+            ninth.upgrade()
         built = set(inspect(conn).get_table_names())
         declared = {t.name for t in Base.metadata.tables.values()}
         assert (
@@ -70,3 +73,22 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
         )
         columns = {c["name"] for c in inspect(conn).get_columns("audit_log")}
         assert {"seq", "prev_hash", "hash", "before", "after"} <= columns
+
+
+def test_0009_adds_the_intent_column_to_a_table_that_lacks_it_and_keeps_old_rows() -> None:
+    import sqlalchemy as sa
+
+    ninth = _load("0009_intent_strategy_id.py")
+    engine = create_engine("sqlite+pysqlite://", poolclass=StaticPool)
+    with engine.begin() as conn:
+        conn.execute(sa.text("CREATE TABLE order_intent (id INTEGER PRIMARY KEY, identity TEXT)"))
+        conn.execute(sa.text("INSERT INTO order_intent (identity) VALUES ('v1|BTCIDR|t|BUY')"))
+        with Operations.context(MigrationContext.configure(conn)):
+            ninth.upgrade()
+            ninth.upgrade()  # running it twice is harmless
+        cols = {c["name"] for c in inspect(conn).get_columns("order_intent")}
+        assert "strategy_id" in cols
+        assert conn.execute(sa.text("SELECT strategy_id FROM order_intent")).scalar() is None
+        assert "ix_order_intent_strategy_id" in {
+            i["name"] for i in inspect(conn).get_indexes("order_intent")
+        }

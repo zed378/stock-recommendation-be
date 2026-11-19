@@ -430,35 +430,58 @@ GOOD = SuppliedEvidence(
 
 
 def paper_sells(session, n: int, when: datetime) -> None:
-    order = OrderRow(
-        origin="PAPER",
-        pair="BTCIDR",
-        side="SELL",
-        type="LIMIT",
-        quantity=D("1"),
-        client_order_id="p1",
-        executed_qty=D("0"),
-        state="FILLED",
-        purpose="EXIT",
-        submitted_at=when,
-        updated_at=when,
-    )
-    session.add(order)
-    session.flush()
-    for i in range(n):
+    """`n` PAPER round trips closed at `when`, each with the buy that opened it and the intent
+    behind that buy (a sale with nothing to sell would be an impossible ledger)."""
+    from aidss_trader.db.models import OrderIntentRow
+
+    def leg(i: int, side: str, at: datetime, intent: str | None) -> None:
+        order = OrderRow(
+            intent_identity=intent,
+            origin="PAPER",
+            pair="BTCIDR",
+            side=side,
+            type="LIMIT",
+            quantity=D("1"),
+            client_order_id=f"p{i}{side[0]}",
+            executed_qty=D("1"),
+            state="FILLED",
+            purpose="ENTRY" if side == "BUY" else "EXIT",
+            submitted_at=at,
+            updated_at=at,
+        )
+        session.add(order)
+        session.flush()
         session.add(
             Fill(
                 order_id=order.id,
                 origin="PAPER",
-                exchange_trade_id=f"pt{i}",
+                exchange_trade_id=f"pt{i}{side[0]}",
                 pair="BTCIDR",
-                side="SELL",
+                side=side,
                 price=D("1"),
                 quantity=D("1"),
                 quote_quantity=D("1"),
-                executed_at=when,
+                executed_at=at,
             )
         )
+
+    for i in range(n):
+        identity = f"v1|BTCIDR|{i}|BUY"
+        session.add(
+            OrderIntentRow(
+                identity=identity,
+                origin="PAPER",
+                strategy_version="v1",
+                pair="BTCIDR",
+                side="BUY",
+                entry_price=D("1"),
+                quantity=D("1"),
+                state="PAPER_FILLED",
+                created_at=when - timedelta(seconds=10),
+            )
+        )
+        leg(i, "BUY", when - timedelta(seconds=n - i), identity)
+        leg(i, "SELL", when, None)
     session.commit()
 
 

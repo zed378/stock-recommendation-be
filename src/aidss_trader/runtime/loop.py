@@ -31,6 +31,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -71,15 +72,25 @@ from aidss_trader.orders.state import OrderState
 from aidss_trader.reconcile import reconcile, windows
 from aidss_trader.risk.engine import CheckResult, Decision, RiskContext, breakers
 from aidss_trader.runtime import accounting
+from aidss_trader.runtime.ownership import (
+    REFERENCE,
+    OwnershipError,
+    paper_entry_refusal,
+    paper_ownership,
+)
 from aidss_trader.runtime.pair_selection import resolve_all
 from aidss_trader.runtime.paper_lifecycle import PaperBook
 from aidss_trader.runtime.settings_store import (
+    MAX_ENABLED_STRATEGIES,
     MAX_HISTORY_BARS,
     Allowlist,
+    enabled_strategy_ids,
     get_allowlist,
     get_paper_settings,
+    get_strategy_def,
     load_strategy,
 )
+from aidss_trader.strategy.kinds import ParameterError, build_strategy
 
 logger = logging.getLogger("aidss_trader.runtime")
 
@@ -413,9 +424,7 @@ class Runtime:
             for a, (free, locked) in account.balances.items()
             if a != QUOTE and (free + locked) > 0
         ]
-        wanted = sorted(
-            {canonical(p) for p in (pairs or active)} | {f"{a}{QUOTE}" for a in held}
-        )
+        wanted = sorted({canonical(p) for p in (pairs or active)} | {f"{a}{QUOTE}" for a in held})
         # Prices already fetched this cycle are reused; only what is still missing is asked for.
         prices = dict(prices or {})
         missing = [w for w in wanted if w not in prices]
@@ -859,41 +868,123 @@ class Runtime:
         allow = get_allowlist(s)
         active = self._active_pairs(s, allow)
         strategy = load_strategy(s)
-        if strategy is None or not active:
+        extras, wind_down = self._paper_extras(s, report)
+        if (strategy is None and not extras and not wind_down) or not active:
             report.skipped.append("no strategy parameters or empty allowlist")
             return
-        row = s.get(StrategyRow, strategy.name)
-        if row is None or row.version != strategy.version_id():
+        row = s.get(StrategyRow, strategy.name) if strategy is not None else None
+        reference_ok = (
+            strategy is not None and row is not None and row.version == strategy.version_id()
+        )
+        if strategy is not None and not reference_ok:
             report.skipped.append("strategy version is not registered")
-            return
         if limits is None or unset_risk_fields(limits):
             report.skipped.append("required risk limits unset")
             return
-        paper_equity: Decimal | None = None
-        if row.mode == "PAPER":
-            ps = get_paper_settings(s)
-            if ps is None:
-                report.skipped.append("paper cost model and start capital unset (owner)")
-                return
-            positions, events = accounting.replay_origin(s, "PAPER")
-            closes = {p: c[-1].close for p in active if (c := self._load_candles(s, p))}
-            paper_equity = accounting.paper_equity(ps.start_equity_idr, positions, events, closes)
+        paper: list[tuple[str, Any]] = []
+        if reference_ok and row is not None and row.mode == "PAPER":
+            paper.append((REFERENCE, strategy))
+        paper += extras
+        if reference_ok and strategy is not None and row is not None and row.mode != "PAPER":
+            self._decide_live_reference(
+                s,
+                ks,
+                notifier,
+                snap,
+                limits,
+                positions,
+                events,
+                report,
+                strategy,
+                row.mode,
+                allow,
+                active,
+            )
+        if paper or wind_down:
+            self._decide_paper_book(s, snap, limits, report, allow, active, paper, wind_down)
+
+    def _paper_extras(
+        self, s: Session, report: CycleReport
+    ) -> tuple[list[tuple[str, Any]], list[tuple[str, Any]]]:
+        """The user-built strategies to evaluate in the paper book.
+
+        `extras` are the enabled ones, which may enter and exit. `wind_down` are strategies that
+        are no longer enabled (or whose definition changed) but still own an open paper position:
+        they may exit it, never enter (ADR-062). A strategy that cannot be built, or whose version
+        is not registered as PAPER, is skipped with its reason, never guessed at.
+        """
+        enabled = [sid for sid in enabled_strategy_ids(s) if sid != REFERENCE]
+        if len(enabled) > MAX_ENABLED_STRATEGIES:
+            report.skipped.append(
+                f"{len(enabled)} strategies enabled, only the first {MAX_ENABLED_STRATEGIES} run"
+            )
+            enabled = enabled[:MAX_ENABLED_STRATEGIES]
+        try:
+            owners = set(paper_ownership(s).owners.values())
+        except OwnershipError:
+            owners = set()  # decided again, and reported, in the paper book itself
+        owning = sorted(o for o in owners if o != REFERENCE and o not in enabled)
+        built: dict[str, list[tuple[str, Any]]] = {"extras": [], "wind_down": []}
+        for sid, kind in [(i, "extras") for i in enabled] + [(i, "wind_down") for i in owning]:
+            d = get_strategy_def(s, sid)
+            if d is None:
+                report.skipped.append(f"{sid}: no definition")
+                continue
+            try:
+                strat = build_strategy(d.kind, d.params)
+            except ParameterError as exc:
+                report.skipped.append(f"{sid}: {exc}")
+                continue
+            reg = s.get(StrategyRow, sid)
+            if reg is None or reg.version != strat.version_id() or reg.mode != "PAPER":
+                report.skipped.append(f"{sid}: version is not registered as PAPER")
+                continue
+            built[kind].append((sid, strat))
+        return built["extras"], built["wind_down"]
+
+    def _pair_ready(
+        self, s: Session, pair: str, allow: Allowlist | None, snap: Snapshot, report: CycleReport
+    ) -> Any:
+        """The pair's rules and closed candles when it may be decided on, else None."""
+        rules = self._rules.get(pair)
+        if rules is None or not rules.tradable:
+            report.skipped.append(f"{pair}: pair rules missing or blocked")
+            return None
+        if not self._liquid(s, pair, allow, snap):
+            report.skipped.append(f"{pair}: liquidity filter unset or not met")
+            return None
+        candles = self._load_candles(s, pair)
+        last = candles[-1] if candles else None
+        if last is not None and (
+            (self._now() - last.open_time).total_seconds() > 2 * TIMEFRAME_SECONDS[self._tf]
+        ):
+            report.skipped.append(f"{pair}: latest closed candle is stale")
+            return None
+        return rules, candles
+
+    def _decide_live_reference(
+        self,
+        s,
+        ks,
+        notifier,
+        snap,
+        limits,
+        positions,
+        events,
+        report,
+        strategy,
+        mode,
+        allow,
+        active,
+    ) -> None:
+        """The reference strategy in APPROVAL or AUTO: LIVE intents through the Risk Engine."""
         for pair in active:
-            rules = self._rules.get(pair)
-            if rules is None or not rules.tradable:
-                report.skipped.append(f"{pair}: pair rules missing or blocked")
+            ready = self._pair_ready(s, pair, allow, snap, report)
+            if ready is None:
                 continue
-            if not self._liquid(s, pair, allow, snap):
-                report.skipped.append(f"{pair}: liquidity filter unset or not met")
-                continue
-            candles = self._load_candles(s, pair)
+            rules, candles = ready
             if len(candles) < strategy.min_history():
                 report.skipped.append(f"{pair}: not enough candle history")
-                continue
-            tf_s = TIMEFRAME_SECONDS[self._tf]
-            last = candles[-1]
-            if (self._now() - last.open_time).total_seconds() > 2 * tf_s:
-                report.skipped.append(f"{pair}: latest closed candle is stale")
                 continue
             self._decide_pair(
                 s,
@@ -905,12 +996,92 @@ class Runtime:
                 events,
                 report,
                 strategy,
-                row.mode,
+                mode,
                 pair,
                 rules,
                 candles,
-                paper_equity,
+                None,
             )
+
+    def _decide_paper_book(
+        self, s, snap, limits, report, allow, active, strategies, wind_down
+    ) -> None:
+        """Every paper strategy over every active pair, one owner per pair (ADR-062).
+
+        Strategies are taken in ascending id, so a same-candle collision goes to the lower id and
+        a replay decides the same way. Only the PAPER origin is touched: nothing here can create
+        a LIVE intent, reach the order manager, or move the kill switch.
+        """
+        ps = get_paper_settings(s)
+        if ps is None:
+            report.skipped.append("paper cost model and start capital unset (owner)")
+            return
+        try:
+            own = paper_ownership(s)
+        except OwnershipError as exc:
+            # An owner that cannot be named is never guessed: no new paper entries this cycle.
+            report.errors.append(f"paper ownership: {exc}")
+            return
+        positions, events = accounting.replay_origin(s, "PAPER")
+        closes = {p: c[-1].close for p in active if (c := self._load_candles(s, p))}
+        equity = accounting.paper_equity(ps.start_equity_idr, positions, events, closes)
+        order = sorted([*strategies, *wind_down], key=lambda x: x[0])
+        winding = {sid for sid, _ in wind_down}
+        for pair in active:
+            ready = self._pair_ready(s, pair, allow, snap, report)
+            if ready is None:
+                continue
+            rules, candles = ready
+            for sid, strategy in order:
+                if len(candles) < strategy.min_history():
+                    report.skipped.append(f"{pair}: {sid}: not enough candle history")
+                    continue
+
+                def gate(intent, sid=sid, pair=pair) -> str | None:
+                    if sid in winding:
+                        return "strategy_disabled"
+                    why = own.blocked_for(pair, sid)
+                    if why is not None:
+                        return why
+                    held = set(own.positions) | set(own.claims)
+                    price = lambda p: snap.prices.get(p, own.positions[p].avg_cost)  # noqa: E731
+                    exposure = {p: pos.quantity * price(p) for p, pos in own.positions.items()}
+                    return paper_entry_refusal(
+                        limits=limits,
+                        equity=equity,
+                        open_positions=len(held),
+                        pair_exposure=exposure.get(pair, ZERO),
+                        total_exposure=sum(exposure.values(), ZERO),
+                        value=intent.quantity * intent.entry_price,
+                    )
+
+                before = len(report.intents)
+                self._decide_pair(
+                    s,
+                    None,
+                    None,
+                    snap,
+                    limits,
+                    own.owned_by(sid),
+                    [t for t in own.trades if t.strategy_id == sid],
+                    report,
+                    strategy,
+                    "PAPER",
+                    pair,
+                    rules,
+                    candles,
+                    equity,
+                    strategy_id=sid,
+                    entry_gate=gate,
+                )
+                if len(report.intents) > before:
+                    intent_side = s.scalar(
+                        select(OrderIntentRow.side).where(
+                            OrderIntentRow.identity == report.intents[-1]
+                        )
+                    )
+                    if intent_side == "BUY":
+                        own.claims[pair] = sid
 
     def _decide_pair(
         self,
@@ -928,6 +1099,9 @@ class Runtime:
         rules,
         candles,
         equity_override: Decimal | None = None,
+        *,
+        strategy_id: str | None = None,
+        entry_gate: Callable[[Intent], str | None] | None = None,
     ) -> None:
         from aidss_trader.strategy.base import PositionState, SignalKind
 
@@ -979,6 +1153,11 @@ class Runtime:
         intent = built.intent
         if s.scalar(select(OrderIntentRow).where(OrderIntentRow.identity == intent.identity)):
             return  # this candle was already decided: a restart cannot create a second intent
+        if entry_gate is not None and intent.side == "BUY":
+            refusal = entry_gate(intent)
+            if refusal is not None:
+                report.skipped.append(f"{pair}: {strategy_id or REFERENCE}: {refusal}")
+                return
         sends_now = mode == "AUTO" or (mode == "APPROVAL" and intent.side == "SELL")
         if sends_now and not self._recon_state(s)[0]:
             # Wait rather than decide: an intent refused for a transient reason would use up
@@ -995,6 +1174,7 @@ class Runtime:
                 identity=intent.identity,
                 origin="PAPER" if mode == "PAPER" else "LIVE",
                 strategy_version=intent.strategy_version,
+                strategy_id=strategy_id or REFERENCE,
                 pair=pair,
                 side=intent.side,
                 entry_price=intent.entry_price,

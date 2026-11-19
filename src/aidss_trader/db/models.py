@@ -168,6 +168,10 @@ class OrderIntentRow(Base):
     identity: Mapped[str] = mapped_column(String(160), unique=True)
     origin: Mapped[str] = mapped_column(String(10))  # LIVE | PAPER | BACKTEST
     strategy_version: Mapped[str] = mapped_column(String(64))
+    #: The owner's strategy id (S2). NULL means the reference strategy `ema_adx`: every intent
+    #: written before this column existed came from it. The version string cannot say, because a
+    #: user-built strategy's version is `<kind>-<hash>`.
+    strategy_id: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
     pair: Mapped[str] = mapped_column(String(16), index=True)
     side: Mapped[str] = mapped_column(String(4))
     entry_price: Mapped[Decimal] = mapped_column(Money)

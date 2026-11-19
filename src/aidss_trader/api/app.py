@@ -70,9 +70,16 @@ from aidss_trader.runtime.accounting import (
     paper_drawdown_pct,
     replay_origin,
 )
+from aidss_trader.runtime.ownership import (
+    REFERENCE,
+    OwnershipError,
+    paper_ownership,
+    strategy_stats,
+)
 from aidss_trader.runtime.pair_selection import spread_pct as pair_spread_pct
 from aidss_trader.runtime.settings_store import (
     MAX_ALL_PAIRS_LIMIT,
+    MAX_ENABLED_STRATEGIES,
     MAX_HISTORY_BARS,
     THRESHOLD_FIELDS,
     Allowlist,
@@ -80,6 +87,8 @@ from aidss_trader.runtime.settings_store import (
     PaperSettings,
     StrategyDef,
     delete_strategy_def,
+    duplicate_strategy_def,
+    enabled_strategy_ids,
     get_allowlist,
     get_pair_groups,
     get_paper_settings,
@@ -93,6 +102,7 @@ from aidss_trader.runtime.settings_store import (
     set_paper_settings,
     set_promotion_thresholds,
     set_strategy_def,
+    set_strategy_enabled,
     set_strategy_params,
     threshold_problem,
     thresholds_loosen,
@@ -533,6 +543,28 @@ class StrategyDefModel(BaseModel):
     backtest_trades: int
     backtest_return_pct: str | None
     backtest_ran_at: str | None
+    paper_enabled: bool = False
+    paper_owned_pairs: list[str] = []
+
+
+class PaperToggleBody(BaseModel):
+    enabled: bool
+
+
+class PaperTradeStats(BaseModel):
+    trades: int
+    wins: int
+    pnl_idr: str
+    drawdown_pct: str | None
+
+
+class StrategyPaperData(BaseModel):
+    strategy_id: str
+    enabled: bool
+    owned_pairs: list[str]
+    claimed_pairs: list[str]
+    stats: PaperTradeStats
+    max_enabled: int
 
 
 class StrategyBacktestData(BaseModel):
@@ -744,6 +776,21 @@ class _Replays:
         except Exception:  # noqa: BLE001 - pruning failure is non-fatal
             pass
 
+
+def _own_paper_drawdown(s: Session, strategy_id: str, since: datetime):
+    """The strategy's own paper drawdown (ADR-062), or None when there is no evidence: no paper
+    settings, an unattributable book, or no sale of its own since `since`."""
+    ps = get_paper_settings(s)
+    if ps is None:
+        return None
+    try:
+        found = strategy_stats(paper_ownership(s), ps.start_equity_idr, since=since)
+    except OwnershipError:
+        return None
+    stats = found.get(strategy_id)
+    return None if stats is None else stats.drawdown_pct
+
+
 def create_app(ctx: ApiContext) -> FastAPI:
     app = FastAPI(title="AIDSS Trader API", docs_url=None, redoc_url=None)
     replays = _Replays(ctx.session_factory)
@@ -941,7 +988,9 @@ def create_app(ctx: ApiContext) -> FastAPI:
                     strategy_id,
                     nxt,
                     active_thresholds(s),
-                    SuppliedEvidence(paper_drawdown_pct=paper_drawdown_pct(s, row.since)),
+                    SuppliedEvidence(
+                        paper_drawdown_pct=_own_paper_drawdown(s, strategy_id, row.since)
+                    ),
                 )
             ]
             if nxt
@@ -1173,6 +1222,15 @@ def create_app(ctx: ApiContext) -> FastAPI:
         row = s.get(StrategyRow, strategy_id)
         if row is None:
             raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        if strategy_id != REFERENCE:
+            # Strategies built here run in the paper book only (ADR-062): there is no live
+            # ownership model for them yet, so they cannot be promoted.
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "paper_only",
+                "only the reference strategy can be promoted; this one runs in paper only",
+            )
         needs_step = row.mode == "APPROVAL"  # the next mode is AUTO
         if needs_step:
             step_up(s, who, "PROMOTE_AUTO", x_step_up)
@@ -1184,7 +1242,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         # the owner could edit before promoting would be no evidence at all.
         supplied = SuppliedEvidence(
             None,  # the backtest figure comes from stored runs (ADR-059), never from the caller
-            paper_drawdown_pct(s, row.since),
+            _own_paper_drawdown(s, strategy_id, row.since),
             d(body.live_capital_used_idr),
             d(body.slippage_vs_paper_pct),
         )
@@ -1431,9 +1489,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
                         else format(spread.quantize(Decimal("0.0001")), "f"),
                     }
                 )
-            rows.sort(
-                key=lambda x: (-Decimal(x["quote_volume_24h_idr"] or "0"), x["pair"])
-            )
+            rows.sort(key=lambda x: (-Decimal(x["quote_volume_24h_idr"] or "0"), x["pair"]))
             catalog_cache["rows"], catalog_cache["at"] = rows, time.monotonic()
         return envelope({"pairs": catalog_cache["rows"]}, source="exchange")
 
@@ -1597,9 +1653,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
     def _label(label: str) -> str:
         text = " ".join(label.split())
         if not text or len(text) > MAX_LABEL:
-            raise ApiError(
-                400, "VALIDATION", "bad_label", f"a name is 1 to {MAX_LABEL} characters"
-            )
+            raise ApiError(400, "VALIDATION", "bad_label", f"a name is 1 to {MAX_LABEL} characters")
         return text
 
     @app.get(f"{r}/strategy-kinds", response_model=Envelope[list[KindModel]])
@@ -1628,6 +1682,14 @@ def create_app(ctx: ApiContext) -> FastAPI:
     @app.get(f"{r}/strategy-defs", response_model=Envelope[list[StrategyDefModel]])
     def strategy_defs(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
         out = []
+        enabled = set(enabled_strategy_ids(s))
+        try:
+            book = paper_ownership(s)
+            owned: dict[str, list[str]] = {}
+            for pair, sid in book.owners.items():
+                owned.setdefault(sid, []).append(pair)
+        except OwnershipError:
+            owned = {}
         for d in list_strategy_defs(s):
             version, error = _def_version(d)
             rows = [] if version is None else _latest_rows(s, d.id, version)
@@ -1648,6 +1710,8 @@ def create_app(ctx: ApiContext) -> FastAPI:
                         _cell(sum((x.total_return_pct for x in rows), ZERO)) if rows else None
                     ),
                     "backtest_ran_at": _cell(max(x.ran_at for x in rows)) if rows else None,
+                    "paper_enabled": d.id in enabled,
+                    "paper_owned_pairs": sorted(owned.get(d.id, [])),
                 }
             )
         return envelope(out, origin="PAPER")
@@ -1677,6 +1741,14 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(409, "CONFLICT", "strategy_exists", "a strategy with this id exists")
         label = _label(body.label)
         version = _validated(body.kind, body.params)
+        twin = duplicate_strategy_def(s, body.kind, body.params)
+        if twin is not None:
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "duplicate_parameters",
+                f"{twin} already has this kind and these numbers; change a number or edit it",
+            )
         set_strategy_def(
             s, StrategyDef(body.id, body.kind, label, dict(body.params)), by=who.user_id
         )
@@ -1723,10 +1795,22 @@ def create_app(ctx: ApiContext) -> FastAPI:
             )
         label = _label(body.label)
         version = _validated(existing.kind, body.params)
+        twin = duplicate_strategy_def(s, existing.kind, body.params, exclude=strategy_id)
+        if twin is not None:
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "duplicate_parameters",
+                f"{twin} already has this kind and these numbers; change a number",
+            )
         set_strategy_def(
             s, StrategyDef(strategy_id, existing.kind, label, dict(body.params)), by=who.user_id
         )
         s.commit()
+        if strategy_id in enabled_strategy_ids(s) or s.get(StrategyRow, strategy_id) is not None:
+            # A new version starts in PAPER (ADR-020); registering it keeps an enabled strategy
+            # running. An open position it owns stays its own and is managed by the new version.
+            Promotion(s).register(strategy_id, version)
         rows = _latest_rows(s, strategy_id, version)
         return envelope(
             {
@@ -1758,6 +1842,20 @@ def create_app(ctx: ApiContext) -> FastAPI:
         existing = get_strategy_def(s, strategy_id)
         if existing is None:
             raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        try:
+            book = paper_ownership(s)
+        except OwnershipError:
+            raise ApiError(
+                409, "CONFLICT", "strategy_in_use", "the paper book cannot be attributed; try later"
+            ) from None
+        if strategy_id in book.owners.values() or strategy_id in book.claims.values():
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "strategy_in_use",
+                "this strategy holds a paper position or has an entry waiting to fill; "
+                "disable it and let the position close first",
+            )
         if existing.legacy:
             # The runtime trades this one. Removing its parameters while a position or an order
             # is open would leave something open that nothing manages.
@@ -1776,12 +1874,77 @@ def create_app(ctx: ApiContext) -> FastAPI:
                     409,
                     "CONFLICT",
                     "strategy_in_use",
-                    "this strategy has an open position or an unfinished order; "
-                    "close it first",
+                    "this strategy has an open position or an unfinished order; close it first",
                 )
         delete_strategy_def(s, strategy_id, by=who.user_id)
         s.commit()
         return envelope({"deleted": True}, origin="PAPER")
+
+    def _paper_data(s: Session, strategy_id: str) -> dict[str, Any]:
+        ps = get_paper_settings(s)
+        try:
+            book = paper_ownership(s)
+        except OwnershipError:
+            raise ApiError(
+                409, "CONFLICT", "paper_book_unattributable", "the paper book cannot be attributed"
+            ) from None
+        st = strategy_stats(book, ps.start_equity_idr).get(strategy_id) if ps is not None else None
+        return {
+            "strategy_id": strategy_id,
+            "enabled": strategy_id in enabled_strategy_ids(s) or strategy_id == REFERENCE,
+            "owned_pairs": sorted(p for p, o in book.owners.items() if o == strategy_id),
+            "claimed_pairs": sorted(p for p, o in book.claims.items() if o == strategy_id),
+            "stats": {
+                "trades": 0 if st is None else st.trades,
+                "wins": 0 if st is None else st.wins,
+                "pnl_idr": "0" if st is None else _cell(st.pnl),
+                "drawdown_pct": None
+                if st is None or st.drawdown_pct is None
+                else _cell(st.drawdown_pct),
+            },
+            "max_enabled": MAX_ENABLED_STRATEGIES,
+        }
+
+    @app.get(f"{r}/strategy-defs/{{strategy_id}}/paper", response_model=Envelope[StrategyPaperData])
+    def strategy_paper(
+        strategy_id: str, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
+    ):
+        if get_strategy_def(s, strategy_id) is None:
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        return envelope(_paper_data(s, strategy_id), origin="PAPER")
+
+    @app.put(f"{r}/strategy-defs/{{strategy_id}}/paper", response_model=Envelope[StrategyPaperData])
+    def set_strategy_paper(
+        strategy_id: str,
+        body: PaperToggleBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        d = get_strategy_def(s, strategy_id)
+        if d is None:
+            raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
+        if strategy_id == REFERENCE:
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "reference_has_own_mode",
+                "the reference strategy runs according to its own mode, not this switch",
+            )
+        if body.enabled:
+            version = _validated(d.kind, d.params)
+            others = [i for i in enabled_strategy_ids(s) if i != strategy_id]
+            if len(others) >= MAX_ENABLED_STRATEGIES:
+                raise ApiError(
+                    409,
+                    "CONFLICT",
+                    "too_many_enabled",
+                    f"at most {MAX_ENABLED_STRATEGIES} strategies can run in paper at once",
+                )
+            Promotion(s).register(strategy_id, version)
+        set_strategy_enabled(s, strategy_id, body.enabled, by=who.user_id)
+        s.commit()
+        return envelope(_paper_data(s, strategy_id), origin="PAPER")
 
     @app.get(
         f"{r}/strategy-defs/{{strategy_id}}/backtests",
@@ -1849,9 +2012,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             raise ApiError(404, "NOT_FOUND", "unknown_strategy", "no such strategy")
         for sid in wanted:
             _validated(defs[sid].kind, defs[sid].params)
-        picked = [
-            (sid, (lambda d=defs[sid]: build_strategy(d.kind, d.params))) for sid in wanted
-        ]
+        picked = [(sid, (lambda d=defs[sid]: build_strategy(d.kind, d.params))) for sid in wanted]
         job = jobs.start(picked, by=f"user:{who.user_id}")
         return envelope(_job_data(job), origin="BACKTEST")
 
@@ -2219,9 +2380,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             }
         ps = get_paper_settings(s)
         latest_peq = s.scalar(
-            select(PaperEquitySnapshot.equity_idr)
-            .order_by(PaperEquitySnapshot.at.desc())
-            .limit(1)
+            select(PaperEquitySnapshot.equity_idr).order_by(PaperEquitySnapshot.at.desc()).limit(1)
         )
         # With no snapshot yet, show cost-marked paper equity if paper is configured.
         if latest_peq is None and ps is not None:

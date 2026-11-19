@@ -3,7 +3,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { idempotencyKey, traderApi, unwrap, TraderError } from "@/trader/client";
-import type { BacktestJob, CredentialKind, KillResult, PromotionThresholds, StrategyDef } from "@/trader/types";
+import type {
+  BacktestJob,
+  CredentialKind,
+  KillResult,
+  PromotionThresholds,
+  StrategyDef,
+  StrategyPaper,
+} from "@/trader/types";
 import type { PairGroup } from "@/trader/pairGroups";
 
 /**
@@ -449,6 +456,22 @@ export function useDeleteStrategyDef() {
           params: { path: { strategy_id: id }, header: { "Idempotency-Key": idempotencyKey() } },
         }),
       ),
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useSetStrategyPaper() {
+  const refresh = useAfterMutation();
+  return useMutation<StrategyPaper, TraderError, { id: string; enabled: boolean }>({
+    mutationFn: async ({ id, enabled }) => {
+      const out = await unwrap<StrategyPaper>(
+        traderApi.PUT("/trader/v1/strategy-defs/{strategy_id}/paper", {
+          params: { path: { strategy_id: id }, header: { "Idempotency-Key": idempotencyKey() } },
+          body: { enabled },
+        }),
+      );
+      return out.data;
+    },
     onSettled: () => void refresh(),
   });
 }

@@ -391,14 +391,20 @@ def test_the_paper_config_and_promotion_evidence_over_the_api() -> None:
     assert got["configured"] is True and got["taker_fee_pct"] == "0.2"
     with w.factory() as s:
         from aidss_trader.promotion import Promotion
+        from tests.trader.test_s2_multi_strategy import close_position, open_position
 
         Promotion(s).register("ema_adx", "v1")
-        for i, e in enumerate(["100", "120", "90"]):
-            accounting.record_paper_equity(s, D(e), datetime.now(UTC) + timedelta(seconds=i))
-        s.commit()
+        now = datetime.now(UTC)
+        # +20% then -25% of the start equity, as two of the strategy's own round trips
+        big = D("1000000000")
+        open_position(s, None, "AAAIDR", now + timedelta(seconds=1), price=big)
+        close_position(s, "AAAIDR", big + D("20000000"), now + timedelta(seconds=2))
+        open_position(s, None, "BBBIDR", now + timedelta(seconds=3), price=big)
+        close_position(s, "BBBIDR", big - D("30000000"), now + timedelta(seconds=4))
     gates = call("GET", "/strategies/ema_adx/promotion").json()["data"]["gates"]
     dd = next(g for g in gates if g["name"] == "paper_drawdown")
-    assert D(dd["measured"]) == D("25")  # computed from the stored series, not supplied by anyone
+    # measured from the strategy's own sales, not supplied by anyone: 120M falls to 90M
+    assert D(dd["measured"]) == D("25")
 
 
 def test_paper_config_rejects_negative_or_absurd_costs_over_the_api() -> None:
