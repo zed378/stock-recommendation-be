@@ -64,6 +64,7 @@ rather than only a mention in a chat or a record.
 | Tamper-evidence design for the audit log | `09/04` | T1-05 ADR |
 | Step-up authentication mechanism for high-impact actions | `09/01` | T5-01 ADR |
 | The promotion gate for the backtest now reads stored BACKTEST runs (ADR-059, 2026-11-18) and refuses a typed figure. **Still typed by the owner:** `live_capital_used_idr` and `slippage_vs_paper_pct` for APPROVAL to AUTO, both measurable from the ledger and the paper book | `src/aidss_trader/api/app.py` (promote), `promotion/gates.py` | Owner decision, before any APPROVAL period produces evidence; a true portfolio backtest (with the open-position and exposure limits) would replace the per-pair sum |
+| Reconciliation asks the exchange for `myTrades` once per watched pair every 60 s, through the throttle. With 18 pairs a cycle sometimes blocks about 11 s (a 16 s gap between cycles was seen on 2026-11-19, past the 15 s heartbeat limit of `healthcheck`, so a manual healthcheck can read 1 for one cycle). With ALL on and up to 200 pairs it would block for minutes and trip the watchdog | `reconcile/reconciler.py`, `runtime/loop.py` (`_housekeeping`) | Owner decision before ALL is switched on: reconcile only pairs with orders or positions, or rotate the pairs per run, or reconcile ALL-selected pairs less often. Any of them narrows what the exchange-is-the-source-of-truth check sees |
 
 ## Deliberate Deferrals
 
