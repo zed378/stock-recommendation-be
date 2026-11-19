@@ -4,7 +4,13 @@ import { useI18n } from "@/i18n/context";
 import { Card, Button, Empty } from "@/components/primitives";
 import { OriginBadge, PanelBody } from "@/trader/components";
 import { traderApi, TraderError } from "@/trader/client";
-import { groupDigits } from "@/trader/format";
+import {
+  displayAmount,
+  displayPercent,
+  displayPrice,
+  displayQuantity,
+  groupDigits,
+} from "@/trader/format";
 import { useTraderQuery } from "@/trader/hooks";
 import { KillControls } from "@/trader/KillControls";
 import { exportTraderCsv, useAcknowledge } from "@/trader/mutations";
@@ -50,7 +56,7 @@ export function Trader() {
 
       <OpenOrders query={dashboard} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <LimitsPanel />
         <ReconciliationPanel />
       </div>
@@ -64,82 +70,79 @@ export function Trader() {
 
 export function OriginPortfolioBlock({ data }: { data: OriginPortfolio }) {
   const { t, locale } = useI18n();
-  const idr = (v: string | null) => (v === null ? "-" : `Rp ${groupDigits(v, locale)}`);
+  // Display only: the figure is rounded for reading, the exact string the server sent stays in
+  // the tooltip, and nothing here is sent back anywhere.
+  const rupiah = (v: string | null, show = displayAmount) =>
+    v === null ? "-" : `Rp\u00a0${groupDigits(show(v), locale)}`;
+  const tile = (label: string, value: string, exact: string | null) => (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-1 space-y-1">
+        <div
+          className="whitespace-nowrap font-mono text-sm tnum text-ink"
+          title={exact === null ? undefined : exact}
+        >
+          {value}
+        </div>
+        <OriginBadge origin={data.origin} compact />
+      </dd>
+    </div>
+  );
   return (
     <div className="space-y-4">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-        {data.start_equity_idr !== null && (
-          <div>
-            <dt className="text-xs text-muted">{t("trader.portfolio.startEquity")}</dt>
-            <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
-              {idr(data.start_equity_idr)}
-              <OriginBadge origin={data.origin} />
-            </dd>
-          </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm sm:grid-cols-3">
+        {data.start_equity_idr !== null &&
+          tile(t("trader.portfolio.startEquity"), rupiah(data.start_equity_idr), data.start_equity_idr)}
+        {tile(t("trader.portfolio.latestEquity"), rupiah(data.latest_equity_idr), data.latest_equity_idr)}
+        {tile(t("trader.portfolio.realisedPnl"), rupiah(data.realised_pnl_idr), data.realised_pnl_idr)}
+        {tile(
+          t("trader.portfolio.drawdown"),
+          data.drawdown_pct === null ? "-" : `${displayPercent(data.drawdown_pct)}%`,
+          data.drawdown_pct,
         )}
-        <div>
-          <dt className="text-xs text-muted">{t("trader.portfolio.latestEquity")}</dt>
-          <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
-            {idr(data.latest_equity_idr)}
-            <OriginBadge origin={data.origin} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">{t("trader.portfolio.realisedPnl")}</dt>
-          <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
-            {idr(data.realised_pnl_idr)}
-            <OriginBadge origin={data.origin} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">{t("trader.portfolio.drawdown")}</dt>
-          <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
-            {data.drawdown_pct === null ? "-" : `${data.drawdown_pct}%`}
-            <OriginBadge origin={data.origin} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">{t("trader.portfolio.dailyLoss")}</dt>
-          <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
-            {idr(data.daily_loss_idr)}
-            <OriginBadge origin={data.origin} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">{t("trader.portfolio.closedTrades")}</dt>
-          <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-xs tnum text-ink">
-            {data.trades_closed}
-            <OriginBadge origin={data.origin} />
-          </dd>
-        </div>
+        {tile(t("trader.portfolio.dailyLoss"), rupiah(data.daily_loss_idr), data.daily_loss_idr)}
+        {tile(t("trader.portfolio.closedTrades"), String(data.trades_closed), null)}
       </dl>
 
       {data.positions.length === 0 ? (
         <p className="text-xs text-muted">{t("trader.portfolio.noPositions")}</p>
       ) : (
         <div className="-mx-4 overflow-x-auto px-4">
-          <table className="w-full min-w-[32rem] text-left text-sm">
+          <table className="w-full min-w-[30rem] text-left text-xs">
             <thead className="text-xs text-muted">
               <tr>
                 <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.pair")}</th>
-                <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.qty")}</th>
-                <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.avgCost")}</th>
-                <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.costBasis")}</th>
-                <th className="pb-2 pr-3 font-medium">{t("trader.portfolio.col.stop")}</th>
-                <th className="pb-2 font-medium">{t("trader.portfolio.col.target")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("trader.portfolio.col.qty")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("trader.portfolio.col.avgCost")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("trader.portfolio.col.costBasis")}</th>
+                <th className="pb-2 pr-3 text-right font-medium">{t("trader.portfolio.col.stop")}</th>
+                <th className="pb-2 text-right font-medium">{t("trader.portfolio.col.target")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {data.positions.map((p) => (
                 <tr key={`${p.origin}-${p.pair}`}>
-                  <td className="py-2 pr-3 font-mono">
-                    {p.pair} <OriginBadge origin={p.origin} />
+                  <td className="py-2 pr-3 align-top font-mono">
+                    <div className="whitespace-nowrap">{p.pair}</div>
+                    <div className="mt-1">
+                      <OriginBadge origin={p.origin} compact />
+                    </div>
                   </td>
-                  <td className="py-2 pr-3 font-mono tnum">{p.quantity}</td>
-                  <td className="py-2 pr-3 font-mono tnum">{idr(p.avg_cost)}</td>
-                  <td className="py-2 pr-3 font-mono tnum">{idr(p.cost_basis_idr)}</td>
-                  <td className="py-2 pr-3 font-mono tnum">{idr(p.stop_price)}</td>
-                  <td className="py-2 font-mono tnum">{idr(p.target_price)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-right align-top font-mono tnum" title={p.quantity}>
+                    {groupDigits(displayQuantity(p.quantity), locale)}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-right align-top font-mono tnum" title={p.avg_cost ?? undefined}>
+                    {rupiah(p.avg_cost, displayPrice)}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-right align-top font-mono tnum" title={p.cost_basis_idr ?? undefined}>
+                    {rupiah(p.cost_basis_idr)}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-right align-top font-mono tnum" title={p.stop_price ?? undefined}>
+                    {rupiah(p.stop_price, displayPrice)}
+                  </td>
+                  <td className="whitespace-nowrap py-2 text-right align-top font-mono tnum" title={p.target_price ?? undefined}>
+                    {rupiah(p.target_price, displayPrice)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -158,7 +161,9 @@ function PortfolioPanels() {
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted">{t("trader.portfolio.noMixNote")}</p>
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* `grid-cols-1` is minmax(0, 1fr): the bare grid column is `auto`, which let a wide table
+          inside a card stretch the card past the phone screen. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card
           title={
             <h2 className="flex items-center gap-2 text-sm font-medium text-ink">

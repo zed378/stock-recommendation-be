@@ -44,16 +44,33 @@ export function Freshness({
  * Paper and backtest numbers must never be read as live (FR-T28), so this is
  * rendered next to the block and carries words, not just a colour.
  */
-export function OriginBadge({ origin }: { origin: Meta["origin"] }) {
+export function OriginBadge({
+  origin,
+  compact = false,
+}: {
+  origin: Meta["origin"];
+  /** Short visible word for a figure inside a tile or a table row; the full words stay in the
+   * accessible name and the tooltip, so the origin is still stated for every figure. */
+  compact?: boolean;
+}) {
   const { t } = useI18n();
   const live = origin === "LIVE";
+  const full = t(`trader.origin.${origin}`);
   return (
     <span
-      className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide ${
+      title={compact ? full : undefined}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide ${
         live ? "border-line text-muted" : "border-watch/50 bg-watch/10 text-watch"
       }`}
     >
-      {t(`trader.origin.${origin}`)}
+      {compact ? (
+        <>
+          <span aria-hidden="true">{origin}</span>
+          <span className="sr-only">{full}</span>
+        </>
+      ) : (
+        full
+      )}
     </span>
   );
 }
