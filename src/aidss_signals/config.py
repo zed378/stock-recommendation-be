@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Any
 
 PREFIX = "AIDSS_SIGNALS_"
 DEFAULT_TOP_N = 5  # the owner's own default for how many coins are picked by volume (2026-11-20)
@@ -156,4 +157,39 @@ def load_config(env: Mapping[str, str] | None = None) -> SignalsConfig | None:
         ack_log_path=data / "signals-acks.jsonl",
         client_token=token,
         notes=tuple(notes),
+    )
+
+
+def config_from_settings(settings: Any, env: Mapping[str, str] | None = None) -> SignalsConfig:
+    """The worker's config from the owner's database settings (ADR-066), plus the few things that
+    are not the owner's to set from a screen: where candles come from, where the receiver listens,
+    and its secret token. `settings` is `aidss_trader.signals_config.SignalSettings`; the caller
+    checks that nothing is unset first."""
+    env = os.environ if env is None else env
+    data = Path(env.get(PREFIX + "DATA_DIR", "").strip() or "data")
+    token = env.get(PREFIX + "CLIENT_TOKEN", "").strip()
+    port_text = env.get(PREFIX + "PORT", "").strip() or "0"
+    base = (env.get(PREFIX + "KLINES_BASE", "").strip() or "https://api.binance.com").rstrip("/")
+    if not re.fullmatch(r"https://[A-Za-z0-9.-]+(:\d+)?", base):
+        raise ConfigError(f"{PREFIX}KLINES_BASE must be an https origin")
+    if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:
+        raise ConfigError(f"{PREFIX}PORT must be a port number")
+    return SignalsConfig(
+        mode=settings.mode,
+        fixed_symbols=tuple(settings.symbols),
+        top_n=settings.top_n,
+        min_quote_volume_usdt=settings.min_quote_volume_usdt,
+        horizons=tuple(settings.horizons),
+        min_score_ratio=float(settings.min_score_ratio),
+        atr_stop_multiple=float(settings.atr_stop_multiple),
+        tp_r=tuple(float(v) for v in settings.tp_r),  # type: ignore[arg-type]
+        ai_min_score=int(settings.ai_min_score),
+        ai_max_calls=int(settings.ai_max_calls),
+        klines_base=base,
+        host=env.get(PREFIX + "HOST", "").strip() or "127.0.0.1",
+        port=int(port_text),
+        state_path=data / "signals-state.json",
+        decision_log_path=data / "signals-decisions.jsonl",
+        ack_log_path=data / "signals-acks.jsonl",
+        client_token=token,
     )

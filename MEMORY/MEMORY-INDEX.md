@@ -79,3 +79,4 @@ One line per record, newest first. Add new entries at the top.
 - [S2: several strategies in the paper loop (2026-11-19)](records/2026-11-19-s2-multi-strategy-paper.md) — pair ownership, migration 0009, paper card; tested locally, not deployed
 - [cryptospike-client local engine patch (2026-11-20)](records/2026-11-20-cryptospike-local-engine.md) — repo analysis, local strategy engine as a patch in integrations/; off by default, SHADOW first, not tested against an exchange
 - [Crypto signal worker in SHADOW on the VM (2026-11-20)](records/2026-11-20-signals-worker-shadow.md) — standalone container stocks-signals, placeholder numbers, first pass all below threshold
+- [Crypto signals: operator menu, DB settings and history (2026-11-20)](records/2026-11-20-signals-menu-and-history.md) — migration 0011, /trader/signals, worker DB mode; built, not deployed

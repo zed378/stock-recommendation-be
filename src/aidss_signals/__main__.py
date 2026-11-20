@@ -46,6 +46,65 @@ def _next_pass(now: datetime) -> datetime:
     return today if today > now else today + timedelta(days=1)
 
 
+async def _serve_db(env) -> None:
+    """Database mode: the owner's settings come from the operator screen (ADR-066)."""
+    import os
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from aidss_signals.runner import poll_once
+    from aidss_signals.store import SignalStore
+
+    url = env["AIDSS_SIGNALS_DATABASE_URL"]
+    store = SignalStore(
+        sessionmaker(create_engine(url, pool_pre_ping=True), expire_on_commit=False)
+    )
+    token = env.get("AIDSS_SIGNALS_CLIENT_TOKEN", "").strip()
+    port = int(env.get("AIDSS_SIGNALS_PORT", "0") or 0)
+    host = env.get("AIDSS_SIGNALS_HOST", "").strip() or "127.0.0.1"
+    hub = None
+    if len(token) >= 16 and port > 0:
+        import uvicorn
+
+        from aidss_signals.server import SignalHub
+
+        hub = SignalHub(token)
+        hub.on_ack = store.save_ack
+        asyncio.create_task(
+            uvicorn.Server(
+                uvicorn.Config(hub.app, host=host, port=port, log_level="warning")
+            ).serve()
+        )
+        logger.info("receiver listening on %s:%s", host, port)
+    loop = asyncio.get_running_loop()
+    log = lambda lvl, msg: logger.log(getattr(logging, lvl, 20), msg)  # noqa: E731
+
+    def publish(signal: dict[str, Any]) -> None:
+        if hub is not None:
+            asyncio.run_coroutine_threadsafe(hub.publish(signal), loop).result(timeout=15)
+
+    poll_s = int(os.environ.get("AIDSS_SIGNALS_POLL_SECONDS", "30") or 30)
+    while True:
+        try:
+            report = await asyncio.to_thread(
+                poll_once,
+                store,
+                lambda cfg: MarketData(cfg.klines_base),
+                _reviewer,
+                publish,
+                dict(env),
+                datetime.now(UTC),
+                log,
+                hub is not None,
+            )
+            if report is not None:
+                logger.info("pass done: %s", report.outcomes)
+        except Exception:  # noqa: BLE001 - the loop must survive a bad poll
+            logger.exception("poll failed")
+        await asyncio.sleep(max(5, poll_s))
+
+
 async def _serve(cfg) -> None:
     import uvicorn
 
@@ -85,6 +144,12 @@ async def _serve(cfg) -> None:
 
 def main(argv: list[str]) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    import os
+
+    command = argv[1] if len(argv) > 1 else "once"
+    if command == "serve" and os.environ.get("AIDSS_SIGNALS_DATABASE_URL"):
+        asyncio.run(_serve_db(os.environ))
+        return 0
     try:
         cfg = load_config()
     except ConfigError as exc:
@@ -95,7 +160,6 @@ def main(argv: list[str]) -> int:
         return 0
     for note in cfg.notes:
         logger.warning(note)
-    command = argv[1] if len(argv) > 1 else "once"
     if command == "serve":
         asyncio.run(_serve(cfg))
         return 0

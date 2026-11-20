@@ -53,6 +53,9 @@ from aidss_trader.db.models import (
     PaperEquitySnapshot,
     ReconciliationDifference,
     ReconciliationRun,
+    SignalAckRow,
+    SignalCandidate,
+    SignalScan,
     StrategyRow,
     TradingEvent,
 )
@@ -107,6 +110,19 @@ from aidss_trader.runtime.settings_store import (
     threshold_problem,
     thresholds_loosen,
 )
+from aidss_trader.signals_config import (
+    DEFAULT_TOP_N,
+    MAX_TOP_N,
+    VALID_HORIZONS,
+    SignalSettingsError,
+    get_settings_row,
+    get_signal_settings,
+    parse_settings,
+    request_run,
+    set_signal_settings,
+    unset_fields,
+)
+from aidss_trader.signals_config import loosens as signals_loosen
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 from aidss_trader.strategy.kinds import ID_PATTERN, KINDS, MAX_LABEL, ParameterError, build_strategy
 
@@ -608,6 +624,112 @@ class BacktestJobData(BaseModel):
     strategy_ids: list[str]
     done_strategies: int
     results: list[BacktestJobSummaryModel]
+
+
+class SignalsConfigBody(BaseModel):
+    enabled: bool = False
+    mode: str = "SHADOW"
+    symbols: list[str] = []
+    top_n: int | None = None
+    min_quote_volume_usdt: str | None = None
+    horizons: list[str] = []
+    min_score_ratio: str | None = None
+    atr_stop_multiple: str | None = None
+    tp_r: list[str] | None = None
+    ai_min_score: int | None = None
+    ai_max_calls: int | None = None
+    notes: str = ""
+    #: Required, and true, to switch to PUBLISH: a second deliberate act beside the password.
+    confirm_publish: bool = False
+
+
+class SignalsSettingsModel(BaseModel):
+    enabled: bool
+    mode: str
+    symbols: list[str]
+    top_n: int
+    min_quote_volume_usdt: str | None
+    horizons: list[str]
+    min_score_ratio: str | None
+    atr_stop_multiple: str | None
+    tp_r: list[str | None] | None
+    ai_min_score: int | None
+    ai_max_calls: int | None
+
+
+class SignalsConfigData(BaseModel):
+    configured: bool
+    settings: SignalsSettingsModel
+    unset: list[str]
+    ready: bool
+    default_top_n: int
+    max_top_n: int
+    valid_horizons: list[str]
+    run_requested_at: str | None
+    updated_at: str | None
+    updated_by: str | None
+
+
+class SignalScanModel(BaseModel):
+    id: str
+    kind: str
+    status: str
+    mode: str
+    started_at: str
+    finished_at: str | None
+    universe: list[str]
+    outcomes: dict[str, str]
+    errors: list[str]
+    ai_calls: int
+    signals: int
+
+
+class SignalsStatusData(BaseModel):
+    configured: bool
+    enabled: bool
+    ready: bool
+    mode: str
+    last_scan: SignalScanModel | None
+    seconds_since_last_scan: int | None
+    stale: bool
+    run_requested_at: str | None
+    run_pending: bool
+
+
+class SignalCandidateModel(BaseModel):
+    id: str
+    scan_id: str
+    symbol: str
+    day: str
+    scored_at: str
+    mode: str
+    eligible: bool
+    reason: str
+    score: str
+    max_score: str
+    score_ratio: str
+    meets_threshold: bool
+    outcome: str
+    met: dict[str, list[str]]
+    not_met: dict[str, list[str]]
+    ai: dict[str, Any] | None
+    levels: dict[str, float] | None
+    signal_id: str | None
+
+
+class SignalCandidatesData(BaseModel):
+    total: int
+    items: list[SignalCandidateModel]
+
+
+class SignalAckModel(BaseModel):
+    id: str
+    signal_id: str
+    stage: str
+    environment: str | None
+    status: str | None
+    reason: str | None
+    received_at: str
 
 
 class CredentialItemModel(BaseModel):
@@ -2102,6 +2224,217 @@ def create_app(ctx: ApiContext) -> FastAPI:
         if job is None:
             raise ApiError(404, "NOT_FOUND", "unknown_job", "no such backtest job")
         return envelope(_job_data(job), origin="BACKTEST")
+
+    # ------------------------------------------------------------ crypto signals (ADR-066)
+
+    def _signal_config_data(s: Session) -> dict[str, Any]:
+        row = get_settings_row(s)
+        settings = get_signal_settings(s)
+        missing = unset_fields(settings)
+        raw = settings.as_json()
+        return {
+            "configured": row is not None,
+            "settings": raw,
+            "unset": missing,
+            "ready": row is not None and not missing,
+            "default_top_n": DEFAULT_TOP_N,
+            "max_top_n": MAX_TOP_N,
+            "valid_horizons": list(VALID_HORIZONS),
+            "run_requested_at": None if row is None else _cell(row.run_requested_at),
+            "updated_at": None if row is None else _cell(row.updated_at),
+            "updated_by": None if row is None else row.updated_by,
+        }
+
+    def _scan_row(x: SignalScan) -> dict[str, Any]:
+        return {
+            "id": str(x.id),
+            "kind": x.kind,
+            "status": x.status,
+            "mode": x.mode,
+            "started_at": _cell(x.started_at),
+            "finished_at": _cell(x.finished_at),
+            "universe": list(x.universe or []),
+            "outcomes": dict(x.outcomes or {}),
+            "errors": [str(e) for e in (x.errors or [])],
+            "ai_calls": x.ai_calls,
+            "signals": x.signals,
+        }
+
+    @app.get(f"{r}/signals/config", response_model=Envelope[SignalsConfigData])
+    def get_signals_config(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        return envelope(_signal_config_data(s), origin="PAPER")
+
+    @app.put(f"{r}/signals/config", response_model=Envelope[SignalsConfigData])
+    def put_signals_config(
+        body: SignalsConfigBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+        x_step_up: str | None = Header(default=None),
+    ):
+        try:
+            new = parse_settings(body.model_dump())
+        except SignalSettingsError as exc:
+            raise ApiError(400, "VALIDATION", "bad_settings", "; ".join(exc.problems)) from None
+        old = get_signal_settings(s)
+        if new.mode == "PUBLISH" and not body.confirm_publish:
+            raise ApiError(
+                400,
+                "VALIDATION",
+                "confirm_publish_required",
+                "switching to PUBLISH needs the explicit confirmation",
+            )
+        if new.mode == "PUBLISH" and (new.enabled and unset_fields(new)):
+            raise ApiError(
+                400,
+                "VALIDATION",
+                "bad_settings",
+                "cannot publish while these are unset: " + ", ".join(unset_fields(new)),
+            )
+        if signals_loosen(old, new):
+            step_up(s, who, "RAISE_LIMIT", x_step_up)
+        set_signal_settings(s, new, by=who.user_id)
+        s.commit()
+        return envelope(_signal_config_data(s), origin="PAPER")
+
+    @app.post(f"{r}/signals/run", response_model=Envelope[SignalsConfigData], status_code=202)
+    def run_signals_now(
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        settings = get_signal_settings(s)
+        if get_settings_row(s) is None or not settings.enabled or unset_fields(settings):
+            raise ApiError(
+                409,
+                "CONFLICT",
+                "not_ready",
+                "the worker is not enabled or has unset settings; nothing to scan",
+            )
+        request_run(s, by=who.user_id)
+        s.commit()
+        return envelope(_signal_config_data(s), origin="PAPER")
+
+    @app.get(f"{r}/signals/status", response_model=Envelope[SignalsStatusData])
+    def get_signals_status(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        row = get_settings_row(s)
+        settings = get_signal_settings(s)
+        last = s.scalars(select(SignalScan).order_by(SignalScan.started_at.desc()).limit(1)).first()
+        ready = row is not None and not unset_fields(settings)
+        age = None
+        if last is not None:
+            started = last.started_at
+            started = started.replace(tzinfo=UTC) if started.tzinfo is None else started
+            age = max(0, int((datetime.now(UTC) - started).total_seconds()))
+        stale = bool(settings.enabled and ready and (age is None or age > 36 * 3600))
+        requested = None if row is None else row.run_requested_at
+        pending = False
+        if requested is not None:
+            req = requested.replace(tzinfo=UTC) if requested.tzinfo is None else requested
+            started = None
+            if last is not None:
+                started = (
+                    last.started_at.replace(tzinfo=UTC)
+                    if last.started_at.tzinfo is None
+                    else last.started_at
+                )
+            pending = started is None or started < req
+        return envelope(
+            {
+                "configured": row is not None,
+                "enabled": settings.enabled,
+                "ready": ready,
+                "mode": settings.mode,
+                "last_scan": None if last is None else _scan_row(last),
+                "seconds_since_last_scan": age,
+                "stale": stale,
+                "run_requested_at": None if requested is None else _cell(requested),
+                "run_pending": pending,
+            },
+            origin="PAPER",
+        )
+
+    @app.get(f"{r}/signals/scans", response_model=Envelope[list[SignalScanModel]])
+    def list_signal_scans(
+        limit: int = 30, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
+    ):
+        rows = s.scalars(
+            select(SignalScan).order_by(SignalScan.started_at.desc()).limit(max(1, min(limit, 200)))
+        ).all()
+        return envelope([_scan_row(x) for x in rows], origin="PAPER")
+
+    @app.get(f"{r}/signals/candidates", response_model=Envelope[SignalCandidatesData])
+    def list_signal_candidates(
+        meets: bool | None = None,
+        symbol: str | None = None,
+        outcome: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        _: Principal = Depends(need(perm.VIEW)),
+        s: Session = Depends(db),
+    ):
+        query = select(SignalCandidate)
+        if meets is not None:
+            query = query.where(SignalCandidate.meets_threshold.is_(meets))
+        if symbol:
+            query = query.where(SignalCandidate.symbol == symbol.strip().upper())
+        if outcome:
+            query = query.where(SignalCandidate.outcome == outcome.strip().upper())
+        total = s.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = s.scalars(
+            query.order_by(SignalCandidate.scored_at.desc(), SignalCandidate.symbol)
+            .limit(max(1, min(limit, 500)))
+            .offset(max(0, offset))
+        ).all()
+        items = [
+            {
+                "id": str(x.id),
+                "scan_id": str(x.scan_id),
+                "symbol": x.symbol,
+                "day": x.day,
+                "scored_at": _cell(x.scored_at),
+                "mode": x.mode,
+                "eligible": x.eligible,
+                "reason": x.reason,
+                "score": _cell(x.score),
+                "max_score": _cell(x.max_score),
+                "score_ratio": _cell(x.score_ratio),
+                "meets_threshold": x.meets_threshold,
+                "outcome": x.outcome,
+                "met": x.met or {},
+                "not_met": x.not_met or {},
+                "ai": x.ai,
+                "levels": x.levels,
+                "signal_id": x.signal_id,
+            }
+            for x in rows
+        ]
+        return envelope({"total": total, "items": items}, origin="PAPER")
+
+    @app.get(f"{r}/signals/acks", response_model=Envelope[list[SignalAckModel]])
+    def list_signal_acks(
+        limit: int = 100, _: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)
+    ):
+        rows = s.scalars(
+            select(SignalAckRow)
+            .order_by(SignalAckRow.received_at.desc())
+            .limit(max(1, min(limit, 500)))
+        ).all()
+        return envelope(
+            [
+                {
+                    "id": str(x.id),
+                    "signal_id": x.signal_id,
+                    "stage": x.stage,
+                    "environment": x.environment,
+                    "status": x.status,
+                    "reason": x.reason,
+                    "received_at": _cell(x.received_at),
+                }
+                for x in rows
+            ],
+            origin="PAPER",
+        )
 
     # ------------------------------------------------------------ credentials
 

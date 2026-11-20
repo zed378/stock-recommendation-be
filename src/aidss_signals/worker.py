@@ -17,7 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from aidss_signals.ai_review import AiUnavailable, Reviewer, build_dossier
 from aidss_signals.config import SignalsConfig
@@ -36,6 +36,12 @@ class PassReport:
     signals: list[dict[str, Any]] = field(default_factory=list)
     outcomes: dict[str, str] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
+
+
+class StateLike(Protocol):
+    def decided(self, symbol: str, day: str) -> bool: ...
+
+    def mark(self, symbol: str, day: str) -> None: ...
 
 
 class State:
@@ -102,7 +108,7 @@ def run_pass(
     review: Reviewer,
     publish: Callable[[dict[str, Any]], None],
     now: datetime,
-    state: State,
+    state: StateLike,
     record: Callable[[dict[str, Any]], None] = lambda _e: None,
     log: Callable[[str, str], None] = lambda _l, _m: None,
 ) -> PassReport:
@@ -144,8 +150,14 @@ def run_pass(
                 "symbol": symbol,
                 "day": day,
                 "mode": cfg.mode,
+                "eligible": score.eligible,
+                "reason": score.reason,
+                "score": score.score,
+                "max_score": score.max_score,
                 "score_ratio": round(score.ratio, 3),
+                "meets_threshold": score.eligible and score.ratio >= cfg.min_score_ratio,
                 "met": score.met,
+                "not_met": score.failed,
             }
             if not score.eligible:
                 report.outcomes[symbol] = f"INELIGIBLE:{score.reason}"
@@ -176,16 +188,26 @@ def run_pass(
                 continue
             if verdict.verdict != "TAKE":
                 report.outcomes[symbol] = "AI_SKIP"
-                record({**base, "outcome": "AI_SKIP", "ai": verdict.as_dict()})
+                record({**base, "outcome": "AI_SKIP", "ai": verdict.as_dict(), "levels": levels})
                 continue
             if verdict.score < cfg.ai_min_score:
                 report.outcomes[symbol] = "AI_BELOW_MIN"
-                record({**base, "outcome": "AI_BELOW_MIN", "ai": verdict.as_dict()})
+                record(
+                    {**base, "outcome": "AI_BELOW_MIN", "ai": verdict.as_dict(), "levels": levels}
+                )
                 continue
             signal = build_signal(symbol, day, score, levels, verdict, bias)
             report.signals.append(signal)
             report.outcomes[symbol] = "SIGNAL"
-            record({**base, "outcome": "SIGNAL", "ai": verdict.as_dict(), "levels": levels})
+            record(
+                {
+                    **base,
+                    "outcome": "SIGNAL",
+                    "ai": verdict.as_dict(),
+                    "levels": levels,
+                    "signal_id": signal["id"],
+                }
+            )
             if cfg.mode == "PUBLISH":
                 publish(signal)
             else:

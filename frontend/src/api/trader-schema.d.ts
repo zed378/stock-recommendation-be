@@ -444,6 +444,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/signals/acks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signal Acks */
+        get: operations["list_signal_acks_trader_v1_signals_acks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signals/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signal Candidates */
+        get: operations["list_signal_candidates_trader_v1_signals_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signals/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signals Config */
+        get: operations["get_signals_config_trader_v1_signals_config_get"];
+        /** Put Signals Config */
+        put: operations["put_signals_config_trader_v1_signals_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signals/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Signals Now */
+        post: operations["run_signals_now_trader_v1_signals_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signals/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signal Scans */
+        get: operations["list_signal_scans_trader_v1_signals_scans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signals/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signals Status */
+        get: operations["get_signals_status_trader_v1_signals_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/status": {
         parameters: {
             query?: never;
@@ -1070,6 +1173,21 @@ export interface components {
             data: components["schemas"]["ResumeData"];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[SignalCandidatesData] */
+        Envelope_SignalCandidatesData_: {
+            data: components["schemas"]["SignalCandidatesData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[SignalsConfigData] */
+        Envelope_SignalsConfigData_: {
+            data: components["schemas"]["SignalsConfigData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[SignalsStatusData] */
+        Envelope_SignalsStatusData_: {
+            data: components["schemas"]["SignalsStatusData"];
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[StatusData] */
         Envelope_StatusData_: {
             data: components["schemas"]["StatusData"];
@@ -1136,6 +1254,18 @@ export interface components {
         Envelope_list_OrderItem__: {
             /** Data */
             data: components["schemas"]["OrderItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[SignalAckModel]] */
+        Envelope_list_SignalAckModel__: {
+            /** Data */
+            data: components["schemas"]["SignalAckModel"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[SignalScanModel]] */
+        Envelope_list_SignalScanModel__: {
+            /** Data */
+            data: components["schemas"]["SignalScanModel"][];
             meta: components["schemas"]["MetaModel"];
         };
         /** Envelope[list[StrategyDefModel]] */
@@ -1602,6 +1732,218 @@ export interface components {
              * @enum {string}
              */
             trading_state: "RUNNING" | "HALTED" | "CANCELLING" | "FLATTENING";
+        };
+        /** SignalAckModel */
+        SignalAckModel: {
+            /** Environment */
+            environment: string | null;
+            /** Id */
+            id: string;
+            /** Reason */
+            reason: string | null;
+            /** Received At */
+            received_at: string;
+            /** Signal Id */
+            signal_id: string;
+            /** Stage */
+            stage: string;
+            /** Status */
+            status: string | null;
+        };
+        /** SignalCandidateModel */
+        SignalCandidateModel: {
+            /** Ai */
+            ai: {
+                [key: string]: unknown;
+            } | null;
+            /** Day */
+            day: string;
+            /** Eligible */
+            eligible: boolean;
+            /** Id */
+            id: string;
+            /** Levels */
+            levels: {
+                [key: string]: number;
+            } | null;
+            /** Max Score */
+            max_score: string;
+            /** Meets Threshold */
+            meets_threshold: boolean;
+            /** Met */
+            met: {
+                [key: string]: string[];
+            };
+            /** Mode */
+            mode: string;
+            /** Not Met */
+            not_met: {
+                [key: string]: string[];
+            };
+            /** Outcome */
+            outcome: string;
+            /** Reason */
+            reason: string;
+            /** Scan Id */
+            scan_id: string;
+            /** Score */
+            score: string;
+            /** Score Ratio */
+            score_ratio: string;
+            /** Scored At */
+            scored_at: string;
+            /** Signal Id */
+            signal_id: string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /** SignalCandidatesData */
+        SignalCandidatesData: {
+            /** Items */
+            items: components["schemas"]["SignalCandidateModel"][];
+            /** Total */
+            total: number;
+        };
+        /** SignalScanModel */
+        SignalScanModel: {
+            /** Ai Calls */
+            ai_calls: number;
+            /** Errors */
+            errors: string[];
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Mode */
+            mode: string;
+            /** Outcomes */
+            outcomes: {
+                [key: string]: string;
+            };
+            /** Signals */
+            signals: number;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Universe */
+            universe: string[];
+        };
+        /** SignalsConfigBody */
+        SignalsConfigBody: {
+            /** Ai Max Calls */
+            ai_max_calls?: number | null;
+            /** Ai Min Score */
+            ai_min_score?: number | null;
+            /** Atr Stop Multiple */
+            atr_stop_multiple?: string | null;
+            /**
+             * Confirm Publish
+             * @default false
+             */
+            confirm_publish: boolean;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Horizons
+             * @default []
+             */
+            horizons: string[];
+            /** Min Quote Volume Usdt */
+            min_quote_volume_usdt?: string | null;
+            /** Min Score Ratio */
+            min_score_ratio?: string | null;
+            /**
+             * Mode
+             * @default SHADOW
+             */
+            mode: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Symbols
+             * @default []
+             */
+            symbols: string[];
+            /** Top N */
+            top_n?: number | null;
+            /** Tp R */
+            tp_r?: string[] | null;
+        };
+        /** SignalsConfigData */
+        SignalsConfigData: {
+            /** Configured */
+            configured: boolean;
+            /** Default Top N */
+            default_top_n: number;
+            /** Max Top N */
+            max_top_n: number;
+            /** Ready */
+            ready: boolean;
+            /** Run Requested At */
+            run_requested_at: string | null;
+            settings: components["schemas"]["SignalsSettingsModel"];
+            /** Unset */
+            unset: string[];
+            /** Updated At */
+            updated_at: string | null;
+            /** Updated By */
+            updated_by: string | null;
+            /** Valid Horizons */
+            valid_horizons: string[];
+        };
+        /** SignalsSettingsModel */
+        SignalsSettingsModel: {
+            /** Ai Max Calls */
+            ai_max_calls: number | null;
+            /** Ai Min Score */
+            ai_min_score: number | null;
+            /** Atr Stop Multiple */
+            atr_stop_multiple: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Horizons */
+            horizons: string[];
+            /** Min Quote Volume Usdt */
+            min_quote_volume_usdt: string | null;
+            /** Min Score Ratio */
+            min_score_ratio: string | null;
+            /** Mode */
+            mode: string;
+            /** Symbols */
+            symbols: string[];
+            /** Top N */
+            top_n: number;
+            /** Tp R */
+            tp_r: (string | null)[] | null;
+        };
+        /** SignalsStatusData */
+        SignalsStatusData: {
+            /** Configured */
+            configured: boolean;
+            /** Enabled */
+            enabled: boolean;
+            last_scan: components["schemas"]["SignalScanModel"] | null;
+            /** Mode */
+            mode: string;
+            /** Ready */
+            ready: boolean;
+            /** Run Pending */
+            run_pending: boolean;
+            /** Run Requested At */
+            run_requested_at: string | null;
+            /** Seconds Since Last Scan */
+            seconds_since_last_scan: number | null;
+            /** Stale */
+            stale: boolean;
         };
         /** StatusData */
         StatusData: {
@@ -2824,6 +3166,240 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_ResumeData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signal_acks_trader_v1_signals_acks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_SignalAckModel__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signal_candidates_trader_v1_signals_candidates_get: {
+        parameters: {
+            query?: {
+                meets?: boolean | null;
+                symbol?: string | null;
+                outcome?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalCandidatesData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signals_config_trader_v1_signals_config_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalsConfigData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_signals_config_trader_v1_signals_config_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-step-up"?: string | null;
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignalsConfigBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalsConfigData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_signals_now_trader_v1_signals_run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalsConfigData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signal_scans_trader_v1_signals_scans_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_SignalScanModel__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signals_status_trader_v1_signals_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalsStatusData_"];
                 };
             };
             /** @description Validation Error */

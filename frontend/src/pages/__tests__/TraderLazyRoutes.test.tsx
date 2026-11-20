@@ -53,6 +53,7 @@ describe("Lazy-loaded Trader route modules", () => {
     ["Trader", () => import("@/pages/Trader").then((m) => ({ default: m.Trader }))],
     ["TraderApprovals", () => import("@/pages/TraderApprovals").then((m) => ({ default: m.TraderApprovals }))],
     ["TraderStrategies", () => import("@/pages/TraderStrategies").then((m) => ({ default: m.TraderStrategies }))],
+    ["TraderSignals", () => import("@/pages/TraderSignals").then((m) => ({ default: m.TraderSignals }))],
     ["TraderLimits", () => import("@/pages/TraderLimits").then((m) => ({ default: m.TraderLimits }))],
     ["TraderParameters", () => import("@/pages/TraderParameters").then((m) => ({ default: m.TraderParameters }))],
     ["TraderPaper", () => import("@/pages/TraderPaper").then((m) => ({ default: m.TraderPaper }))],

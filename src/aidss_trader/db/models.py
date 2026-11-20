@@ -532,3 +532,87 @@ class IdempotencyRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class SignalConfigRow(Base):
+    """The crypto signal worker's settings: one row (id 1), edited on the operator screen (ADR-066).
+
+    The worker reads it with a role that can select this table and nothing else of the Trader's;
+    the secret it also needs (the receiver's client token) is never stored here.
+    """
+
+    __tablename__ = "signal_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    value: Mapped[dict[str, Any]] = mapped_column(JSON)
+    #: Set by "scan now"; the worker runs one pass when this is newer than its last scan.
+    run_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_by: Mapped[str] = mapped_column(String(64))
+
+
+class SignalScan(Base):
+    """One pass of the signal worker over its coins."""
+
+    __tablename__ = "signal_scan"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(10))  # SCHEDULED | MANUAL
+    status: Mapped[str] = mapped_column(String(10))  # RUNNING | DONE | FAILED
+    mode: Mapped[str] = mapped_column(String(8))  # SHADOW | PUBLISH
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    universe: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    outcomes: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    errors: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    ai_calls: Mapped[int] = mapped_column(Integer, default=0)
+    signals: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class SignalCandidate(Base):
+    """One coin as one scan saw it: its score, which named criteria held, and what became of it.
+
+    Every scored coin is kept, with `meets_threshold` saying whether it reached the owner's score,
+    so the history shows both the coins that qualified and how close the others came. Rows are only
+    ever added.
+    """
+
+    __tablename__ = "signal_candidate"
+    __table_args__ = (Index("ix_signal_candidate_symbol_day", "symbol", "day"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    scan_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey(f"{SCHEMA}.signal_scan.id"), index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    day: Mapped[str] = mapped_column(String(10))  # the daily candle scored, YYYY-MM-DD (UTC)
+    scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    mode: Mapped[str] = mapped_column(String(8))
+    eligible: Mapped[bool] = mapped_column(Boolean)
+    reason: Mapped[str] = mapped_column(String(64), default="ok")
+    score: Mapped[Decimal] = mapped_column(Money, default=Decimal(0))
+    max_score: Mapped[Decimal] = mapped_column(Money, default=Decimal(0))
+    score_ratio: Mapped[Decimal] = mapped_column(Money, default=Decimal(0))
+    meets_threshold: Mapped[bool] = mapped_column(Boolean, index=True)
+    #: SIGNAL, BELOW_THRESHOLD, INELIGIBLE, NO_LEVELS, AI_SKIP, AI_BELOW_MIN, AI_UNAVAILABLE,
+    #: AI_BUDGET, ALREADY_PUBLISHED, DATA_ERROR
+    outcome: Mapped[str] = mapped_column(String(24), index=True)
+    met: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    not_met: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    ai: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    levels: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    signal_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+
+class SignalAckRow(Base):
+    """What the receiving client said back about a published signal (received, then its result)."""
+
+    __tablename__ = "signal_ack"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    signal_id: Mapped[str] = mapped_column(String(64), index=True)
+    stage: Mapped[str] = mapped_column(String(12))
+    environment: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    status: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

@@ -29,6 +29,7 @@ import {
 const Trader = lazy(() => import("@/pages/Trader").then((m) => ({ default: m.Trader })));
 const TraderApprovals = lazy(() => import("@/pages/TraderApprovals").then((m) => ({ default: m.TraderApprovals })));
 const TraderStrategies = lazy(() => import("@/pages/TraderStrategies").then((m) => ({ default: m.TraderStrategies })));
+const TraderSignals = lazy(() => import("@/pages/TraderSignals").then((m) => ({ default: m.TraderSignals })));
 const TraderLimits = lazy(() => import("@/pages/TraderLimits").then((m) => ({ default: m.TraderLimits })));
 const TraderParameters = lazy(() => import("@/pages/TraderParameters").then((m) => ({ default: m.TraderParameters })));
 const TraderPaper = lazy(() => import("@/pages/TraderPaper").then((m) => ({ default: m.TraderPaper })));
@@ -147,6 +148,7 @@ export default function App() {
                 <Route path="/trader" element={<LazyRoute><Trader /></LazyRoute>} />
                 <Route path="/trader/approvals" element={<LazyRoute><TraderApprovals /></LazyRoute>} />
                 <Route path="/trader/strategies" element={<LazyRoute><TraderStrategies /></LazyRoute>} />
+                <Route path="/trader/signals" element={<LazyRoute><TraderSignals /></LazyRoute>} />
                 <Route path="/trader/limits" element={<LazyRoute><TraderLimits /></LazyRoute>} />
                 <Route path="/trader/parameters" element={<LazyRoute><TraderParameters /></LazyRoute>} />
                 <Route path="/trader/paper" element={<LazyRoute><TraderPaper /></LazyRoute>} />

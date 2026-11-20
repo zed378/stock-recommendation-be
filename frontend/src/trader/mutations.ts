@@ -4,6 +4,7 @@ import { useI18n } from "@/i18n/context";
 import { useToast } from "@/components/toastContext";
 import { idempotencyKey, traderApi, unwrap, TraderError } from "@/trader/client";
 import type {
+  SignalsConfig,
   BacktestJob,
   CredentialKind,
   KillResult,
@@ -468,6 +469,58 @@ export function useSetStrategyPaper() {
         traderApi.PUT("/trader/v1/strategy-defs/{strategy_id}/paper", {
           params: { path: { strategy_id: id }, header: { "Idempotency-Key": idempotencyKey() } },
           body: { enabled },
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export type SignalsConfigBodyValues = {
+  enabled: boolean;
+  mode: string;
+  symbols: string[];
+  top_n: number | null;
+  min_quote_volume_usdt: string | null;
+  horizons: string[];
+  min_score_ratio: string | null;
+  atr_stop_multiple: string | null;
+  tp_r: string[] | null;
+  ai_min_score: number | null;
+  ai_max_calls: number | null;
+  confirm_publish: boolean;
+  notes: string;
+};
+
+export function useSaveSignalsConfig() {
+  const refresh = useAfterMutation();
+  return useMutation<SignalsConfig, TraderError, { values: SignalsConfigBodyValues; stepUp?: string }>({
+    mutationFn: async ({ values, stepUp }) => {
+      const out = await unwrap<SignalsConfig>(
+        traderApi.PUT("/trader/v1/signals/config", {
+          params: {
+            header: {
+              "Idempotency-Key": idempotencyKey(),
+              ...(stepUp ? { "x-step-up": stepUp } : {}),
+            },
+          },
+          body: values,
+        }),
+      );
+      return out.data;
+    },
+    onSettled: () => void refresh(),
+  });
+}
+
+export function useRunSignals() {
+  const refresh = useAfterMutation();
+  return useMutation<SignalsConfig, TraderError, void>({
+    mutationFn: async () => {
+      const out = await unwrap<SignalsConfig>(
+        traderApi.POST("/trader/v1/signals/run", {
+          params: { header: { "Idempotency-Key": idempotencyKey() } },
         }),
       );
       return out.data;

@@ -26,7 +26,7 @@ def _load(name: str = "0001_foundation.py"):
 
 
 def test_upgrades_create_exactly_the_declared_tables() -> None:
-    first, second, third, fourth, fifth, sixth, seventh, eighth, ninth = (
+    first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth, eleventh = (
         _load("0001_foundation.py"),
         _load("0002_market_data.py"),
         _load("0003_trading_core.py"),
@@ -36,6 +36,8 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
         _load("0007_backtest_runs.py"),
         _load("0008_indexes_idempotency.py"),
         _load("0009_intent_strategy_id.py"),
+        _load("0010_backtest_extra_metrics.py"),
+        _load("0011_crypto_signals.py"),
     )
     assert second.down_revision == first.revision and third.down_revision == second.revision
     assert fourth.down_revision == third.revision and fifth.down_revision == fourth.revision
@@ -43,6 +45,7 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
     assert seventh.down_revision == sixth.revision
     assert eighth.down_revision == seventh.revision
     assert ninth.down_revision == eighth.revision
+    assert tenth.down_revision == ninth.revision and eleventh.down_revision == tenth.revision
     engine = create_engine("sqlite+pysqlite://", poolclass=StaticPool).execution_options(
         schema_translate_map={"trading": None}
     )
@@ -57,6 +60,8 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
             seventh.upgrade()
             eighth.upgrade()
             ninth.upgrade()
+            tenth.upgrade()
+            eleventh.upgrade()
         built = set(inspect(conn).get_table_names())
         declared = {t.name for t in Base.metadata.tables.values()}
         assert (
@@ -69,6 +74,7 @@ def test_upgrades_create_exactly_the_declared_tables() -> None:
             | set(fifth._TABLES)
             | set(sixth._TABLES)
             | set(seventh._TABLES)
+            | set(eleventh._TABLES)
             | {"idempotency_key"}
         )
         columns = {c["name"] for c in inspect(conn).get_columns("audit_log")}
