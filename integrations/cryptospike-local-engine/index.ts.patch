@@ -1,0 +1,22 @@
+diff --git a/server/src/index.ts b/server/src/index.ts
+index dc72955..2b8472c 100644
+--- a/server/src/index.ts
++++ b/server/src/index.ts
+@@ -5,6 +5,7 @@ import { app } from "./app";
+ import { connectToNestJS } from "./services/socket.service";
+ import { startSpotMonitor } from "./services/spot-monitor.service";
+ import { startBinanceMonitor } from "./services/binance-monitor.service";
++import { startLocalEngine } from "./services/local-engine.service";
+ import { startBinanceWsService } from "./services/binance-ws.service";
+ import { addAppLog } from "./lib/logger";
+ 
+@@ -28,6 +29,9 @@ app.listen(PORT, async () => {
+ 
+   // Inisialisasi worker pemantau Auto-BEP & Clean-up Binance Futures (Fallback)
+   startBinanceMonitor();
++
++  // Mesin strategi lokal (mati kecuali LOCAL_ENGINE_ENABLED=true; bawaan mode SHADOW)
++  startLocalEngine();
+ });
+ 
+ export { app };

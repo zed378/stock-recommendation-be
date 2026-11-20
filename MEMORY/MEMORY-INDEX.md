@@ -77,3 +77,4 @@ One line per record, newest first. Add new entries at the top.
 - [Migration kit: moving AIDSS to another host (2026-11-17)](records/2026-11-17-migration-kit.md) — production compose proven equal to the running stack, preflight/restore/fingerprint, runbook; no real move done
 - [Strategy library, builder and tabs (2026-11-19)](records/2026-11-19-strategy-library-builder.md) — four extra rules, template builder, backtest jobs, Compare and per-strategy tabs; backtest only, not deployed
 - [S2: several strategies in the paper loop (2026-11-19)](records/2026-11-19-s2-multi-strategy-paper.md) — pair ownership, migration 0009, paper card; tested locally, not deployed
+- [cryptospike-client local engine patch (2026-11-20)](records/2026-11-20-cryptospike-local-engine.md) — repo analysis, local strategy engine as a patch in integrations/; off by default, SHADOW first, not tested against an exchange
