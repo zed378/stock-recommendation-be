@@ -1272,8 +1272,10 @@ The password is the weakest point; a second factor is worth considering (ADR-046
   existing forecaster and gateway while the Trader reads only typed stored evidence.
 - **Consequences:** Model output is SHADOW context. Definitions and reviews are
   persisted and shown through the Trader, and required fresh evidence gates PAPER
-  entry. There is no new publisher or exchange operation. The worker uses existing
-  operator authentication; a narrower service identity is future work. Migration
+  entry. There is no new publisher or exchange operation. A separate random token
+  file authenticates exactly the two builder routes; it is compared in constant time
+  and never stored in settings or exposed in the environment. It grants no account,
+  strategy-configuration or order access. Migration
   0013 grants only SELECT/INSERT to trader_rw for the append-only review table.
   Existing strategy-definition edits retain audit, idempotency and version handling.
   Required builder context does not change the optional-context behavior of existing

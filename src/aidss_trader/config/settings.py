@@ -33,6 +33,8 @@ class TraderSettings(BaseSettings):
     exchange_base_url: str | None = None
     public_base_url: str | None = None
     analysis_api_url: str | None = None
+    #: Separate random service token, scoped to signal-builder work/review routes.
+    builder_worker_token_file: Path | None = None
 
     # The operator API (docs/07-API-CONTRACTS). Served only when `analysis_api_url` is set,
     # because every request is authenticated by asking the analysis API who the caller is.

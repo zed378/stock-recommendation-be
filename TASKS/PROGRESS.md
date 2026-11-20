@@ -34,8 +34,9 @@ through the authenticated Trader API, then posts append-only, audited reviews
 Kronos + AI evidence; exits do not wait for models. Existing risk, ownership and
 promotion controls remain; non-reference strategies are PAPER-only. Backtests are
 explicitly rule-only. This is not the deferred candle-in analysis API or a live
-promotion. Owner numbers, model provisioning and new worker installation
-remain operator tasks. Browser visual QA was unavailable; validation is recorded in
+promotion. CPU Kronos/AI worker is deployed separately at 300 seconds with a scoped
+token and cached weights; it remains idle until a complete builder definition is
+created. Trader remains HALTED. Browser visual QA was unavailable; validation is recorded in
 `MEMORY/records/2026-11-20-signal-builder.md` for verification and limitations.
 
 ### The analysis platform (built; not changed by this plan)

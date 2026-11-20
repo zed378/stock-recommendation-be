@@ -142,6 +142,19 @@ The relationships in `01-PRODUCT-REQUIREMENTS/08-OWNER-NUMBERS-WORKSHEET.md`: pe
 multiple of the poll interval; lease ttl above its heartbeat; request budget under the rate limits; approval
 expiry below the candle period; and, on a limit **increase**, a displayed effect and a confirmation.
 
+## Builder worker infrastructure (ADR-068)
+
+`AIDSS_TRADER_BUILDER_WORKER_TOKEN_FILE` names an owner-only secret file mounted
+read-only in the Trader container. It contains a random token of at least 32
+characters; the value is never in a database setting or process environment.
+`AIDSS_BUILDER_TRADER_TOKEN_FILE` points to the same token inside the separate
+worker. The worker polls every **300 seconds** per owner selection. Missing or
+unreadable token means the worker endpoints refuse requests.
+
+The worker additionally receives the existing read-only analysis DB URL and
+`AIDSS_JWT_SECRET` from protected files to read AI-provider configuration. It
+does not receive the Trader database URL, exchange key, or order client.
+
 ## Tests (planned)
 
 A test that **no loss-limiting operational setting has a default value** in code; a test per "Unset" cell; a test per

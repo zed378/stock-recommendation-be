@@ -78,9 +78,9 @@ cannot approve a changed order (`05/07`).
 | Method | Path under `/trader/v1` | Permission | Behavior |
 |---|---|---|---|
 | GET | `/signal-builder/schema` | VIEW | Strict declarative definition schema |
-| GET | `/signal-builder/work` | VIEW | Pending exact-candle public Indodax work for enabled definitions and named IDR pairs |
+| GET | `/signal-builder/work` | `RECORD_BUILDER_REVIEW` | Pending exact-candle public Indodax work for enabled definitions and named IDR pairs |
 | GET | `/signal-builder/reviews` | VIEW | Latest 50 SHADOW reviews, including whether each is still current |
-| POST | `/signal-builder/reviews` | CONFIGURE_STRATEGY | Idempotency-Key required; strict typed evidence; server derives PASS/BLOCKED, rechecks work identity, appends evidence and audit in one transaction |
+| POST | `/signal-builder/reviews` | `RECORD_BUILDER_REVIEW` | Idempotency-Key required; strict typed evidence; server derives PASS/BLOCKED, rechecks work identity, appends evidence and audit in one transaction |
 
 Configuration is persisted through existing POST/PUT `/strategy-defs` routes as kind
 `signal_builder`, with the sole parameter `definition` (JSON). Those routes retain
@@ -88,3 +88,12 @@ their existing permission, idempotency, audit, version reset and delete guards.
 No additional order-entry or model-inference route is exposed. The model worker is
 external to the Trader. A review cannot be replaced; changed evidence for an existing
 identity is a conflict. Model text and projected prices never become order fields.
+
+The worker identity authenticates with `X-Builder-Worker-Token`, loaded from an
+owner-only mounted secret file and compared in constant time. The `signal_worker`
+role has only VIEW and RECORD_BUILDER_REVIEW; it cannot configure definitions, read
+accounts, approve intents or create orders.
+
+Worker requests send the dedicated token in `X-Builder-Worker-Token`; it comes from
+an owner-only mounted secret file and is compared in constant time. No bearer operator
+token or strategy-configuration privilege is required for these two routes.

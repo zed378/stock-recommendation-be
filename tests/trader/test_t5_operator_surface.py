@@ -865,6 +865,12 @@ def test_role_matrix_matches_the_document() -> None:
     assert not allowed("viewer", "trade:approve") and not allowed("investor", "trade:halt")
     assert ROLE_PERMISSIONS["trader"] >= {"trade:approve", "trade:promote", "trade:kill"}
     assert not allowed("nobody", "trade:view")
+    assert ROLE_PERMISSIONS["signal_worker"] == {
+        "trade:view",
+        "trade:record_builder_review",
+    }
+    assert not allowed("signal_worker", "trade:configure_strategy")
+    assert not allowed("signal_worker", "trade:approve")
 
 
 def test_mutations_need_an_idempotency_key(api) -> None:

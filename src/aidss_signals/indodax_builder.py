@@ -1,13 +1,14 @@
 """Indodax context worker: public candles in, model reviews out, no exchange client.
 
-Requires AIDSS_BUILDER_TRADER_URL and AIDSS_BUILDER_TRADER_TOKEN. The latter is
-an operator credential with CONFIGURE_STRATEGY; never put it into a definition.
+Requires AIDSS_BUILDER_TRADER_URL and AIDSS_BUILDER_TRADER_TOKEN. The latter is a
+dedicated, route-scoped token; never put it into a strategy definition.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import stat
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -93,13 +94,28 @@ def main() -> None:
     parser.add_argument("--models", action="store_true", help="Explicitly enable model calls")
     args = parser.parse_args()
     url = os.environ.get("AIDSS_BUILDER_TRADER_URL", "")
-    token = os.environ.get("AIDSS_BUILDER_TRADER_TOKEN", "")
-    if not url or not token or not args.models:
-        parser.error("Trader URL, operator token and --models must be set explicitly")
+    token_file = os.environ.get("AIDSS_BUILDER_TRADER_TOKEN_FILE", "")
+    token = ""
+    if token_file:
+        try:
+            if os.name != "nt" and stat.S_IMODE(os.stat(token_file).st_mode) & 0o077:
+                parser.error("worker token file permissions must be owner-only")
+            with open(token_file, encoding="utf-8") as secret_file:
+                token = secret_file.read().strip()
+        except OSError:
+            parser.error("worker token file could not be read")
+    if not url or len(token) < 32 or not args.models:
+        parser.error("Trader URL, 32-character worker token file and --models are required")
     if args.mode == "serve" and (args.poll_seconds is None or args.poll_seconds <= 0):
         parser.error("serve requires a positive --poll-seconds chosen by the owner")
-    if not (url.startswith("https://") or url.startswith("http://127.0.0.1:")):
-        parser.error("use HTTPS, or an explicit local loopback HTTP port")
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if not (
+        parsed.scheme == "https"
+        or (parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "trader"})
+    ):
+        parser.error("use HTTPS, local loopback, or the internal Docker host trader")
     from aidss_signals.__main__ import _reviewer
 
     def review(dossier: dict[str, Any]) -> Any:
@@ -108,7 +124,7 @@ def main() -> None:
     forecast = kronos_adapter(KronosForecaster())
     with httpx.Client(
         base_url=url,
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Builder-Worker-Token": token},
         timeout=30,
         follow_redirects=False,
     ) as client:

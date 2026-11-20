@@ -61,9 +61,8 @@ so nothing there needed removal. Other applications untouched.
 
 ## What Was Not Determined
 
-New Indodax model worker is **not installed or activated**: it requires an operator
-token, CPU Kronos provisioning and owner-set builder parameters/poll interval.
-No model credentials minted, no model calls and no exchange requests issued by
+Initial deployment did not activate the model worker. The follow-up worker
+deployment is recorded in `MEMORY/records/2026-11-21-kronos-worker.md`.
 deployment tools. Existing runtime public market polling remains configured.
 
 No real model review, authenticated public browser test, PostgreSQL restore or

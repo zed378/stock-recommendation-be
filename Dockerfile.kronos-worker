@@ -1,0 +1,22 @@
+# Separate CPU model worker. It never enters the Indodax order path.
+# Base image is pinned to the deployed AIDSS API's CPU-torch image.
+FROM zed378/aidss-api@sha256:363d4d1cc06fa0ea7e4f38f1a85fb5842514e19efa921bac4a54c3e70a5ec44a
+
+USER root
+WORKDIR /app
+COPY --chown=1000:1000 src/aidss_signals /app/src/aidss_signals
+COPY --chown=1000:1000 src/aidss_trader /app/src/aidss_trader
+
+ENV PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    AIDSS_KRONOS_DEVICE=cpu \
+    HF_HOME=/data/huggingface \
+    HF_HUB_OFFLINE=1 \
+    OMP_NUM_THREADS=1
+
+USER 1000:1000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python", "-c", "import os; os.kill(1, 0)"]
+ENTRYPOINT ["python", "-m", "aidss_signals.indodax_builder"]
+CMD ["serve", "--models", "--poll-seconds", "300"]

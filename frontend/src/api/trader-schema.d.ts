@@ -3510,7 +3510,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                authorization?: string | null;
+                "X-Builder-Worker-Token"?: string | null;
                 "Idempotency-Key"?: string | null;
             };
             path?: never;
@@ -3577,7 +3577,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                authorization?: string | null;
+                "X-Builder-Worker-Token"?: string | null;
             };
             path?: never;
             cookie?: never;

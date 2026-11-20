@@ -15,6 +15,12 @@ Chronological summary of user-visible or operationally significant changes. Coar
 
 ## 2026-11-18
 
+## 2026-11-21
+
+- Deployed the separate CPU Kronos/AI review worker at the owner-selected 300-second
+  interval with an exact-route service token. It is idle until complete builder
+  definitions are created. Trader remains HALTED.
+
 - Stage 12 A–E: portable Git Bash anchor tests; offline `nft -c` validation of Stage-1 unapplied firewall draft (`nftables v1.1.3`); read-only `inventory-clients.sh` for Stage 2; `aidss-anchor-watch.sh` / R16 (draft cron, not installed); migration & backlog doc sync (firewall remains unapplied; Stage 2 awaits client inventory).
 
 ## 2026-11-17

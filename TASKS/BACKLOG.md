@@ -73,14 +73,11 @@ rather than only a mention in a chat or a record.
   with the owner before live operation. Trader remains HALTED. Public URL checks
   from the host returned 403, so authenticated browser verification is still open.
 
-- T3-07 / ADR-068: target resolved by owner as Indodax spot IDR. Visual definitions,
-  required model reviews and PAPER integration are implemented locally. Owner must
-  supply every rule/stop/review number and provision the separate model worker before
-  it can generate evidence. Migration 0013, real-model validation, worker deployment,
-  live promotion and independent browser visual QA remain unperformed. The worker
-  currently uses an existing operator credential with CONFIGURE_STRATEGY; a narrow
-  service identity and review retention policy remain future decisions. Reviews cover
-  explicitly named allowlisted pairs; ALL-selected pairs fail closed without reviews.
+- T3-07 / ADR-068: target resolved as Indodax spot IDR. Owner supplies every
+  rule/stop/review number before PAPER signals can be generated. Worker has a dedicated
+  random file token limited to two review routes; a review retention policy remains
+  open. Reviews cover explicitly named allowlisted pairs; ALL-selected pairs stay
+  blocked without evidence. Live promotion remains unavailable; browser visual QA is open.
 
 | Item | Why deferred | Returns when |
 |---|---|---|

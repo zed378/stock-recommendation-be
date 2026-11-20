@@ -113,12 +113,18 @@ an order field. Review history is SHADOW evidence, not fills or profit probabili
 3. Provision a **separate** model-worker environment with the existing optional
    Kronos CPU dependencies/weights and configured AIDSS AI gateway. Do not add torch
    to the Trader image. Set `AIDSS_BUILDER_TRADER_URL` and
-   `AIDSS_BUILDER_TRADER_TOKEN` outside source and configuration tables. HTTPS is
-   required except for a local loopback HTTP port. The current token needs existing
-   VIEW and CONFIGURE_STRATEGY privileges; a narrower service identity is not built.
-4. Run `python -m aidss_signals.indodax_builder once --models`, or run `serve --models
-   --poll-seconds <owner-selected-interval>`. No poll interval is chosen by the code.
-   The worker is opt-in and was not installed or run against real models here.
+   `AIDSS_BUILDER_TRADER_TOKEN_FILE`. Mount the random token read-only from an
+   owner-only file in both services; it is never an environment value. It grants
+   only builder work/review routes. Use HTTPS externally or `http://trader:8001` on
+   the isolated Compose network. For AI gateway calls, provide the analysis role's
+   read-only database URL and JWT decryption setting from protected files.
+4. Run `python -m aidss_signals.indodax_builder once --models`, or run
+   `python -m aidss_signals.indodax_builder serve --models --poll-seconds 300`.
+   The owner selected 300 seconds; it only discovers review work, not trading.
+   The worker uses a dedicated random token mounted from an owner-only file at
+   `/run/secrets/builder_worker_token` in both containers. Its separate analysis
+   identity has read-only provider access; it has no Trader database URL, exchange
+   key or operator bearer token.
 5. Read the SHADOW review history. Only matching fresh reviews can release a PAPER
    candidate, and existing risk checks may still refuse it. Disabling the builder
    or changing its definition prevents old evidence from being reused.

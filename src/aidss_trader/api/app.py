@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
+import os
 import time
 import uuid
 from collections.abc import Callable
@@ -36,6 +38,7 @@ from aidss_trader.auth.stepup import StepUp, StepUpRefused
 from aidss_trader.auth.verify import AuthFailed, Principal, TokenVerifier
 from aidss_trader.backtest.jobs import BacktestJobs, summarise
 from aidss_trader.config import RiskLimits, load_risk_limits, save_risk_limits, unset_risk_fields
+from aidss_trader.config import get_settings as get_trader_settings
 from aidss_trader.connector.errors import ConnectorError
 from aidss_trader.connector.port import ExchangeClient
 from aidss_trader.credentials import CredentialStore, CredentialUnreadable
@@ -1878,8 +1881,33 @@ def create_app(ctx: ApiContext) -> FastAPI:
     def builder_schema(_: Principal = Depends(need(perm.VIEW))):
         return envelope(BuilderDefinition.model_json_schema(), origin="PAPER")
 
+    def need_builder_worker():
+        def dependency(token: str | None = Header(default=None, alias="X-Builder-Worker-Token")):
+            try:
+                token_file = get_trader_settings().builder_worker_token_file
+            except Exception:  # noqa: BLE001 - missing infra config means auth is unavailable
+                token_file = None
+            expected = ""
+            if token_file is not None:
+                try:
+                    if os.name != "nt" and token_file.stat().st_mode & 0o077:
+                        raise OSError("worker token permissions are too broad")
+                    expected = token_file.read_text(encoding="utf-8").strip()
+                    if len(expected) < 32:
+                        expected = ""
+                except OSError:
+                    expected = ""
+            if not expected or token is None or not hmac.compare_digest(token, expected):
+                raise ApiError(
+                    401, "AUTH", "invalid_worker_token", "builder worker authentication required"
+                )
+            return Principal(user_id="signal-worker", role="signal_worker")
+
+        dependency.__permission__ = perm.RECORD_BUILDER_REVIEW  # type: ignore[attr-defined]
+        return dependency
+
     @app.get(f"{r}/signal-builder/work", response_model=Envelope[list[dict[str, Any]]])
-    def builder_work(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+    def builder_work(_: Principal = Depends(need_builder_worker()), s: Session = Depends(db)):
         return envelope(pending_work(s, datetime.now(UTC)), origin="PAPER")
 
     @app.get(f"{r}/signal-builder/reviews", response_model=Envelope[list[dict[str, Any]]])
@@ -1911,7 +1939,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
     @app.post(f"{r}/signal-builder/reviews", response_model=Envelope[dict[str, Any]])
     def record_builder_review(
         body: ReviewBody,
-        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        who: Principal = Depends(need_builder_worker()),
         _k: str = Depends(idempotent),
         s: Session = Depends(db),
     ):

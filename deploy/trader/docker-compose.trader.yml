@@ -47,6 +47,7 @@ services:
       AIDSS_TRADER_EXCHANGE_BASE_URL: ${AIDSS_TRADER_EXCHANGE_BASE_URL:-}
       AIDSS_TRADER_PUBLIC_BASE_URL: ${AIDSS_TRADER_PUBLIC_BASE_URL:-}
       AIDSS_TRADER_UI_URL: ${AIDSS_TRADER_UI_URL:-}
+      AIDSS_TRADER_BUILDER_WORKER_TOKEN_FILE: ${AIDSS_TRADER_BUILDER_WORKER_TOKEN_FILE:-}
     secrets:
       - trader_master_key
     # Not published to the host. The front end proxies /trader/ to this port over the compose

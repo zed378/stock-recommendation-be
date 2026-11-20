@@ -11,6 +11,7 @@ VIEW = "trade:view"
 READ_AUDIT = "trade:read_audit"
 APPROVE = "trade:approve"
 CONFIGURE_STRATEGY = "trade:configure_strategy"
+RECORD_BUILDER_REVIEW = "trade:record_builder_review"
 CONFIGURE_RISK = "trade:configure_risk"
 PROMOTE = "trade:promote"
 HALT = "trade:halt"
@@ -24,6 +25,7 @@ ALL = frozenset(
         READ_AUDIT,
         APPROVE,
         CONFIGURE_STRATEGY,
+        RECORD_BUILDER_REVIEW,
         CONFIGURE_RISK,
         PROMOTE,
         HALT,
@@ -38,6 +40,9 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "admin": ALL,
     "investor": frozenset({VIEW}),
     "viewer": frozenset({VIEW}),
+    # A dedicated worker identity can read only exact-candle builder work and
+    # append typed model reviews; it cannot change strategies or touch orders.
+    "signal_worker": frozenset({VIEW, RECORD_BUILDER_REVIEW}),
 }
 
 

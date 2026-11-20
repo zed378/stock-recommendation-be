@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -15,6 +17,8 @@ from aidss_trader.runtime.builder_reviews import build_work, entry_review
 from aidss_trader.strategy.base import PositionState, SignalKind
 from aidss_trader.strategy.kinds import ParameterError, build_strategy
 from tests.trader.test_runtime_wiring import USERS, World, api_for, warm
+
+WORKER_TOKEN = "test-builder-token-32-characters"
 
 
 def definition():
@@ -45,6 +49,23 @@ def definition():
 @pytest.fixture
 def world(monkeypatch):
     w = World("PAPER")
+    monkeypatch.setenv("AIDSS_TRADER_DATABASE_URL", "sqlite://")
+    token_file = tempfile.NamedTemporaryFile(delete=False)
+    token_file.write(WORKER_TOKEN.encode())
+    token_file.close()
+    if os.name != "nt":
+        os.chmod(token_file.name, 0o600)
+    monkeypatch.setenv("AIDSS_TRADER_BUILDER_WORKER_TOKEN_FILE", token_file.name)
+    from pathlib import Path
+
+    from aidss_trader.config.settings import TraderSettings
+
+    monkeypatch.setattr(
+        "aidss_trader.api.app.get_trader_settings",
+        lambda: TraderSettings(
+            database_url="sqlite://", builder_worker_token_file=Path(token_file.name)
+        ),
+    )
 
     class Clock(datetime):
         @classmethod
@@ -74,11 +95,20 @@ def world(monkeypatch):
 
 
 def work(call):
-    response = call("GET", "/signal-builder/work")
+    response = call(
+        "GET",
+        "/signal-builder/work",
+        **{"X-Builder-Worker-Token": WORKER_TOKEN},
+    )
     assert response.status_code == 200, response.text
     jobs = response.json()["data"]
     assert len(jobs) == 1
     return jobs[0]
+
+
+def post_review(call, body, **headers):
+    headers.setdefault("X-Builder-Worker-Token", WORKER_TOKEN)
+    return call("POST", "/signal-builder/reviews", body, **headers)
 
 
 def review(job):
@@ -106,7 +136,7 @@ def test_paper_entry_requires_review_and_records_its_id(world):
     assert not w.rows(OrderIntentRow) and w.posts() == 0
     assert any("review_pending" in why for why in w.cycle().skipped)
     body = review(work(call))
-    response = call("POST", "/signal-builder/reviews", body)
+    response = post_review(call, body)
     assert response.status_code == 200, response.text
     assert response.json()["data"]["outcome"] == "PASS"
     w.cycle()
@@ -131,7 +161,7 @@ def test_model_veto_and_source_mismatch_block_paper_entry(world, stage, change):
     w, call = world
     body = review(work(call))
     body[stage].update(change)
-    response = call("POST", "/signal-builder/reviews", body)
+    response = post_review(call, body)
     assert response.status_code == 200 and response.json()["data"]["outcome"] == "BLOCKED"
     w.cycle()
     assert not w.rows(OrderIntentRow) and w.posts() == 0
@@ -140,10 +170,10 @@ def test_model_veto_and_source_mismatch_block_paper_entry(world, stage, change):
 def test_review_is_append_only_idempotent_and_audited(world):
     w, call = world
     body = review(work(call))
-    assert call("POST", "/signal-builder/reviews", body).status_code == 200
-    assert call("POST", "/signal-builder/reviews", body).status_code == 200
+    assert post_review(call, body).status_code == 200
+    assert post_review(call, body).status_code == 200
     body["ai"]["score"] = 99
-    assert call("POST", "/signal-builder/reviews", body).status_code == 409
+    assert post_review(call, body).status_code == 409
     assert len(w.rows(BuilderReview)) == 1
     with w.factory() as s:
         assert verify_chain(s) > 0
@@ -161,7 +191,7 @@ def test_changed_candles_or_settings_cannot_reuse_review(world):
     w, call = world
     job = work(call)
     body = review(job)
-    assert call("POST", "/signal-builder/reviews", body).status_code == 200
+    assert post_review(call, body).status_code == 200
     with w.factory() as s:
         row = s.scalar(select(Candle).order_by(Candle.open_time.desc()).limit(1))
         row.volume += Decimal("1")
@@ -188,7 +218,7 @@ def test_changed_candles_or_settings_cannot_reuse_review(world):
 
 def test_expired_review_and_non_indodax_candles_block(world):
     w, call = world
-    assert call("POST", "/signal-builder/reviews", review(work(call))).status_code == 200
+    assert post_review(call, review(work(call))).status_code == 200
     strategy = build_strategy("signal_builder", {"definition": json.dumps(definition())})
     with w.factory() as s:
         candles = w.runtime._load_candles(s, "BTCIDR")
@@ -214,17 +244,57 @@ def test_review_routes_refuse_viewer_writes_and_missing_idempotency(world, monke
     _, call = world
     body = review(work(call))
     monkeypatch.setitem(USERS, "viewer_test", ("u2", "viewer"))
+    assert call("GET", "/signal-builder/work").status_code == 401
     assert (
-        call("GET", "/signal-builder/work", Authorization="Bearer viewer_test").status_code == 200
+        call("GET", "/signal-builder/work", **{"X-Builder-Worker-Token": "wrong"}).status_code
+        == 401
     )
     assert (
         call(
             "POST", "/signal-builder/reviews", body, Authorization="Bearer viewer_test"
         ).status_code
-        == 403
+        == 401
+    )
+    assert post_review(call, body, **{"Idempotency-Key": ""}).status_code == 400
+
+
+def test_worker_identity_cannot_read_strategy_configuration_or_mutate_it(world):
+    _, call = world
+    worker = {"X-Builder-Worker-Token": WORKER_TOKEN}
+    assert call("GET", "/signal-builder/work", **worker).status_code == 200
+    worker["Authorization"] = ""
+    assert call("GET", "/strategy-defs", **worker).status_code == 401
+    assert (
+        call(
+            "PUT",
+            "/strategy-defs/aa_builder/paper",
+            {"enabled": False},
+            **worker,
+        ).status_code
+        == 401
+    )
+
+
+@pytest.mark.parametrize("secret,mode", [(WORKER_TOKEN[:31], 0o600), (WORKER_TOKEN, 0o644)])
+def test_worker_route_rejects_short_or_group_readable_tokens(world, monkeypatch, secret, mode):
+    if os.name == "nt" and mode & 0o077:
+        pytest.skip("Windows does not expose POSIX secret-file mode bits")
+    _, call = world
+    path = tempfile.NamedTemporaryFile(delete=False)
+    path.write(secret.encode())
+    path.close()
+    if os.name != "nt":
+        os.chmod(path.name, mode)
+    from pathlib import Path
+
+    from aidss_trader.config.settings import TraderSettings
+
+    monkeypatch.setattr(
+        "aidss_trader.api.app.get_trader_settings",
+        lambda: TraderSettings(database_url="sqlite://", builder_worker_token_file=Path(path.name)),
     )
     assert (
-        call("POST", "/signal-builder/reviews", body, **{"Idempotency-Key": ""}).status_code == 400
+        call("GET", "/signal-builder/work", **{"X-Builder-Worker-Token": secret}).status_code == 401
     )
 
 
@@ -272,14 +342,21 @@ def test_worker_end_to_end_records_once_without_exchange_operations(world):
     def transport(request):
         path = request.url.path.removeprefix("/trader/v1")
         body = json.loads(request.content) if request.content else None
-        response = call(request.method, path, body)
+        response = call(
+            request.method,
+            path,
+            body,
+            **{"X-Builder-Worker-Token": WORKER_TOKEN},
+        )
         return httpx.Response(response.status_code, json=response.json())
 
     with httpx.Client(
         base_url="https://internal.test", transport=httpx.MockTransport(transport)
     ) as client:
+
         def reviewer(_):
             return Verdict(80, "TAKE", "MEDIUM", (), ())
+
         assert run_once(client, forecast, reviewer, w.now()) == 1
         assert run_once(client, forecast, reviewer, w.now()) == 0
     assert model_calls == ["BTCIDR"] and w.posts() == 0
@@ -292,7 +369,7 @@ def test_passing_models_cannot_override_unset_risk_limits(world):
     from aidss_trader.config import RiskLimits, save_risk_limits
 
     w, call = world
-    assert call("POST", "/signal-builder/reviews", review(work(call))).status_code == 200
+    assert post_review(call, review(work(call))).status_code == 200
     with w.factory() as s:
         save_risk_limits(s, RiskLimits(), set_by="test-owner")
         s.commit()

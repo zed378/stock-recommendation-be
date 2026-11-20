@@ -32,14 +32,18 @@ owner-set freshness; pending/unavailable/vetoed evidence blocks entry. EXIT bypa
 reviews. The API exposes review history with VIEW permission. Existing setting changes
 retain idempotency, audit, version reset and PAPER-only restrictions.
 
-Worker is an explicit CLI `once`/`serve`, with an explicit poll interval for serve.
-It obtains public-candle work through the authenticated Trader API (VIEW) and posts
-reviews through an idempotent CONFIGURE_STRATEGY route. The Trader validates the exact
-work identity and appends the review plus its hash-chain audit row in one transaction.
-This avoids a second database audit writer or extra DB permissions. An operator bearer
-token is an environment reference, never a literal or a config-table field; a narrower
-service identity remains future work under the existing authentication model.
-It is not installed or deployed by this task. The UI shows
+Worker is an explicit CLI `once`/`serve`; the owner selected a **300-second** poll
+interval for the Indodax deployment.
+It obtains public-candle work through two dedicated service-token routes. A random
+token is mounted read-only from an owner-only file in both containers; it is never
+placed in environment values, command arguments or logs. The API reads it per request,
+checks file permissions and compares it in constant time. The identity can only request
+builder work and submit reviews; it cannot configure strategies, read full settings,
+read accounts or make orders. Its `signal_worker` role has only VIEW and
+RECORD_BUILDER_REVIEW. The Trader validates exact work identity and appends the
+review plus hash-chain audit row in one transaction. The worker separately uses the
+analysis platform's existing read-only DB identity and JWT-derived provider decryption
+setting for AI Gateway calls. The UI shows
 PAPER limitations and review status, never a simulated result as a live fill.
 
 Backtests for this strategy are explicitly rule-only (no historical model evidence,
