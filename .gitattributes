@@ -1,3 +1,5 @@
 # Scripts and cron files run on Linux hosts: a CRLF checkout on Windows would break them.
 *.sh text eol=lf
 *.cron text eol=lf
+# A patch applied with git apply must keep LF endings.
+*.patch text eol=lf
