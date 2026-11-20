@@ -22,6 +22,9 @@ from aidss_trader.audit import AuditLogger
 from aidss_trader.db.models import SignalConfigRow
 
 DEFAULT_TOP_N = 5  # the owner's own default (2026-11-20)
+#: The classic 20-bar Donchian channel; the owner asked for a default here (2026-11-20). It sizes a
+#: signal's lookback and limits no loss, so a blank field falls back to it instead of staying unset.
+DEFAULT_DONCHIAN_N = 20
 MAX_TOP_N = 50  # a resource limit: one candle request per coin
 VALID_HORIZONS = ("1d", "7d", "14d", "30d")
 SYMBOL = re.compile(r"^[A-Z0-9]{2,15}USDT$")
@@ -47,7 +50,7 @@ class H4Settings:
 
     enabled: bool = False
     strategies: tuple[str, ...] = ()
-    donchian_n: int | None = None
+    donchian_n: int = DEFAULT_DONCHIAN_N
     vol_period: int | None = None
     vol_mult: Decimal | None = None
     range_mult: Decimal | None = None
@@ -168,7 +171,7 @@ def _parse_h4(raw: Any, problems: list[str]) -> H4Settings:
     return H4Settings(
         enabled=bool(raw.get("enabled", False)),
         strategies=strategies,
-        donchian_n=whole("donchian_n", 5, 200),
+        donchian_n=whole("donchian_n", 5, 200) or DEFAULT_DONCHIAN_N,
         vol_period=whole("vol_period", 5, 100),
         vol_mult=dec("vol_mult", Decimal(1), Decimal(20), lo_open=True),
         range_mult=dec("range_mult", Decimal(0), Decimal(10), lo_open=True),
@@ -284,7 +287,6 @@ def unset_fields(s: SignalSettings) -> list[str]:
     if s.h4.enabled:
         h = s.h4
         for name in (
-            "donchian_n",
             "vol_period",
             "vol_mult",
             "range_mult",

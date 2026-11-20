@@ -45,7 +45,9 @@ def test_h4_is_off_by_default_and_then_needs_every_number() -> None:
     assert not [f for f in unset_fields(parse_settings(FULL)) if f.startswith("h4.")]
     bare = parse_settings({**FULL, "h4": {"enabled": True}})
     missing = {f for f in unset_fields(bare) if f.startswith("h4.")}
-    assert {"h4.min_score", "h4.drift_r", "h4.fee_pct", "h4.donchian_n"} <= missing
+    assert {"h4.min_score", "h4.drift_r", "h4.fee_pct"} <= missing
+    assert "h4.donchian_n" not in missing  # the one number with a default
+    assert bare.h4.donchian_n == 20 == parse_settings(with_h4(donchian_n=None)).h4.donchian_n
     assert not [f for f in unset_fields(parse_settings(with_h4())) if f.startswith("h4.")]
 
 
