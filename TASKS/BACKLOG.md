@@ -68,6 +68,11 @@ rather than only a mention in a chat or a record.
 
 ## Deliberate Deferrals
 
+- Deployment finding 2026-11-20: audit chain link broken at seq 1423, also present
+  in the pre-85f7f45 backup. No history rewritten; investigate cause and recovery
+  with the owner before live operation. Trader remains HALTED. Public URL checks
+  from the host returned 403, so authenticated browser verification is still open.
+
 - T3-07 / ADR-068: target resolved by owner as Indodax spot IDR. Visual definitions,
   required model reviews and PAPER integration are implemented locally. Owner must
   supply every rule/stop/review number and provision the separate model worker before

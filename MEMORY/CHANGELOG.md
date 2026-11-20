@@ -4,6 +4,10 @@ Chronological summary of user-visible or operationally significant changes. Coar
 
 ## 2026-11-20
 
+- Deployed Trader/frontend 85f7f45, migration 0013; healthy and HALTED. Removed
+  15 old server image tags and 11 Docker Hub tags, retaining active/rollback.
+  Pre-existing audit-link break at 1423 recorded; new model worker not activated.
+
 - T3-07: Indodax IDR signal builder with visual entry/exit rules, audited definitions,
   separate Kronos + AI reviewer worker and append-only evidence (migration 0013).
   PAPER entry requires fresh exact-candle reviews; exits are deterministic. Crypto

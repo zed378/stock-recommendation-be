@@ -2,6 +2,8 @@
 
 One line per record, newest first. Add new entries at the top.
 
+- [Indodax builder deployment and image cleanup (2026-11-20)](records/2026-11-20-signal-builder-deploy.md) — 85f7f45 Trader/frontend healthy, migration 0013, HALTED; 15 server/11 Hub tags removed; audit link broken at 1423 predates deploy; model worker not activated
+
 - [2026-11-18 - Stage 12 A-F: anchor portability, nft validation, client inventory, anchor watch, doc sync & security review](records/2026-11-18-stage-12-a-to-f.md): `nft -c` passed (`nftables v1.1.3`, WSL2 `6.6.87.2`) on unapplied Stage-1 draft; `ruff` clean, `564 passed, 15 deselected`; firewall unapplied & cron not installed.
 - [2026-11-17 - V: encrypted off-host backup](records/2026-11-17-v-offhost-backup.md): local fixture verification, no real host copy.
 - [2026-11-17 - W: unapplied host firewall proposal](records/2026-11-17-w-host-firewall-plan.md): owner questions, empty source sets, disabled wrapper; nft unavailable locally.

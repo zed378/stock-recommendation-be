@@ -20,8 +20,12 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 
 ### T3-07 — Signal decision builder foundation (2026-11-20)
 
-Target confirmed by the owner: **Indodax spot IDR**. Local implementation on
-`feat/T3-07-signal-decision-builder`, not merged or deployed. Declarative entry/exit
+Target confirmed by the owner: **Indodax spot IDR**. Merged to main as `85f7f45`;
+Trader/frontend deployed at that tag and healthy, migration 0013 applied (2026-11-20).
+Trader remains HALTED. Pre-existing audit-chain break at seq 1423 also exists in the
+pre-deploy backup; investigate before live use. Public URL checks returned 403;
+internal route/health checks passed. See the deployment record
+`MEMORY/records/2026-11-20-signal-builder-deploy.md`. Declarative entry/exit
 rules are shared with a pure Trader `signal_builder` strategy; existing audited
 strategy definitions persist it. Strategies has a visual rule editor and SHADOW
 review history. A separate opt-in model worker consumes stored Indodax candle work
@@ -30,7 +34,7 @@ through the authenticated Trader API, then posts append-only, audited reviews
 Kronos + AI evidence; exits do not wait for models. Existing risk, ownership and
 promotion controls remain; non-reference strategies are PAPER-only. Backtests are
 explicitly rule-only. This is not the deferred candle-in analysis API or a live
-promotion. Owner numbers, migration, model provisioning and worker installation
+promotion. Owner numbers, model provisioning and new worker installation
 remain operator tasks. Browser visual QA was unavailable; validation is recorded in
 `MEMORY/records/2026-11-20-signal-builder.md` for verification and limitations.
 
