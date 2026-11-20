@@ -1125,6 +1125,24 @@ class Runtime:
             self._trail_paper_stop(s, pair, signal.stop_hint)
         if signal.kind is SignalKind.NONE or equity is None:
             return
+        # Only typed, exact-candle evidence is read here. Model work runs in a
+        # separate process, so an unavailable predictor cannot delay protection.
+        from aidss_trader.strategy.declarative import DeclarativeStrategy
+
+        if isinstance(strategy, DeclarativeStrategy):
+            if self._tf != strategy.definition.timeframe or not pair.endswith("IDR"):
+                report.skipped.append(f"{pair}: builder_market_mismatch")
+                return
+            if signal.kind is SignalKind.ENTRY:
+                from aidss_trader.runtime.builder_reviews import entry_review
+
+                refusal, review_id = entry_review(
+                    s, strategy, strategy_id or REFERENCE, pair, self._tf, candles, self._now()
+                )
+                if refusal is not None:
+                    report.skipped.append(f"{pair}: {strategy_id}: {refusal}")
+                    return
+                signal.inputs["builder_review_id"] = review_id or ""
         book = snap.books.get(pair)
         if book is None:
             return

@@ -1,5 +1,54 @@
 # Sinyal crypto dari stock pick AIDSS ke klien CryptoSpike
 
+## Offline signal builder (ADR-068, proposed)
+
+The additional `aidss_signals.builder` tool evaluates user-defined entry and exit
+conditions on local closed candles. Its standalone output is always **SHADOW**.
+The owner chose **Indodax IDR**, with a separate `aidss_signals.indodax_builder`
+review worker, visual editor in Trader Strategies and required review gate for
+PAPER entries. See `docs/05-MODULE-SPECIFICATIONS/01-STRATEGY-ENGINE.md` for setup.
+This does not connect the declarative builder to CryptoSpike publication.
+
+```powershell
+.venv/Scripts/python -m aidss_signals.builder --schema
+.venv/Scripts/python -m aidss_signals.builder builder.json candles.json
+# Explicitly request Kronos inference and the configured AIDSS AI gateway:
+.venv/Scripts/python -m aidss_signals.builder builder.json candles.json --models
+```
+
+`--schema` prints the complete JSON contracts. `builder.json` requires `name`,
+`symbol`, `exchange`, `timeframe` (`4h` or `1d`), `entry`, `exit`,
+`max_data_age_seconds`, `forecast_bars`, `forecast_samples`,
+`min_projected_return_pct`, and `ai_min_score`. Every number is supplied by the
+owner; the tool supplies no trading thresholds. Decimal values can be strings.
+
+Each entry/exit group has `mode` (`ALL` or `ANY`) and a nonempty `rules` array.
+Each rule has a unique `name`, `left`, `operator` and `right`. Operands specify
+`indicator`: `close`; `constant` with `value`; or `ema`, `rsi`, `adx`,
+`volume_ratio` with `period`. Operators: `gt`, `gte`, `lt`, `lte`,
+`crosses_above`, `crosses_below`. Volume ratio uses the preceding window,
+excluding the current candle. Insufficient history blocks the entire group,
+including ANY groups. No arbitrary expressions or Python code are evaluated.
+
+`candles.json` contains `long` (whether a spot position exists) and `candles`
+(oldest first). Each candle has UTC `timestamp` (bar open), positive `open`,
+`high`, `low`, `close`, and nonnegative `volume`. Gaps, malformed OHLC,
+unfinished candles and stale data block the decision.
+
+Outputs: `HOLD`, `EXIT`, `BLOCKED`, or `ENTRY_CANDIDATE`, with rule evidence,
+config/data hashes, stable candidate id and model provenance. A candidate
+requires both a non-fixture Kronos projection meeting the return threshold
+and AI TAKE meeting the score threshold. Model failure means BLOCKED. Exit
+rules never call models. Without `--models`, an entry candidate is BLOCKED
+because model evidence is unavailable; deterministic HOLD/EXIT still work.
+
+Kronos uses a continuous crypto calendar, including weekends. Optional Kronos
+dependencies and model weights must already be available to run inference.
+The AI gateway uses the existing configured providers, quotas and costs.
+No real inference, exchange operation or profitability is established by the
+synthetic tests. Future execution requires existing sizing, Risk Engine,
+promotion gates and owner-approved settings.
+
 Metode yang Anda tetapkan, sebagai satu alur:
 
 1. **Worker** mengambil data emiten crypto (publik, tanpa kunci): ticker 24 jam dan candle harian tertutup dari Binance spot.

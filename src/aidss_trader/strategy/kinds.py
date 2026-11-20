@@ -202,6 +202,17 @@ def _parse(field: Field, raw: object) -> int | Decimal:
 def build_strategy(kind: str, params: Mapping[str, object]) -> Strategy:
     """The strategy for `kind` and exactly its parameters. Unknown kinds, missing or extra
     fields, out-of-range values and rules the rule itself rejects all raise `ParameterError`."""
+    if kind == "signal_builder":
+        from aidss_trader.strategy.declarative import BuilderDefinition, DeclarativeStrategy
+
+        if set(params) != {"definition"} or not isinstance(params["definition"], str):
+            raise ParameterError("signal_builder requires only definition as JSON")
+        try:
+            return DeclarativeStrategy(BuilderDefinition.model_validate_json(params["definition"]))
+        except ValueError:
+            raise ParameterError(
+                "invalid Indodax IDR builder definition; every field is required"
+            ) from None
     spec = KINDS.get(kind)
     if spec is None:
         raise ParameterError(f"unknown kind {kind!r}")

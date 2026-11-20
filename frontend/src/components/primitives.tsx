@@ -49,11 +49,13 @@ export function Modal({
   onClose,
   children,
   footer,
+  wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  wide?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
 
@@ -111,12 +113,12 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md overflow-hidden rounded-lg border border-line bg-raised shadow-xl"
+        className={`w-full ${wide ? "max-w-3xl" : "max-w-md"} overflow-hidden rounded-lg border border-line bg-raised shadow-xl`}
       >
         <header className="border-b border-line px-4 py-3">
           <h2 className="text-sm font-medium text-ink">{title}</h2>
         </header>
-        <div className="px-4 py-4 text-sm text-muted">{children}</div>
+        <div className={`${wide ? "max-h-[65dvh] overflow-y-auto" : ""} px-4 py-4 text-sm text-muted`}>{children}</div>
         {footer && (
           <footer className="flex justify-end gap-2 border-t border-line px-4 py-3">
             {footer}

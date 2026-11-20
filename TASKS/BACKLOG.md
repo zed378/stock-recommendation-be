@@ -68,6 +68,15 @@ rather than only a mention in a chat or a record.
 
 ## Deliberate Deferrals
 
+- T3-07 / ADR-068: target resolved by owner as Indodax spot IDR. Visual definitions,
+  required model reviews and PAPER integration are implemented locally. Owner must
+  supply every rule/stop/review number and provision the separate model worker before
+  it can generate evidence. Migration 0013, real-model validation, worker deployment,
+  live promotion and independent browser visual QA remain unperformed. The worker
+  currently uses an existing operator credential with CONFIGURE_STRATEGY; a narrow
+  service identity and review retention policy remain future decisions. Reviews cover
+  explicitly named allowlisted pairs; ALL-selected pairs fail closed without reviews.
+
 | Item | Why deferred | Returns when |
 |---|---|---|
 | Market-data and private WebSockets | ADR-011 | Stops prove too slow, or the fee split is needed (`06/09`) |

@@ -2,6 +2,13 @@
 
 Chronological summary of user-visible or operationally significant changes. Coarser than the records.
 
+## 2026-11-20
+
+- T3-07: Indodax IDR signal builder with visual entry/exit rules, audited definitions,
+  separate Kronos + AI reviewer worker and append-only evidence (migration 0013).
+  PAPER entry requires fresh exact-candle reviews; exits are deterministic. Crypto
+  forecasts include weekends; the stock default is unchanged. Not deployed or promoted.
+
 ## 2026-11-18
 
 - Stage 12 A–E: portable Git Bash anchor tests; offline `nft -c` validation of Stage-1 unapplied firewall draft (`nftables v1.1.3`); read-only `inventory-clients.sh` for Stage 2; `aidss-anchor-watch.sh` / R16 (draft cron, not installed); migration & backlog doc sync (firewall remains unapplied; Stage 2 awaits client inventory).

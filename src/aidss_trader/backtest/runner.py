@@ -111,12 +111,17 @@ def run_strategy(
     the same kind with different names keep separate evidence."""
     results: list[PairResult] = []
     skipped: list[str] = []
+    from aidss_trader.strategy.declarative import DeclarativeStrategy
+
+    timeframe = (
+        strategy.definition.timeframe if isinstance(strategy, DeclarativeStrategy) else TIMEFRAME
+    )
     for pair in inputs.pairs:
         if progress is not None:
             progress(pair)
         rows = session.scalars(
             select(Candle)
-            .where(Candle.pair == pair, Candle.timeframe == TIMEFRAME)
+            .where(Candle.pair == pair, Candle.timeframe == timeframe)
             .order_by(Candle.open_time)
         ).all()
         rule_row = session.get(PairRule, pair)
@@ -150,7 +155,7 @@ def run_strategy(
                 result,
                 config,
                 strategy_id=strategy_id,
-                timeframe=TIMEFRAME,
+                timeframe=timeframe,
                 by=by,
             )
     return StrategyResult(

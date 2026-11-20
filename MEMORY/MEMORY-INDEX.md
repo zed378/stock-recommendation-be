@@ -81,3 +81,4 @@ One line per record, newest first. Add new entries at the top.
 - [Crypto signal worker in SHADOW on the VM (2026-11-20)](records/2026-11-20-signals-worker-shadow.md) — standalone container stocks-signals, placeholder numbers, first pass all below threshold
 - [Crypto signals: operator menu, DB settings and history (2026-11-20)](records/2026-11-20-signals-menu-and-history.md) — migration 0011, /trader/signals, worker DB mode; built, not deployed
 - [4-hour breakout signals (2026-11-20)](records/2026-11-20-signals-h4.md) — ADR-067, Donchian and volume spike, deterministic ids, simulated lifecycle, migration 0012; built, not deployed
+- [Signal decision builder for Indodax IDR (2026-11-20)](records/2026-11-20-signal-builder.md) — T3-07, visual rules, audited definitions, separate model worker, append-only reviews and PAPER entry gate; not deployed

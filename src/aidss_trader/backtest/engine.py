@@ -270,6 +270,8 @@ def record_backtest(
     parameters = _json_safe(asdict(config.strategy.params))
     cost_model = _json_safe(asdict(config.paper))
     assert isinstance(parameters, dict)
+    if config.strategy.name == "signal_builder":
+        parameters["evaluation_scope"] = "RULES_ONLY_NO_MODEL_REVIEWS"
     assert isinstance(cost_model, dict)
     row = BacktestRunRow(
         origin=result.origin,

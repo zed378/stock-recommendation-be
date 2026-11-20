@@ -13,6 +13,19 @@ now and the source plugged in later.
 
 ## Request
 
+### Offline builder foundation (ADR-068, proposed)
+
+`aidss_signals.builder` evaluates declarative entry/exit rules on supplied closed candles
+and attaches Kronos and AI reviews to SHADOW candidates. The owner selected Indodax
+spot IDR: `aidss_signals.indodax_builder` now obtains exact-candle work through the
+Trader API and posts typed model evidence to append-only `trading.builder_review`
+(migration 0013). The Trader's pure `signal_builder` strategy uses those reviews as
+a required PAPER entry gate, with owner-set freshness and exact version/data identity.
+No model is imported into the Trader. Its exits, stops and kill switch do not wait
+for reviews. This is separate from the deferred analysis-platform candle-in endpoint;
+existing reference strategies retain their optional-context policy. See
+`MEMORY/specs/T3-07-signal-decision-builder.md` and `05/01` for operation and limits.
+
 | Field | Notes |
 |---|---|
 | `pair` | Canonical pair |

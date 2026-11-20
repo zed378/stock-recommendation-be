@@ -983,3 +983,12 @@ Following Section 19 of the planning document:
    personal use. Graded Buy/Sell labels with confidence scores are informational by
    construction here, but whether that positioning holds under OJK rules for investment
    research providers is a question for a lawyer, not for this codebase.
+
+### Indodax IDR signal builder (local, PAPER)
+
+Trader Strategies now includes a visual signal builder: explicit entry/exit rules,
+ATR stops and required Kronos + AI reviews for PAPER entries. A separate model worker
+uses stored Indodax candles and records SHADOW evidence through the authenticated
+Trader API. It is not deployed or promoted live; every trading number is owner-set.
+See [the strategy specification](docs/05-MODULE-SPECIFICATIONS/01-STRATEGY-ENGINE.md#indodax-idr-declarative-builder-adr-068)
+for migration, worker setup, limits and rule-only backtest interpretation.

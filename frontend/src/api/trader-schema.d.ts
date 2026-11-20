@@ -444,6 +444,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/signal-builder/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Builder Reviews */
+        get: operations["builder_reviews_trader_v1_signal_builder_reviews_get"];
+        put?: never;
+        /** Record Builder Review */
+        post: operations["record_builder_review_trader_v1_signal_builder_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signal-builder/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Builder Schema */
+        get: operations["builder_schema_trader_v1_signal_builder_schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signal-builder/work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Builder Work */
+        get: operations["builder_work_trader_v1_signal_builder_work_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/signals/acks": {
         parameters: {
             query?: never;
@@ -797,6 +849,25 @@ export interface components {
         AckData: {
             /** Acked */
             acked: boolean;
+        };
+        /** AiContext */
+        AiContext: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "LOW" | "MEDIUM" | "HIGH";
+            /** Reasons */
+            reasons: string[];
+            /** Risks */
+            risks: string[];
+            /** Score */
+            score: number;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "TAKE" | "SKIP";
         };
         /** AllowlistBody */
         AllowlistBody: {
@@ -1262,6 +1333,14 @@ export interface components {
             data: components["schemas"]["StrategyParamsData"];
             meta: components["schemas"]["MetaModel"];
         };
+        /** Envelope[dict[str, Any]] */
+        Envelope_dict_str__Any__: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            meta: components["schemas"]["MetaModel"];
+        };
         /** Envelope[dict[str, bool]] */
         Envelope_dict_str__bool__: {
             /** Data */
@@ -1328,6 +1407,14 @@ export interface components {
         Envelope_list_TradingEventItem__: {
             /** Data */
             data: components["schemas"]["TradingEventItem"][];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[list[dict[str, Any]]] */
+        Envelope_list_dict_str__Any___: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            }[];
             meta: components["schemas"]["MetaModel"];
         };
         /** GateModel */
@@ -1418,6 +1505,39 @@ export interface components {
             fields: components["schemas"]["KindFieldModel"][];
             /** Kind */
             kind: string;
+        };
+        /** KronosContext */
+        KronosContext: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /**
+             * Exchange
+             * @constant
+             */
+            exchange: "INDODAX";
+            /** Model Id */
+            model_id: string;
+            /** Pred Len */
+            pred_len: number;
+            /** Projected Return Pct */
+            projected_return_pct: number | string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "huggingface" | "fixture";
+            /** Samples */
+            samples: number;
+            /** Ticker */
+            ticker: string;
+            /**
+             * Timeframe
+             * @enum {string}
+             */
+            timeframe: "4h" | "1d";
         };
         /** LedgerItem */
         LedgerItem: {
@@ -1776,6 +1896,17 @@ export interface components {
              * @enum {string}
              */
             trading_state: "RUNNING" | "HALTED" | "CANCELLING" | "FLATTENING";
+        };
+        /** ReviewBody */
+        ReviewBody: {
+            ai?: components["schemas"]["AiContext"] | null;
+            /** Identity */
+            identity: string;
+            kronos?: components["schemas"]["KronosContext"] | null;
+            /** Pair */
+            pair: string;
+            /** Strategy Id */
+            strategy_id: string;
         };
         /** SignalAckModel */
         SignalAckModel: {
@@ -3331,6 +3462,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_ResumeData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    builder_reviews_trader_v1_signal_builder_reviews_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_builder_review_trader_v1_signal_builder_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    builder_schema_trader_v1_signal_builder_schema_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    builder_work_trader_v1_signal_builder_work_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_dict_str__Any___"];
                 };
             };
             /** @description Validation Error */

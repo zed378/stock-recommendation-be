@@ -44,6 +44,7 @@ from aidss_trader.db.models import (
     ApprovalRow,
     AuditLog,
     BacktestRunRow,
+    BuilderReview,
     EquitySnapshot,
     Fill,
     IdempotencyRecord,
@@ -73,6 +74,13 @@ from aidss_trader.runtime.accounting import (
     drawdown_pct,
     paper_drawdown_pct,
     replay_origin,
+)
+from aidss_trader.runtime.builder_reviews import (
+    ReviewBody,
+    build_work,
+    pending_work,
+    review_is_current,
+    review_outcome,
 )
 from aidss_trader.runtime.ownership import (
     REFERENCE,
@@ -127,6 +135,7 @@ from aidss_trader.signals_config import (
 from aidss_trader.signals_config import loosens as signals_loosen
 from aidss_trader.signals_stats import Row as SignalStatsRow
 from aidss_trader.signals_stats import summarize as signals_summarize
+from aidss_trader.strategy.declarative import BuilderDefinition
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 from aidss_trader.strategy.kinds import ID_PATTERN, KINDS, MAX_LABEL, ParameterError, build_strategy
 
@@ -1864,6 +1873,86 @@ def create_app(ctx: ApiContext) -> FastAPI:
     # ------------------------------------------------------ strategy library and backtests
 
     jobs = BacktestJobs(ctx.session_factory)  # type: ignore[arg-type]
+
+    @app.get(f"{r}/signal-builder/schema", response_model=Envelope[dict[str, Any]])
+    def builder_schema(_: Principal = Depends(need(perm.VIEW))):
+        return envelope(BuilderDefinition.model_json_schema(), origin="PAPER")
+
+    @app.get(f"{r}/signal-builder/work", response_model=Envelope[list[dict[str, Any]]])
+    def builder_work(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        return envelope(pending_work(s, datetime.now(UTC)), origin="PAPER")
+
+    @app.get(f"{r}/signal-builder/reviews", response_model=Envelope[list[dict[str, Any]]])
+    def builder_reviews(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        rows = s.scalars(
+            select(BuilderReview).order_by(BuilderReview.generated_at.desc()).limit(50)
+        )
+        return envelope(
+            [
+                {
+                    "id": str(row.id),
+                    "strategy_id": row.strategy_id,
+                    "strategy_version": row.strategy_version,
+                    "pair": row.pair,
+                    "timeframe": row.timeframe,
+                    "candle_open": _cell(row.candle_open),
+                    "generated_at": _cell(row.generated_at),
+                    "outcome": row.outcome,
+                    "reason": row.reason,
+                    "evidence": row.evidence,
+                    "origin": "SHADOW",
+                    "current": review_is_current(s, row, datetime.now(UTC)),
+                }
+                for row in rows
+            ],
+            origin="PAPER",
+        )
+
+    @app.post(f"{r}/signal-builder/reviews", response_model=Envelope[dict[str, Any]])
+    def record_builder_review(
+        body: ReviewBody,
+        who: Principal = Depends(need(perm.CONFIGURE_STRATEGY)),
+        _k: str = Depends(idempotent),
+        s: Session = Depends(db),
+    ):
+        existing = s.scalar(select(BuilderReview).where(BuilderReview.identity == body.identity))
+        if existing is not None:
+            if existing.evidence != body.model_dump(mode="json"):
+                raise ApiError(409, "CONFLICT", "review_immutable", "a review cannot be replaced")
+            return envelope({"id": str(existing.id), "outcome": existing.outcome}, origin="PAPER")
+        now = datetime.now(UTC)
+        work = build_work(s, body.strategy_id, body.pair, now)
+        if work is None or work["identity"] != body.identity:
+            raise ApiError(
+                409, "CONFLICT", "review_work_changed", "review input is no longer current"
+            )
+        outcome, reason = review_outcome(work, body)
+        row = BuilderReview(
+            identity=body.identity,
+            strategy_id=body.strategy_id,
+            strategy_version=work["strategy_version"],
+            pair=body.pair,
+            timeframe=work["timeframe"],
+            candle_open=datetime.fromisoformat(work["candle_open"]),
+            data_hash=work["data_hash"],
+            generated_at=now,
+            outcome=outcome,
+            reason=reason,
+            evidence=body.model_dump(mode="json"),
+        )
+        s.add(row)
+        s.flush()
+        AuditLogger(s).record(
+            actor=who.user_id,
+            action="builder_review_recorded",
+            subject_type="builder_review",
+            subject_id=str(row.id),
+            mode="PAPER",
+            after={"identity": body.identity, "outcome": outcome, "reason": reason},
+            at=now,
+        )
+        s.commit()
+        return envelope({"id": str(row.id), "outcome": outcome}, origin="PAPER")
 
     def _def_version(d: StrategyDef) -> tuple[str | None, str | None]:
         try:

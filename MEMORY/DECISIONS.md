@@ -1245,3 +1245,36 @@ The password is the weakest point; a second factor is worth considering (ADR-046
 - **Decision:** `aidss_signals` gains a 4-hour pass beside the daily one. Two strategies on closed 4H Binance candles: Donchian breakout and volume-and-range spike. The best single setup per coin per candle gets an additive 0 to 100 score (breakout distance, volume, range, close near the extreme, BTC 4H trend alignment), which is a rank and not a probability. Levels are an ATR stop and R-multiple targets (the stop multiple and targets are shared with the daily screen). The id is derived from strategy, coin, side and candle open, so a rescan or manual run cannot create a second copy; `signal_trade.signal_id` is unique. A lifecycle tracker follows every unfinished signal over later candles in a pure simulation: entry at the next candle's open with slippage, skipped if the open drifted beyond the owner's limit, ladder 50/30/20 with the stop moved to break-even after TP1, the stop tested before targets inside one bar, gaps filled at the open, a time stop, and fee plus slippage charged in R. Results are stored in `signal_trade` (migration `0012`, additive; `signals_rw` may select, insert and update it) and shown on a "4-hour signals" tab and a summary that is always labelled simulated.
 - **Consequences:** No order, no exchange key, no signed call: the worker reads public candles only. PUBLISH without a receiver still runs as SHADOW. The summary reports a mean net R with its standard error and withholds the score-versus-outcome correlation until 30 signals have closed. Bar-level simulation cannot know the order inside a bar, so it is pessimistic by rule and still an estimate. The strategies, weights and defaults are not tuned and nothing shows yet that they have an edge; the table exists to measure that before any signal is trusted or published.
 - **Default (owner, 2026-11-20):** the Donchian window defaults to 20 candles when left blank, because it only sets the lookback and limits no loss. Every other 4-hour number stays required with no default.
+
+### ADR-068 — Indodax IDR signal builder with required model reviews
+
+- **Date:** 2026-11-20
+- **Target update (owner, this session):** Indodax spot IDR. Extend the builder with
+  a pure Trader strategy and existing PAPER lifecycle, visual configuration through
+  audited strategy definitions, and append-only exact-candle model reviews generated
+  by a separate worker. Required review failures block entries only. No model runs
+  in the Trader process; non-reference strategies retain their PAPER-only live guard.
+  Backtests are labelled rule-only because historical model reviews do not exist.
+  This authorizes local implementation, not deployment, credentials, live calls or
+  promotion. Every parameter and review freshness value must be owner-supplied.
+- **Status:** proposed technical design, locally built for PAPER review; Indodax IDR
+  target explicitly confirmed by the owner. No live authorization or thresholds implied.
+- **Decision:** Add a strict declarative rule builder to `aidss_signals`. Entry and exit
+  rules use named indicators, comparisons and ALL/ANY groups. Existing Kronos and AI
+  adapters review entry candidates only. A required review that fails blocks the entry;
+  neither model may create a signal or veto an exit. Every threshold is explicit.
+  A continuous-market forecast option includes weekends for crypto and preserves the
+  existing stock calendar by default.
+- **Alternatives:** Reusing only fixed templates cannot express user-selected rule
+  groups. Model-triggered entries would violate ADR-004. Wiring execution immediately
+  requires owner numbers and evidence that are not yet established. Importing model
+  internals into the Trader would violate ADR-001; the separate worker reuses the
+  existing forecaster and gateway while the Trader reads only typed stored evidence.
+- **Consequences:** Model output is SHADOW context. Definitions and reviews are
+  persisted and shown through the Trader, and required fresh evidence gates PAPER
+  entry. There is no new publisher or exchange operation. The worker uses existing
+  operator authentication; a narrower service identity is future work. Migration
+  0013 grants only SELECT/INSERT to trader_rw for the append-only review table.
+  Existing strategy-definition edits retain audit, idempotency and version handling.
+  Required builder context does not change the optional-context behavior of existing
+  reference strategies (ADR-004). Deployment and live promotion remain unperformed.

@@ -97,14 +97,14 @@ class KronosForecastResult:
 
 
 def _future_timestamps(
-    last_ts: datetime, timeframe: Timeframe, pred_len: int
+    last_ts: datetime, timeframe: Timeframe, pred_len: int, *, continuous_market: bool = False
 ) -> pd.Series:
     step = _TIMEFRAME_DELTAS.get(timeframe, timedelta(days=1))
     dates: list[pd.Timestamp] = []
     cur = pd.Timestamp(last_ts)
     for _ in range(pred_len):
         cur = cur + step
-        if timeframe == Timeframe.D1:
+        if timeframe == Timeframe.D1 and not continuous_market:
             while cur.weekday() >= 5:
                 cur = cur + timedelta(days=1)
         dates.append(cur)
@@ -173,6 +173,7 @@ class KronosForecaster:
         temperature: float = 1.0,
         top_p: float = 0.9,
         sample_count: int = 1,
+        continuous_market: bool = False,
     ) -> KronosForecastResult:
         if len(candles) < 20:
             raise KronosInsufficientDataError(
@@ -182,7 +183,9 @@ class KronosForecaster:
 
         window = candles[-self._settings.kronos_max_context :]
         last_close = float(window[-1].close)
-        future_ts = _future_timestamps(window[-1].timestamp, timeframe, pred_len)
+        future_ts = _future_timestamps(
+            window[-1].timestamp, timeframe, pred_len, continuous_market=continuous_market
+        )
 
         if self._settings.kronos_provider == "fixture":
             bars = self._fixture_forecast(window, future_ts, pred_len)

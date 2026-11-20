@@ -1,5 +1,19 @@
 # Phase T3 — Strategy, Backtest, Paper
 
+## Owner-requested extension: T3-07 — Indodax IDR signal builder
+
+Status: locally implemented, awaiting review; not DONE, merged, deployed or promoted.
+The owner selected Indodax spot IDR. Existing strategy interface, audited definitions,
+PAPER ownership and intent sizing are implemented and reused; their phase review
+statuses are not relabelled DONE by this extension. Spec refs: `05/01`, `07/01`,
+`08/01`, ADR-068, `MEMORY/specs/T3-07-signal-decision-builder.md`.
+
+Visual declarative entry/exit rules, explicit ATR/model parameters, separate model
+review worker and append-only exact-candle review gate are implemented for PAPER.
+Every owner number remains explicit. Acceptance and limitations are recorded in
+`MEMORY/records/2026-11-20-signal-builder.md`. No completion of T3-05/T3-06's different
+analysis-platform candle-in bridge, live gates or independent review is implied.
+
 | | |
 |---|---|
 | **Status** | ⏳ TODO |

@@ -72,3 +72,19 @@ The reconciliation resolution action (`POST /reconciliation/{id}/resolve`) recor
 
 Mutating routes require `Idempotency-Key`. `approve` additionally requires the intent hash so a stale card
 cannot approve a changed order (`05/07`).
+
+## Indodax builder review API (ADR-068)
+
+| Method | Path under `/trader/v1` | Permission | Behavior |
+|---|---|---|---|
+| GET | `/signal-builder/schema` | VIEW | Strict declarative definition schema |
+| GET | `/signal-builder/work` | VIEW | Pending exact-candle public Indodax work for enabled definitions and named IDR pairs |
+| GET | `/signal-builder/reviews` | VIEW | Latest 50 SHADOW reviews, including whether each is still current |
+| POST | `/signal-builder/reviews` | CONFIGURE_STRATEGY | Idempotency-Key required; strict typed evidence; server derives PASS/BLOCKED, rechecks work identity, appends evidence and audit in one transaction |
+
+Configuration is persisted through existing POST/PUT `/strategy-defs` routes as kind
+`signal_builder`, with the sole parameter `definition` (JSON). Those routes retain
+their existing permission, idempotency, audit, version reset and delete guards.
+No additional order-entry or model-inference route is exposed. The model worker is
+external to the Trader. A review cannot be replaced; changed evidence for an existing
+identity is a conflict. Model text and projected prices never become order fields.

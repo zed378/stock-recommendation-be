@@ -18,6 +18,22 @@ What is shipped, what is not. Updated in the same commit as the work it reflects
 
 ## What Exists Today
 
+### T3-07 — Signal decision builder foundation (2026-11-20)
+
+Target confirmed by the owner: **Indodax spot IDR**. Local implementation on
+`feat/T3-07-signal-decision-builder`, not merged or deployed. Declarative entry/exit
+rules are shared with a pure Trader `signal_builder` strategy; existing audited
+strategy definitions persist it. Strategies has a visual rule editor and SHADOW
+review history. A separate opt-in model worker consumes stored Indodax candle work
+through the authenticated Trader API, then posts append-only, audited reviews
+(migration 0013). PAPER entry requires exact version/candle/data and fresh passing
+Kronos + AI evidence; exits do not wait for models. Existing risk, ownership and
+promotion controls remain; non-reference strategies are PAPER-only. Backtests are
+explicitly rule-only. This is not the deferred candle-in analysis API or a live
+promotion. Owner numbers, migration, model provisioning and worker installation
+remain operator tasks. Browser visual QA was unavailable; validation is recorded in
+`MEMORY/records/2026-11-20-signal-builder.md` for verification and limitations.
+
 ### The analysis platform (built; not changed by this plan)
 
 Python 3.11+, FastAPI, PostgreSQL 16 with pgvector, React and Vite. Market data, indicators, a multi-agent

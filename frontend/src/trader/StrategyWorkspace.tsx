@@ -10,6 +10,8 @@ import { roundDecimal, trimZeros } from "@/trader/format";
 import { useTraderQuery } from "@/trader/hooks";
 import { useDeleteStrategyDef, useSetStrategyPaper, useStartBacktests } from "@/trader/mutations";
 import { StrategyBuilder, type BuilderStart } from "@/trader/StrategyBuilder";
+import { SignalBuilder } from "@/trader/SignalBuilder";
+import { BuilderReviews } from "@/trader/BuilderReviews";
 import { StrategyCard } from "@/trader/StrategyCard";
 import type {
   BacktestJob,
@@ -67,6 +69,7 @@ export function StrategyWorkspace() {
 
   return (
     <div className="space-y-4">
+      <BuilderReviews />
       <PanelBody query={defs}>
         {(list) => {
           const active = list.some((d) => d.id === tab) ? tab : COMPARE;
@@ -84,6 +87,8 @@ export function StrategyWorkspace() {
                     ]}
                   />
                 </div>
+                <Button size="sm" onClick={() => setBuilder({ existing: false, id: "", label: "",
+                  kind: "signal_builder", params: {} })}>{t("builder.new")}</Button>
                 <Button
                   size="sm"
                   disabled={kinds.data === undefined}
@@ -131,7 +136,9 @@ export function StrategyWorkspace() {
           );
         }}
       </PanelBody>
-      {builder && kinds.data && (
+      {builder?.kind === "signal_builder" && <SignalBuilder start={builder}
+        onClose={() => setBuilder(null)} onSaved={(id) => { setBuilder(null); setTab(id); }} />}
+      {builder && builder.kind !== "signal_builder" && kinds.data && (
         <StrategyBuilder
           kinds={kinds.data.data}
           start={builder}
@@ -323,7 +330,7 @@ function StrategyPanel({
       >
         <p className="mb-3 max-w-prose text-sm text-muted">{t(`trader.strat.kind.${def.kind}.desc` as MessageKey)}</p>
         <p className="mb-4 text-xs text-muted">
-          {def.legacy
+          {def.kind === "signal_builder" ? t("builder.scope") : def.legacy
             ? t("trader.strat.runsInPaper")
             : t("trader.strat.backtestOnly")}
         </p>
@@ -333,6 +340,7 @@ function StrategyPanel({
           </p>
         )}
         <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{t("trader.strat.params")}</h3>
+        {def.kind === "signal_builder" ? <p className="text-sm text-muted">{t("builder.editHint")}</p> :
         <dl className="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2">
           {Object.entries(def.params).map(([name, value]) => (
             <div key={name} className="flex justify-between gap-4 border-b border-line py-1.5 text-sm">
@@ -340,7 +348,7 @@ function StrategyPanel({
               <dd className="font-mono tnum text-ink">{value}</dd>
             </div>
           ))}
-        </dl>
+        </dl>}
         {def.version && <p className="mt-3 font-mono text-xs text-muted">{def.version}</p>}
         {del.error && (
           <p role="alert" className="mt-3 text-sm text-fall">
