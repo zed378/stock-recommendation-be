@@ -1,0 +1,9 @@
+# Crypto signal worker deployed in SHADOW (2026-11-20)
+
+ADR-065. Image `zed378/aidss-signals:59eae42` (new `Dockerfile.signals`: core dependencies plus python-socketio, no torch, non-root, state in `/data`). Run on the VM as a standalone container `stocks-signals` (not a compose service; `--restart unless-stopped`, read-only root, `no-new-privileges`, network `stocks_default`), state and decision log in `~/aidss-signals-data`. The api, worker, trader, frontend and postgres containers were not touched. Secrets (database URL of the `aidss_app` role, JWT secret for the stored provider keys) are passed by name from the host env files, never written to a file or the command line; the non-secret settings are in `~/aidss-signals.env` (mode 600).
+
+Settings used: owner's choices (horizons 14d and 30d, threshold 0.8, TOP_N left at its default 5) plus **placeholder numbers I picked, not the owner's**: symbols BTCUSDT, ETHUSDT, SOLUSDT; minimum 24h quote volume 50,000,000 USDT; ATR stop multiple 2.5; targets 1.5R, 2.5R, 4R; AI minimum score 70; at most 10 AI calls per pass. They matter before PUBLISH, not in SHADOW (nothing is sent anywhere).
+
+First pass (real Binance public data, from the VM): universe BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, ZECUSDT (fixed three plus top 5 by volume, overlapping), all BELOW_THRESHOLD for the 2026-11-19 daily candle: ratios 0.32 to 0.51 against 0.8, so no coin reached the AI review. The container's startup pass then skipped all five as already decided; the next pass is after the 00:05 UTC close. Verified: Binance public endpoints answer from the VM (HTTP 200), the decision log and state file are written, and the stored AI providers (gemini, openrouter, jerouter) exist for the gateway.
+
+Not exercised against reality: the AI review (no candidate reached it), PUBLISH mode, the receiver, any client. Rollback: `docker rm -f stocks-signals`.
