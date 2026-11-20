@@ -274,3 +274,14 @@ def test_config_from_settings_keeps_the_secret_in_the_environment() -> None:
     assert (
         cfg.port == 3099 and "tok-" not in repr(cfg) and cfg.fixed_symbols == ("ETHUSDT", "SOLUSDT")
     )
+
+
+def test_a_half_filled_4h_section_does_not_stop_the_daily_pass(factory) -> None:
+    # Found on the VM on 2026-11-20: enabling the 4-hour section without its numbers made the
+    # whole worker idle, including the daily scan that was already running.
+    configure(factory, h4={"enabled": True, "strategies": ["DONCHIAN"], "allow_short": True})
+    store = SignalStore(factory, now=lambda: NOW)
+    logs: list[str] = []
+    report = poll(store, factory, logs=logs)
+    assert report is not None and report.outcomes
+    assert not any("signals: idle" in m for m in logs)

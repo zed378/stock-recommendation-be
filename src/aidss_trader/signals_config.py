@@ -265,6 +265,12 @@ def parse_settings(body: dict[str, Any]) -> SignalSettings:
     )
 
 
+def daily_unset_fields(s: SignalSettings) -> list[str]:
+    """What the daily pass is waiting for. The 4-hour numbers are not part of it: a half-filled
+    4-hour section must not stop the daily scan that was already running."""
+    return [f for f in unset_fields(s) if not f.startswith("h4.")]
+
+
 def unset_fields(s: SignalSettings) -> list[str]:
     """What still has to be chosen before the worker may run. Empty means ready."""
     missing: list[str] = []

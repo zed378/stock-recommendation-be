@@ -12,6 +12,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+from aidss_trader.signals_config import unset_fields
+
 PREFIX = "AIDSS_SIGNALS_"
 DEFAULT_TOP_N = 5  # the owner's own default for how many coins are picked by volume (2026-11-20)
 MAX_TOP_N = 50  # a resource limit (one candle request per coin), not a recommendation
@@ -194,7 +196,9 @@ def config_from_settings(settings: Any, env: Mapping[str, str] | None = None) ->
         raise ConfigError(f"{PREFIX}PORT must be a port number")
     h = settings.h4
     h4 = None
-    if h.enabled:
+    # A half-filled 4-hour section leaves the 4-hour pass idle (the runner says what is unset);
+    # it must not stop the daily pass.
+    if h.enabled and not [f for f in unset_fields(settings) if f.startswith("h4.")]:
         h4 = H4Config(
             strategies=tuple(h.strategies),
             donchian_n=int(h.donchian_n),

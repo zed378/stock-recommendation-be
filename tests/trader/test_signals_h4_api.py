@@ -204,3 +204,14 @@ def test_the_summary_endpoint_reports_what_the_rows_say() -> None:
     assert d["simulated"] is True and d["total"] == 3 and d["overall"]["closed"] == 2
     assert d["overall"]["mean_net_r"] == pytest.approx(0.35)
     assert d["states"] == {"CLOSED": 2, "PENDING": 1} and d["score_correlation"] is None
+
+
+def test_a_half_filled_4h_section_keeps_the_daily_worker_ready() -> None:
+    call = api_for(World("PAPER", configured=False))
+    body = {**FULL, "h4": {"enabled": True, "strategies": ["DONCHIAN"]}}
+    assert put(call, body).status_code == 200
+    data = call("GET", "/signals/config").json()["data"]
+    assert data["ready"] is True and any(f.startswith("h4.") for f in data["unset"])
+    status = call("GET", "/signals/status").json()["data"]
+    assert status["ready"] is True
+    assert call("POST", "/signals/run").status_code == 202

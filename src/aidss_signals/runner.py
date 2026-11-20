@@ -19,7 +19,7 @@ from aidss_signals.h4_pass import H4Report, h4_slot, run_h4_pass
 from aidss_signals.market import MarketData
 from aidss_signals.store import DbState, SignalStore
 from aidss_signals.worker import PassReport, run_pass
-from aidss_trader.signals_config import unset_fields
+from aidss_trader.signals_config import daily_unset_fields, unset_fields
 
 SCHEDULE_OFFSET = timedelta(minutes=5)  # after the 00:00 UTC close, once the exchange settled it
 
@@ -59,7 +59,7 @@ def poll_once(
     settings, requested_at = store.load_settings()
     if not settings.enabled:
         return None
-    missing = unset_fields(settings)
+    missing = daily_unset_fields(settings)
     if missing:
         log("WARN", "signals: idle, these settings are not set: " + ", ".join(missing))
         return None

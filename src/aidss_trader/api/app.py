@@ -116,6 +116,7 @@ from aidss_trader.signals_config import (
     MAX_TOP_N,
     VALID_HORIZONS,
     SignalSettingsError,
+    daily_unset_fields,
     get_settings_row,
     get_signal_settings,
     parse_settings,
@@ -2289,7 +2290,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
             "configured": row is not None,
             "settings": raw,
             "unset": missing,
-            "ready": row is not None and not missing,
+            "ready": row is not None and not daily_unset_fields(settings),
             "default_top_n": DEFAULT_TOP_N,
             "max_top_n": MAX_TOP_N,
             "valid_horizons": list(VALID_HORIZONS),
@@ -2357,7 +2358,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         s: Session = Depends(db),
     ):
         settings = get_signal_settings(s)
-        if get_settings_row(s) is None or not settings.enabled or unset_fields(settings):
+        if get_settings_row(s) is None or not settings.enabled or daily_unset_fields(settings):
             raise ApiError(
                 409,
                 "CONFLICT",
@@ -2373,7 +2374,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         row = get_settings_row(s)
         settings = get_signal_settings(s)
         last = s.scalars(select(SignalScan).order_by(SignalScan.started_at.desc()).limit(1)).first()
-        ready = row is not None and not unset_fields(settings)
+        ready = row is not None and not daily_unset_fields(settings)
         age = None
         if last is not None:
             started = last.started_at
