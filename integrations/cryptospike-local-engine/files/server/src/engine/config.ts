@@ -1,3 +1,4 @@
+import type { AiConfig } from "./ai-assessor";
 import { validateParams, type StrategyParams } from "./strategy";
 
 export type EngineMode = "SHADOW" | "EXECUTE";
@@ -9,6 +10,8 @@ export interface EngineConfig {
   params: StrategyParams;
   btcSymbol: string;
   pollSeconds: number;
+  /** Ada hanya bila LOCAL_ENGINE_AI_ENABLED=true. Kunci API TIDAK disimpan di sini. */
+  ai?: AiConfig;
 }
 
 export type EngineConfigResult =
@@ -72,10 +75,22 @@ export function loadEngineConfig(env: NodeJS.ProcessEnv): EngineConfigResult {
   const klinesBase = (env.LOCAL_ENGINE_KLINES_BASE ?? "https://api.binance.com").trim().replace(/\/+$/, "");
   if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(klinesBase)) problems.push("LOCAL_ENGINE_KLINES_BASE must be an https origin");
 
+  let ai: AiConfig | undefined;
+  if ((env.LOCAL_ENGINE_AI_ENABLED ?? "").trim().toLowerCase() === "true") {
+    const model = (env.LOCAL_ENGINE_AI_MODEL ?? "").trim();
+    if (!model) problems.push("LOCAL_ENGINE_AI_MODEL is required when the AI reviewer is on");
+    if (!(env.ANTHROPIC_API_KEY ?? "").trim()) problems.push("ANTHROPIC_API_KEY is required when the AI reviewer is on");
+    const minScore = num("LOCAL_ENGINE_AI_MIN_SCORE");
+    const maxCallsPerTick = num("LOCAL_ENGINE_AI_MAX_CALLS_PER_TICK");
+    if (Number.isFinite(minScore) && !(Number.isInteger(minScore) && minScore >= 1 && minScore <= 100)) problems.push("LOCAL_ENGINE_AI_MIN_SCORE must be a whole number from 1 to 100");
+    if (Number.isFinite(maxCallsPerTick) && !(Number.isInteger(maxCallsPerTick) && maxCallsPerTick >= 1 && maxCallsPerTick <= 50)) problems.push("LOCAL_ENGINE_AI_MAX_CALLS_PER_TICK must be a whole number from 1 to 50");
+    ai = { model, minScore, maxCallsPerTick };
+  }
+
   if (problems.length > 0) return { status: "invalid", problems };
   return {
     status: "ready",
     notes,
-    config: { mode, symbols, klinesBase, params, btcSymbol: "BTCUSDT", pollSeconds: 60 },
+    config: { mode, symbols, klinesBase, params, btcSymbol: "BTCUSDT", pollSeconds: 60, ...(ai ? { ai } : {}) },
   };
 }

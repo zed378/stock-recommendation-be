@@ -1,0 +1,22 @@
+[3:59:33 PM] ℹ️ [SignalClient] Connecting to Signal Server (http://127.0.0.1:53863)...
+[3:59:33 PM] ✅ [SignalClient] Connected to Signal Server (http://127.0.0.1:53863)!
+=== Satu putaran mesin: 4 simbol, semuanya lolos aturan masuk (pasar naik sintetis) ===
+  [engine INFO] Local engine signal: ETHUSDT LONG entry 359 sl 356.2 tp 363.2/366/370.2
+  -> sinyal dikirim ke klien lewat server sinyal palsu: ETHUSDT score 85 entry 359.0000 sl 356.2000 tp1 363.2000
+[3:59:34 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: ETHUSDT (LONG) [local-ema-adx-di] Score: 85
+[3:59:34 PM] ℹ️ [Tokocrypto] [FeeShield] TP1 ETHUSDT (+1.17%) is too tight. Adjusted to safe minimum target +3.0%: $369.7700.
+[3:59:34 PM] ✅ [Tokocrypto] [SIMULATION] BUY order ETH_USDT at $359 succeeded. Target TP: $369.7700, SL: $356.2000.
+  [engine INFO] Local engine: SOLUSDT candidate skipped by AI (score 40): move looks stretched
+  [engine WARN] Local engine: ADAUSDT candidate dropped, AI reviewer unavailable (AI request answered 529)
+  [engine INFO] Local engine: XRPUSDT candidate below the AI minimum score (60 < 70)
+
+=== Catatan keputusan (decision log) ===
+  ETHUSDT: SIGNAL (skor 85, TAKE, trend, ADX and DI agree)
+  SOLUSDT: AI_SKIP (skor 40, SKIP, move looks stretched)
+  ADAUSDT: AI_UNAVAILABLE [AI request answered 529]
+  XRPUSDT: AI_BELOW_MIN (skor 60, TAKE, acceptable but weak)
+
+=== Hasil ===
+  kandidat dari aturan: 4, panggilan AI: 4, sinyal keluar: 1
+  posisi spot dry-run di klien: ETH_USDT
+  ACK ke server sinyal (RECEIVED): local-ETHUSDT-1425600000

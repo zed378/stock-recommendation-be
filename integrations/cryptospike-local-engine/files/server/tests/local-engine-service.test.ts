@@ -99,6 +99,7 @@ describe("mesin", () => {
     assert.ok(s.sl < s.entryPrice && s.entryPrice < s.tp1 && s.tp1 < s.tp2 && s.tp2 < s.tp3);
     assert.equal(s.btcTrendBias, "bullish");
     assert.equal(s.side, "LONG");
+    for (const v of [s.entryPrice, s.sl, s.tp1, s.tp2, s.tp3]) assert.equal(v, Number(v.toPrecision(10)), "tanpa derau pecahan biner");
   });
   test("candle yang sama tidak diputuskan dua kali; candle baru diputuskan", async () => {
     let data = (_s: string): unknown => rows(60, 1, 100);

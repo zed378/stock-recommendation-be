@@ -1,0 +1,91 @@
+=== 1. Tanpa token / token salah ===
+[3:56:14 PM] ℹ️ [SignalClient] Connecting to Signal Server (http://127.0.0.1:55965)...
+[3:56:14 PM] ⚠️ [SignalClient] Failed to connect to Signal Server (invalid client token)
+  tersambung: false; handshake ditolak server: 1x
+
+=== 2. Token benar ===
+[3:56:15 PM] ℹ️ [SignalClient] Connecting to Signal Server (http://127.0.0.1:55965)...
+[3:56:15 PM] ✅ [SignalClient] Connected to Signal Server (http://127.0.0.1:55965)!
+  tersambung: true
+
+=== 3. Sinyal LONG sah ===
+  server mengirim new_signal: {"id":"sig-1","symbol":"BTCUSDT","side":"LONG","entryPrice":65000,"tp1":67000,"tp2":69000,"tp3":72000,"sl":63000,"strategy":"demo","score":91,"strength":"HIGH"}
+[3:56:16 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: BTCUSDT (LONG) [demo] Score: 91
+[3:56:16 PM] ✅ [Tokocrypto] [SIMULATION] BUY order BTC_USDT at $65000 succeeded. Target TP: $67000.0000, SL: $63000.0000.
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-1","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-1","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-1","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 4. Sinyal SHORT (Tokocrypto spot hanya bisa beli) ===
+  server mengirim new_signal: {"id":"sig-2","symbol":"ETHUSDT","side":"SHORT","entryPrice":65000,"tp1":67000,"tp2":69000,"tp3":72000,"sl":63000,"strategy":"demo","score":91,"strength":"HIGH"}
+[3:56:16 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: ETHUSDT (SHORT) [demo] Score: 91
+[3:56:16 PM] ⚠️ [Tokocrypto] Tokocrypto is a Spot exchange supporting only BUY / LONG positions. SHORT signals are automatically skipped.
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-2","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-2","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-2","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 5. Koin di daftar hitam ===
+  server mengirim new_signal: {"id":"sig-3","symbol":"SCAMUSDT","side":"LONG","entryPrice":65000,"tp1":67000,"tp2":69000,"tp3":72000,"sl":63000,"strategy":"demo","score":91,"strength":"HIGH"}
+[3:56:17 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: SCAMUSDT (LONG) [demo] Score: 91
+[3:56:17 PM] ℹ️ [Tokocrypto] [BLACKLIST BLOCKED] Signal SCAMUSDT skipped: included in your Blacklist (SCAMUSDT).
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-3","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-3","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-3","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 6. Payload cacat (tanpa simbol dan sisi) ===
+  server mengirim new_signal: {"id":"sig-4","side":null}
+[3:56:17 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: undefined (null) [undefined] Score: undefined
+[3:56:17 PM] ⚠️ [Tokocrypto] Signal side '' is not valid for Tokocrypto spot market.
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-4","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-4","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-4","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 7. Sinyal LONG sah kedua ===
+  server mengirim new_signal: {"id":"sig-5","symbol":"SOLUSDT","side":"LONG","entryPrice":150,"tp1":160,"tp2":170,"tp3":180,"sl":140,"strategy":"demo","score":91,"strength":"HIGH"}
+[3:56:18 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: SOLUSDT (LONG) [demo] Score: 91
+[3:56:18 PM] ✅ [Tokocrypto] [SIMULATION] BUY order SOL_USDT at $150 succeeded. Target TP: $160.0000, SL: $140.0000.
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-5","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-5","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-5","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 8. Sinyal yang SAMA dengan no. 3 dikirim ulang (id sama, misalnya replay setelah reconnect) ===
+  server mengirim new_signal: {"id":"sig-1","symbol":"BTCUSDT","side":"LONG","entryPrice":65000,"tp1":67000,"tp2":69000,"tp3":72000,"sl":63000,"strategy":"demo","score":91,"strength":"HIGH"}
+[3:56:18 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: BTCUSDT (LONG) [demo] Score: 91
+[3:56:18 PM] ✅ [Tokocrypto] [SIMULATION] BUY order BTC_USDT at $65000 succeeded. Target TP: $67000.0000, SL: $63000.0000.
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-1","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-1","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-1","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 9. Sinyal LONG berikutnya melewati batas posisi (3) ===
+  server mengirim new_signal: {"id":"sig-6","symbol":"ADAUSDT","side":"LONG","entryPrice":0.5,"tp1":0.55,"tp2":0.6,"tp3":0.65,"sl":0.46,"strategy":"demo","score":91,"strength":"HIGH"}
+[3:56:19 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: ADAUSDT (LONG) [demo] Score: 91
+[3:56:19 PM] ⚠️ [Tokocrypto] Max open positions limit reached (3/3). Signal ADAUSDT skipped.
+  diterima oleh 1 klien; baris bertanda waktu di atas adalah log klien asli
+  ACK ke server: {"signalId":"sig-6","stage":"RECEIVED"}
+  ACK ke server: {"signalId":"sig-6","stage":"RESULT","environment":"TESTNET","status":"DISABLED","reason":"Testnet auto-execute off or API key missing"}
+  ACK ke server: {"signalId":"sig-6","stage":"RESULT","environment":"LIVE","status":"DISABLED","reason":"Live auto-execute off or API key missing"}
+
+=== 10. Jaringan putus (transport ditutup tanpa pesan): apakah klien tersambung lagi? ===
+[3:56:19 PM] ⚠️ [SignalClient] Disconnected from Signal Server (transport close)
+  setelah diputus, tersambung: false
+[3:56:22 PM] ✅ [SignalClient] Connected to Signal Server (http://127.0.0.1:55965)!
+  setelah menunggu 4,5 detik, tersambung: true (klien di server: 1)
+
+=== 11. Server SENGAJA memutus klien (disconnect dari sisi server): apakah klien tersambung lagi? ===
+[3:56:24 PM] ⚠️ [SignalClient] Disconnected from Signal Server (io server disconnect)
+  setelah diputus, tersambung: false
+  setelah menunggu 4,5 detik, tersambung: false (klien di server: 0)
+
+=== 12. Sinyal setelah itu ===
+  server mengirim new_signal: {"id":"sig-7","symbol":"XRPUSDT","side":"LONG","entryPrice":0.6,"tp1":0.66,"tp2":0.7,"tp3":0.75,"sl":0.55,"strategy":"demo","score":91,"strength":"HIGH"}
+  diterima oleh 0 klien; baris bertanda waktu di atas adalah log klien asli
+
+=== Ringkasan ===
+  posisi spot yang tercatat (database palsu): BTC_USDT, SOL_USDT, BTC_USDT
+  jumlah ACK diterima server: 21 (RECEIVED: 7)

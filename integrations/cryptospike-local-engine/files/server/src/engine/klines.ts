@@ -1,6 +1,13 @@
 import { at, type Candle } from "./indicators";
 
-export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<{
+export type FetchInit = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  signal?: AbortSignal;
+};
+
+export type FetchLike = (url: string, init?: FetchInit) => Promise<{
   ok: boolean;
   status: number;
   json(): Promise<unknown>;
