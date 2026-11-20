@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { startMockSignalServer } from "./mock-signal-server";
 
-export const TOKEN = "sim-token-not-a-real-token";
+export const TOKEN = process.env.SIM_TOKEN ?? "sim-token-not-a-real-token";
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const say = (s = "") => console.log(s);
 
@@ -12,12 +12,13 @@ export const say = (s = "") => console.log(s);
  * Tidak ada koneksi keluar, tidak ada kunci, tidak ada bursa. Tokocrypto dalam mode dry-run;
  * Binance tanpa kunci (selalu DISABLED). Jalankan dari folder server/ klien.
  */
-export async function bootClient(tokoOverrides: Record<string, unknown> = {}) {
+export async function bootClient(tokoOverrides: Record<string, unknown> = {}, externalUrl?: string) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "cs-sim-"));
   process.chdir(work);
   process.env.SIGNAL_DEDUPE_FILE = path.join(work, "processed.json");
-  const server = await startMockSignalServer(TOKEN);
-  process.env.SERVER_URL = server.url;
+  // Dengan externalUrl klien tersambung ke server sinyal NYATA (mis. server AIDSS), bukan yang palsu.
+  const server = externalUrl ? null : await startMockSignalServer(TOKEN);
+  process.env.SERVER_URL = externalUrl ?? server!.url;
 
   const serverDir = path.resolve(__dirname, "..");
   const dbFile = require.resolve(path.join(serverDir, "src/lib/db"));

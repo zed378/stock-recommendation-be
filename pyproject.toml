@@ -37,8 +37,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2",
+    "python-socketio[asyncio_client]>=5.11",
     "pytest-cov>=5.0",
     "ruff>=0.5",
+]
+# The crypto signal receiver (`aidss_signals`): a Socket.IO server the CryptoSpike client connects to.
+signals = [
+    "python-socketio>=5.11",
 ]
 kronos = [
     "torch>=2.0.0",

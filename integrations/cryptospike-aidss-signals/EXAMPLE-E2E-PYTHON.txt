@@ -1,0 +1,15 @@
+AIDSS signal server listening on 127.0.0.1:3099; waiting for the client to connect...
+client connected; running one worker pass
+published aidss-ETHUSDT-2026-11-19 (score 94, ai 86) to 1 client(s)
+  [WARN] signals: XRPUSDT dropped, AI review unavailable (provider unreachable)
+
+outcome per coin:
+  ADAUSDT: AI_SKIP
+  ETHUSDT: SIGNAL
+  SOLUSDT: BELOW_THRESHOLD
+  XRPUSDT: AI_UNAVAILABLE
+
+acknowledgements from the receiver:
+  {"signalId": "aidss-ETHUSDT-2026-11-19", "stage": "RECEIVED"}
+  {"signalId": "aidss-ETHUSDT-2026-11-19", "stage": "RESULT", "environment": "TESTNET", "status": "DISABLED", "reason": "Testnet auto-execute off or API key missing"}
+  {"signalId": "aidss-ETHUSDT-2026-11-19", "stage": "RESULT", "environment": "LIVE", "status": "DISABLED", "reason": "Live auto-execute off or API key missing"}

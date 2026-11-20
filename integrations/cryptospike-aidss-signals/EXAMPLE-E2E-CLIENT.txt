@@ -1,0 +1,8 @@
+[4:44:28 PM] ℹ️ [SignalClient] Connecting to Signal Server (http://127.0.0.1:3099)...
+[4:44:28 PM] ✅ [SignalClient] Connected to Signal Server (http://127.0.0.1:3099)!
+[4:44:29 PM] ℹ️ [SignalClient] ⚡ Broadcast signal received: ETHUSDT (LONG) [aidss-crypto-pick] Score: 94
+[4:44:29 PM] ✅ [Tokocrypto] [SIMULATION] BUY order ETH_USDT at $15705.47805 succeeded. Target TP: $16615.9723, SL: $15098.4819.
+[4:44:29 PM] ⚠️ [SignalClient] Disconnected from Signal Server (transport close)
+
+connected: false
+dry-run spot positions recorded by the client: ETH_USDT qty 0.000637 tp1 16615.97227 sl 15098.48191
