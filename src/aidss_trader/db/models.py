@@ -616,3 +616,47 @@ class SignalAckRow(Base):
     status: Mapped[str | None] = mapped_column(String(12), nullable=True)
     reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class SignalTrade(Base):
+    """A 4-hour breakout signal and what a follower would have got from it (ADR-067).
+
+    One row per signal id. The id is derived from the candle, coin, side and strategy and is unique,
+    so a rescan cannot add a second copy. The outcome columns are a **simulation** from public
+    candles: never a fill on any exchange and never shown as one.
+    """
+
+    __tablename__ = "signal_trade"
+    __table_args__ = (Index("ix_signal_trade_state", "state", "issued_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    signal_id: Mapped[str] = mapped_column(String(96), unique=True)
+    scan_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{SCHEMA}.signal_scan.id"), nullable=True
+    )
+    strategy: Mapped[str] = mapped_column(String(12), index=True)  # DONCHIAN | SPIKE
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    side: Mapped[str] = mapped_column(String(5))
+    mode: Mapped[str] = mapped_column(String(8))  # SHADOW | PUBLISH when it was made
+    published: Mapped[bool] = mapped_column(Boolean, default=False)
+    candle_open: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    score: Mapped[int] = mapped_column(Integer, index=True)
+    components: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    entry: Mapped[Decimal] = mapped_column(Money)
+    stop: Mapped[Decimal] = mapped_column(Money)
+    tp1: Mapped[Decimal] = mapped_column(Money)
+    tp2: Mapped[Decimal] = mapped_column(Money)
+    tp3: Mapped[Decimal] = mapped_column(Money)
+    atr: Mapped[Decimal] = mapped_column(Money)
+    btc_bias: Mapped[str] = mapped_column(String(8), default="")
+    #: PENDING (no candle after it yet), OPEN, CLOSED or SKIPPED (price had drifted or broken)
+    state: Mapped[str] = mapped_column(String(8), default="PENDING")
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tp_hits: Mapped[int] = mapped_column(Integer, default=0)
+    fill_price: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    gross_r: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    net_r: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    bars_held: Mapped[int] = mapped_column(Integer, default=0)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

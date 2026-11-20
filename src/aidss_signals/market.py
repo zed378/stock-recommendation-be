@@ -101,8 +101,12 @@ class MarketData:
         return out
 
     def daily_candles(self, symbol: str, now: datetime, limit: int = 400) -> list[Candle]:
+        return self.candles(symbol, "1d", now, limit)
+
+    def candles(self, symbol: str, interval: str, now: datetime, limit: int) -> list[Candle]:
+        """Closed candles only, oldest first; a bad row fails the whole fetch."""
         body = self._get(
-            "/api/v3/klines", {"symbol": symbol, "interval": "1d", "limit": str(limit)}
+            "/api/v3/klines", {"symbol": symbol, "interval": interval, "limit": str(limit)}
         )
         if not isinstance(body, list):
             raise MarketDataError(f"klines {symbol}: expected a list")

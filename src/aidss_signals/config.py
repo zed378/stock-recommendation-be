@@ -26,6 +26,23 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class H4Config:
+    """The 4-hour breakout signals' settings as the worker uses them."""
+
+    strategies: tuple[str, ...]
+    donchian_n: int
+    vol_period: int
+    vol_mult: float
+    range_mult: float
+    min_score: int
+    allow_short: bool
+    max_hold_bars: int
+    fee_pct: float
+    slippage_pct: float
+    drift_r: float
+
+
+@dataclass(frozen=True, slots=True)
 class SignalsConfig:
     mode: str  # SHADOW: nothing leaves the process. PUBLISH: signals go to connected receivers
     fixed_symbols: tuple[str, ...]
@@ -45,6 +62,7 @@ class SignalsConfig:
     ack_log_path: Path
     client_token: str = field(repr=False, default="")
     notes: tuple[str, ...] = ()
+    h4: H4Config | None = None
 
 
 def load_config(env: Mapping[str, str] | None = None) -> SignalsConfig | None:
@@ -174,7 +192,24 @@ def config_from_settings(settings: Any, env: Mapping[str, str] | None = None) ->
         raise ConfigError(f"{PREFIX}KLINES_BASE must be an https origin")
     if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:
         raise ConfigError(f"{PREFIX}PORT must be a port number")
+    h = settings.h4
+    h4 = None
+    if h.enabled:
+        h4 = H4Config(
+            strategies=tuple(h.strategies),
+            donchian_n=int(h.donchian_n),
+            vol_period=int(h.vol_period),
+            vol_mult=float(h.vol_mult),
+            range_mult=float(h.range_mult),
+            min_score=int(h.min_score),
+            allow_short=bool(h.allow_short),
+            max_hold_bars=int(h.max_hold_bars),
+            fee_pct=float(h.fee_pct),
+            slippage_pct=float(h.slippage_pct),
+            drift_r=float(h.drift_r),
+        )
     return SignalsConfig(
+        h4=h4,
         mode=settings.mode,
         fixed_symbols=tuple(settings.symbols),
         top_n=settings.top_n,

@@ -53,7 +53,7 @@ async def _serve_db(env) -> None:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from aidss_signals.runner import poll_once
+    from aidss_signals.runner import poll_h4, poll_once
     from aidss_signals.store import SignalStore
 
     url = env["AIDSS_SIGNALS_DATABASE_URL"]
@@ -100,6 +100,18 @@ async def _serve_db(env) -> None:
             )
             if report is not None:
                 logger.info("pass done: %s", report.outcomes)
+            h4_report = await asyncio.to_thread(
+                poll_h4,
+                store,
+                lambda cfg: MarketData(cfg.klines_base),
+                publish,
+                dict(env),
+                datetime.now(UTC),
+                log,
+                hub is not None,
+            )
+            if h4_report is not None:
+                logger.info("4h pass done: %s", h4_report.outcomes)
         except Exception:  # noqa: BLE001 - the loop must survive a bad poll
             logger.exception("poll failed")
         await asyncio.sleep(max(5, poll_s))

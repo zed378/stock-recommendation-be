@@ -19,3 +19,4 @@ GRANT SELECT ON trading.signal_config TO signals_rw;
 GRANT SELECT, INSERT, UPDATE ON trading.signal_scan TO signals_rw;
 GRANT SELECT, INSERT ON trading.signal_candidate TO signals_rw;
 GRANT SELECT, INSERT ON trading.signal_ack TO signals_rw;
+GRANT SELECT, INSERT, UPDATE ON trading.signal_trade TO signals_rw;

@@ -547,6 +547,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trader/v1/signals/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signal Trades */
+        get: operations["list_signal_trades_trader_v1_signals_trades_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trader/v1/signals/trades/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Signal Trade Summary */
+        get: operations["signal_trade_summary_trader_v1_signals_trades_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trader/v1/status": {
         parameters: {
             query?: never;
@@ -1176,6 +1210,16 @@ export interface components {
         /** Envelope[SignalCandidatesData] */
         Envelope_SignalCandidatesData_: {
             data: components["schemas"]["SignalCandidatesData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[SignalTradeSummaryData] */
+        Envelope_SignalTradeSummaryData_: {
+            data: components["schemas"]["SignalTradeSummaryData"];
+            meta: components["schemas"]["MetaModel"];
+        };
+        /** Envelope[SignalTradesData] */
+        Envelope_SignalTradesData_: {
+            data: components["schemas"]["SignalTradesData"];
             meta: components["schemas"]["MetaModel"];
         };
         /** Envelope[SignalsConfigData] */
@@ -1831,6 +1875,116 @@ export interface components {
             /** Universe */
             universe: string[];
         };
+        /** SignalTradeModel */
+        SignalTradeModel: {
+            /** Atr */
+            atr: string;
+            /** Bars Held */
+            bars_held: number;
+            /** Btc Bias */
+            btc_bias: string;
+            /** Candle Open */
+            candle_open: string;
+            /** Closed At */
+            closed_at: string | null;
+            /** Components */
+            components: {
+                [key: string]: unknown;
+            };
+            /** Entry */
+            entry: string;
+            /** Fill Price */
+            fill_price: string | null;
+            /** Gross R */
+            gross_r: string | null;
+            /** Id */
+            id: string;
+            /** Issued At */
+            issued_at: string;
+            /** Mode */
+            mode: string;
+            /** Net R */
+            net_r: string | null;
+            /** Outcome */
+            outcome: string | null;
+            /** Published */
+            published: boolean;
+            /** Score */
+            score: number;
+            /** Side */
+            side: string;
+            /** Signal Id */
+            signal_id: string;
+            /** State */
+            state: string;
+            /** Stop */
+            stop: string;
+            /** Strategy */
+            strategy: string;
+            /** Symbol */
+            symbol: string;
+            /** Tp1 */
+            tp1: string;
+            /** Tp2 */
+            tp2: string;
+            /** Tp3 */
+            tp3: string;
+            /** Tp Hits */
+            tp_hits: number;
+        };
+        /** SignalTradeSummaryData */
+        SignalTradeSummaryData: {
+            /** By Score */
+            by_score: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** By Side */
+            by_side: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** By Strategy */
+            by_strategy: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Correlation Min Closed */
+            correlation_min_closed: number;
+            /** Outcomes */
+            outcomes: {
+                [key: string]: number;
+            };
+            /** Overall */
+            overall: {
+                [key: string]: unknown;
+            };
+            /** Score Correlation */
+            score_correlation: number | null;
+            /** Simulated */
+            simulated: boolean;
+            /** States */
+            states: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
+        };
+        /** SignalTradesData */
+        SignalTradesData: {
+            /** Items */
+            items: components["schemas"]["SignalTradeModel"][];
+            /**
+             * Simulated
+             * @default true
+             */
+            simulated: boolean;
+            /** Total */
+            total: number;
+        };
         /** SignalsConfigBody */
         SignalsConfigBody: {
             /** Ai Max Calls */
@@ -1849,6 +2003,13 @@ export interface components {
              * @default false
              */
             enabled: boolean;
+            /**
+             * H4
+             * @default {}
+             */
+            h4: {
+                [key: string]: unknown;
+            };
             /**
              * Horizons
              * @default []
@@ -1910,6 +2071,10 @@ export interface components {
             atr_stop_multiple: string | null;
             /** Enabled */
             enabled: boolean;
+            /** H4 */
+            h4: {
+                [key: string]: unknown;
+            };
             /** Horizons */
             horizons: string[];
             /** Min Quote Volume Usdt */
@@ -3400,6 +3565,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_SignalsStatusData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signal_trades_trader_v1_signals_trades_get: {
+        parameters: {
+            query?: {
+                strategy?: string | null;
+                symbol?: string | null;
+                state?: string | null;
+                side?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalTradesData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signal_trade_summary_trader_v1_signals_trades_summary_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SignalTradeSummaryData_"];
                 };
             };
             /** @description Validation Error */

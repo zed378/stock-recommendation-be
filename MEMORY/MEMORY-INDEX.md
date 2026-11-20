@@ -80,3 +80,4 @@ One line per record, newest first. Add new entries at the top.
 - [cryptospike-client local engine patch (2026-11-20)](records/2026-11-20-cryptospike-local-engine.md) — repo analysis, local strategy engine as a patch in integrations/; off by default, SHADOW first, not tested against an exchange
 - [Crypto signal worker in SHADOW on the VM (2026-11-20)](records/2026-11-20-signals-worker-shadow.md) — standalone container stocks-signals, placeholder numbers, first pass all below threshold
 - [Crypto signals: operator menu, DB settings and history (2026-11-20)](records/2026-11-20-signals-menu-and-history.md) — migration 0011, /trader/signals, worker DB mode; built, not deployed
+- [4-hour breakout signals (2026-11-20)](records/2026-11-20-signals-h4.md) — ADR-067, Donchian and volume spike, deterministic ids, simulated lifecycle, migration 0012; built, not deployed

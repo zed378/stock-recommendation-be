@@ -10,6 +10,7 @@ import { StepUpDialog } from "@/trader/StepUpDialog";
 import {
   bodyFrom,
   formFrom,
+  H4_STRATEGIES,
   HORIZON_ORDER,
   loosensSignals,
   sameForm,
@@ -21,10 +22,13 @@ import type {
   SignalCandidates,
   SignalsConfig,
   SignalsStatus,
+  SignalTradeSummary,
+  SignalTrades,
 } from "@/trader/types";
 
-type Tab = "settings" | "qualified" | "history" | "receiver";
+type Tab = "settings" | "qualified" | "history" | "h4" | "receiver";
 const PAGE = 50;
+const KINDS = ["SCHEDULED", "MANUAL", "H4", "H4MANUAL"];
 
 const pct = (ratio: string) => `${Math.round(Number(ratio) * 100)}%`;
 const words = (key: string) => key.replace(/_/g, " ");
@@ -56,12 +60,14 @@ export function TraderSignals() {
           { id: "settings", label: t("trader.signals.tab.settings") },
           { id: "qualified", label: t("trader.signals.tab.qualified") },
           { id: "history", label: t("trader.signals.tab.history") },
+          { id: "h4", label: t("trader.signals.tab.h4") },
           { id: "receiver", label: t("trader.signals.tab.receiver") },
         ]}
       />
       {tab === "settings" && <SettingsTab />}
       {tab === "qualified" && <CandidateList meets key="qualified" />}
       {tab === "history" && <CandidateList key="history" />}
+      {tab === "h4" && <H4Tab />}
       {tab === "receiver" && <ReceiverTab />}
     </div>
   );
@@ -106,7 +112,7 @@ function StatusCard() {
                 {last
                   ? t("trader.signals.status.last", {
                       when: dateTime(last.started_at),
-                      kind: t(`trader.signals.kind.${last.kind === "MANUAL" ? "MANUAL" : "SCHEDULED"}` as MessageKey),
+                      kind: t(`trader.signals.kind.${KINDS.includes(last.kind) ? last.kind : "SCHEDULED"}` as MessageKey),
                       mode: last.mode,
                       signals: last.signals,
                       calls: last.ai_calls,
@@ -129,6 +135,24 @@ function StatusCard() {
     </Card>
   );
 }
+
+const H4_FIELDS: ReadonlyArray<
+  readonly [
+    "donchianN" | "volPeriod" | "volMult" | "rangeMult" | "minScore" | "maxHold" | "fee" | "slip" | "drift",
+    MessageKey,
+    "numeric" | "decimal",
+  ]
+> = [
+  ["donchianN", "trader.signals.f.h4.donchianN", "numeric"],
+  ["volPeriod", "trader.signals.f.h4.volPeriod", "numeric"],
+  ["volMult", "trader.signals.f.h4.volMult", "decimal"],
+  ["rangeMult", "trader.signals.f.h4.rangeMult", "decimal"],
+  ["minScore", "trader.signals.f.h4.minScore", "numeric"],
+  ["maxHold", "trader.signals.f.h4.maxHold", "numeric"],
+  ["fee", "trader.signals.f.h4.fee", "decimal"],
+  ["slip", "trader.signals.f.h4.slip", "decimal"],
+  ["drift", "trader.signals.f.h4.drift", "decimal"],
+];
 
 function SettingsTab() {
   const query = useTraderQuery<SignalsConfig>(
@@ -175,6 +199,11 @@ function SettingsForm({ config }: { config: SignalsConfig }) {
         },
       },
     );
+
+  const setH4 = (patch: Partial<SignalsForm["h4"]>) => {
+    setSaved(false);
+    setForm((f) => ({ ...f, h4: { ...f.h4, ...patch } }));
+  };
 
   const toggleHorizon = (h: string) =>
     set("horizons", form.horizons.includes(h) ? form.horizons.filter((x) => x !== h) : [...form.horizons, h]);
@@ -281,6 +310,50 @@ function SettingsForm({ config }: { config: SignalsConfig }) {
         </div>
       </fieldset>
 
+      <fieldset className="space-y-4 border-t border-line pt-4">
+        <legend className="text-sm font-medium text-ink">{t("trader.signals.f.h4.title")}</legend>
+        <p className="max-w-prose text-xs text-muted">{t("trader.signals.f.h4.note")}</p>
+        <label className="flex min-h-9 items-center gap-3 text-sm text-ink max-sm:min-h-11">
+          <input type="checkbox" className="h-4 w-4" checked={form.h4.enabled} onChange={(e) => setH4({ enabled: e.target.checked })} />
+          {t("trader.signals.f.h4.enabled")}
+        </label>
+        <div className="flex flex-wrap gap-4" role="group" aria-label={t("trader.signals.f.h4.strategies")}>
+          {H4_STRATEGIES.map((x) => (
+            <label key={x} className="flex min-h-9 items-center gap-2 text-sm text-ink max-sm:min-h-11">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={form.h4.strategies.includes(x)}
+                onChange={() =>
+                  setH4({
+                    strategies: form.h4.strategies.includes(x)
+                      ? form.h4.strategies.filter((y) => y !== x)
+                      : [...form.h4.strategies, x],
+                  })
+                }
+              />
+              {t(`trader.signals.f.h4.strategy.${x}` as MessageKey)}
+            </label>
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {H4_FIELDS.map(([key, label, mode]) => (
+            <Field key={key} label={t(label)}>
+              <input
+                className={`${inputClass} font-mono tnum`}
+                inputMode={mode}
+                value={form.h4[key]}
+                onChange={(e) => setH4({ [key]: e.target.value })}
+              />
+            </Field>
+          ))}
+        </div>
+        <label className="flex min-h-9 items-center gap-3 text-sm text-ink max-sm:min-h-11">
+          <input type="checkbox" className="h-4 w-4" checked={form.h4.allowShort} onChange={(e) => setH4({ allowShort: e.target.checked })} />
+          {t("trader.signals.f.h4.allowShort")}
+        </label>
+      </fieldset>
+
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
         <Button type="submit" busy={save.isPending} disabled={!changed || publishUnconfirmed}>
           {t("trader.signals.save")}
@@ -301,6 +374,198 @@ function SettingsForm({ config }: { config: SignalsConfig }) {
       )}
       {stepUp && <StepUpDialog scope="RAISE_LIMIT" onCancel={() => setStepUp(false)} onGranted={(grant) => send(grant)} />}
     </form>
+  );
+}
+
+type Group = {
+  closed: number;
+  win_rate: number | null;
+  tp1_rate: number | null;
+  mean_net_r: number | null;
+  stderr_net_r: number | null;
+  sum_net_r: number | null;
+};
+
+const fixed = (v: number | null | undefined, digits = 2) => (v === null || v === undefined ? "-" : v.toFixed(digits));
+const share = (v: number | null | undefined) => (v === null || v === undefined ? "-" : `${Math.round(v * 100)}%`);
+const FEW = 30;
+
+function GroupTable({ title, groups }: { title: string; groups: Record<string, Group> }) {
+  const { t } = useI18n();
+  const rows = Object.entries(groups);
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted">{title}</h3>
+      <div className="-mx-4 overflow-x-auto px-4">
+        <table className="w-full min-w-[28rem] text-left text-sm">
+          <thead className="text-xs text-muted">
+            <tr>
+              <th className="pb-2 pr-3 font-medium" />
+              <th className="pb-2 pr-3 text-right font-medium">{t("trader.signals.h4.closed")}</th>
+              <th className="pb-2 pr-3 text-right font-medium">{t("trader.signals.h4.winRate")}</th>
+              <th className="pb-2 pr-3 text-right font-medium">{t("trader.signals.h4.tp1Rate")}</th>
+              <th className="pb-2 text-right font-medium">{t("trader.signals.h4.meanR")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map(([name, g]) => (
+              <tr key={name}>
+                <td className="py-2 pr-3 font-mono text-xs">{name}</td>
+                <td className="py-2 pr-3 text-right font-mono tnum">{g.closed}</td>
+                <td className="py-2 pr-3 text-right font-mono tnum">{share(g.win_rate)}</td>
+                <td className="py-2 pr-3 text-right font-mono tnum">{share(g.tp1_rate)}</td>
+                <td className="py-2 text-right font-mono tnum">
+                  {fixed(g.mean_net_r)}
+                  {g.stderr_net_r !== null && g.stderr_net_r !== undefined ? ` ±${fixed(g.stderr_net_r)}` : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function H4Summary() {
+  const { t } = useI18n();
+  const query = useTraderQuery<SignalTradeSummary>(["signals", "h4", "summary"], () =>
+    traderApi.GET("/trader/v1/signals/trades/summary"),
+  );
+  return (
+    <Card title={<h2 className="text-sm font-medium text-ink">{t("trader.signals.h4.summary")}</h2>}>
+      <PanelBody query={query}>
+        {(d) => {
+          if (d.total === 0) return <Empty message={t("trader.signals.h4.none")} />;
+          const o = d.overall as unknown as Group;
+          return (
+            <div className="space-y-5">
+              <p className="text-xs text-watch">{t("trader.signals.h4.caveat")}</p>
+              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {(
+                  [
+                    ["trader.signals.h4.closed", String(o.closed)],
+                    ["trader.signals.h4.winRate", share(o.win_rate)],
+                    ["trader.signals.h4.tp1Rate", share(o.tp1_rate)],
+                    [
+                      "trader.signals.h4.meanR",
+                      `${fixed(o.mean_net_r)}${o.stderr_net_r !== null && o.stderr_net_r !== undefined ? ` ±${fixed(o.stderr_net_r)}` : ""}`,
+                    ],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-xs text-muted">{t(label)}</dt>
+                    <dd className="font-mono text-lg tnum text-ink">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {o.closed < FEW && <p className="text-xs text-muted">{t("trader.signals.h4.few")}</p>}
+              <p className="font-mono text-xs text-muted">
+                {t("trader.signals.h4.states")}:{" "}
+                {Object.entries(d.states)
+                  .map(([k, v]) => `${t(`trader.signals.h4.state.${k}` as MessageKey)} ${v}`)
+                  .join(", ")}
+              </p>
+              <GroupTable title={t("trader.signals.h4.byStrategy")} groups={d.by_strategy as unknown as Record<string, Group>} />
+              <GroupTable title={t("trader.signals.h4.bySide")} groups={d.by_side as unknown as Record<string, Group>} />
+              <GroupTable title={t("trader.signals.h4.byScore")} groups={d.by_score as unknown as Record<string, Group>} />
+              <p className="text-xs text-muted">
+                {t("trader.signals.h4.corr")}:{" "}
+                {d.score_correlation === null
+                  ? t("trader.signals.h4.corrWithheld", { n: d.correlation_min_closed })
+                  : fixed(d.score_correlation)}
+              </p>
+            </div>
+          );
+        }}
+      </PanelBody>
+    </Card>
+  );
+}
+
+function H4Tab() {
+  const { t, dateTime } = useI18n();
+  const [strategy, setStrategy] = useState("");
+  const [state, setState] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const query = useTraderQuery<SignalTrades>(["signals", "h4", "trades", strategy, state, limit], () =>
+    traderApi.GET("/trader/v1/signals/trades", {
+      params: { query: { strategy: strategy || undefined, state: state || undefined, limit, offset: 0 } },
+    }),
+  );
+  return (
+    <div className="space-y-6">
+      <H4Summary />
+      <Card>
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <Field label={t("trader.signals.h4.filter.strategy")}>
+            <select className={inputClass} value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+              <option value="">{t("trader.signals.h4.filter.any")}</option>
+              {H4_STRATEGIES.map((x) => (
+                <option key={x} value={x}>
+                  {t(`trader.signals.f.h4.strategy.${x}` as MessageKey)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t("trader.signals.h4.filter.state")}>
+            <select className={inputClass} value={state} onChange={(e) => setState(e.target.value)}>
+              <option value="">{t("trader.signals.h4.filter.any")}</option>
+              {["PENDING", "CLOSED", "SKIPPED"].map((x) => (
+                <option key={x} value={x}>
+                  {t(`trader.signals.h4.state.${x}` as MessageKey)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <PanelBody query={query}>
+          {(d) =>
+            d.items.length === 0 ? (
+              <Empty message={t("trader.signals.h4.none")} />
+            ) : (
+              <div className="space-y-3">
+                <div className="-mx-4 overflow-x-auto px-4">
+                  <table className="w-full min-w-[44rem] text-left text-sm">
+                    <thead className="text-xs text-muted">
+                      <tr>
+                        {(["coin", "strategy", "side", "score", "entry", "stop", "state", "outcome", "net", "when"] as const).map((c) => (
+                          <th key={c} className="pb-2 pr-3 font-medium">
+                            {t(`trader.signals.h4.col.${c}` as MessageKey)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {d.items.map((x) => (
+                        <tr key={x.id}>
+                          <td className="py-2 pr-3 font-mono">{x.symbol}</td>
+                          <td className="py-2 pr-3 text-xs">{x.strategy}</td>
+                          <td className="py-2 pr-3 text-xs">{x.side}</td>
+                          <td className="py-2 pr-3 font-mono tnum">{x.score}</td>
+                          <td className="py-2 pr-3 font-mono tnum">{x.entry}</td>
+                          <td className="py-2 pr-3 font-mono tnum">{x.stop}</td>
+                          <td className="py-2 pr-3 text-xs">{t(`trader.signals.h4.state.${x.state}` as MessageKey)}</td>
+                          <td className="py-2 pr-3 font-mono text-xs text-muted">{x.outcome ? words(x.outcome) : "-"}</td>
+                          <td className="py-2 pr-3 font-mono tnum">{x.net_r === null ? "-" : fixed(Number(x.net_r))}</td>
+                          <td className="py-2 text-xs text-muted">{dateTime(x.issued_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {d.items.length < d.total && (
+                  <Button variant="ghost" size="sm" onClick={() => setLimit((n) => n + PAGE)}>
+                    {t("trader.signals.h4.more")}
+                  </Button>
+                )}
+              </div>
+            )
+          }
+        </PanelBody>
+      </Card>
+    </div>
   );
 }
 

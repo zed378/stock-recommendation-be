@@ -16,6 +16,20 @@ const config = (over: Partial<SignalsConfig["settings"]> = {}): SignalsConfig =>
     tp_r: ["1.5", "2.5", "4"],
     ai_min_score: 70,
     ai_max_calls: 10,
+    h4: {
+      enabled: true,
+      strategies: ["DONCHIAN"],
+      donchian_n: 20,
+      vol_period: 20,
+      vol_mult: "2",
+      range_mult: "1.5",
+      min_score: 60,
+      allow_short: false,
+      max_hold_bars: 30,
+      fee_pct: "0.1",
+      slippage_pct: "0.05",
+      drift_r: "0.5",
+    },
     ...over,
   },
   unset: [],
@@ -107,5 +121,46 @@ describe("what needs the password", () => {
     expect(loosensSignals(fresh, edit(fresh, { minRatio: "0.5", aiMin: "10", minVolume: "1", atrStop: "9", aiCalls: "50" }))).toBe(false);
     const live = config({ mode: "PUBLISH" });
     expect(loosensSignals(live, edit(live, { mode: "PUBLISH" }))).toBe(false);
+  });
+});
+
+describe("signals form, 4-hour settings", () => {
+  const h4 = (over: Partial<SignalsForm["h4"]>) => (c: SignalsConfig) => edit(c, { h4: { ...formFrom(c).h4, ...over } });
+
+  it("round-trips the stored 4-hour settings and sends blanks as null", () => {
+    const c = config();
+    expect(bodyFrom(formFrom(c)).h4).toMatchObject({
+      enabled: true,
+      strategies: ["DONCHIAN"],
+      donchian_n: 20,
+      vol_mult: "2",
+      min_score: 60,
+      allow_short: false,
+      drift_r: "0.5",
+    });
+    expect(bodyFrom(h4({ minScore: "", drift: "" })(c)).h4).toMatchObject({ min_score: null, drift_r: null });
+  });
+
+  it("asks for the password only when the 4-hour rules get looser", () => {
+    const c = config();
+    expect(loosensSignals(c, formFrom(c))).toBe(false);
+    for (const over of [
+      { minScore: "50" },
+      { volMult: "1.5" },
+      { rangeMult: "1" },
+      { donchianN: "10" },
+      { allowShort: true },
+      { strategies: ["DONCHIAN", "SPIKE"] },
+    ]) {
+      expect(loosensSignals(c, h4(over)(c)), JSON.stringify(over)).toBe(true);
+    }
+    for (const over of [{ minScore: "80" }, { volMult: "3" }, { enabled: false }, { strategies: [] }]) {
+      expect(loosensSignals(c, h4(over)(c)), JSON.stringify(over)).toBe(false);
+    }
+  });
+
+  it("does not treat turning a never-enabled 4-hour screen on as looser", () => {
+    const c = config({ h4: { enabled: false, strategies: [] } });
+    expect(loosensSignals(c, h4({ enabled: true, strategies: ["DONCHIAN", "SPIKE"] })(c))).toBe(false);
   });
 });

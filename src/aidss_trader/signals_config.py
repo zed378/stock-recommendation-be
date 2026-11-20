@@ -36,6 +36,48 @@ class SignalSettingsError(ValueError):
         self.problems = problems
 
 
+H4_STRATEGIES = ("DONCHIAN", "SPIKE")
+
+
+@dataclass(frozen=True, slots=True)
+class H4Settings:
+    """The 4-hour breakout signals (ADR-067). Switched off until the owner turns them on; every
+    number is required then, none has a default. The stop multiple and the targets are shared with
+    the daily screen (the same two settings), so one place decides how a trade is priced."""
+
+    enabled: bool = False
+    strategies: tuple[str, ...] = ()
+    donchian_n: int | None = None
+    vol_period: int | None = None
+    vol_mult: Decimal | None = None
+    range_mult: Decimal | None = None
+    min_score: int | None = None
+    allow_short: bool = False
+    max_hold_bars: int | None = None
+    fee_pct: Decimal | None = None
+    slippage_pct: Decimal | None = None
+    drift_r: Decimal | None = None
+
+    def as_json(self) -> dict[str, Any]:
+        def d(v: Decimal | None) -> str | None:
+            return None if v is None else format(v.normalize(), "f")
+
+        return {
+            "enabled": self.enabled,
+            "strategies": list(self.strategies),
+            "donchian_n": self.donchian_n,
+            "vol_period": self.vol_period,
+            "vol_mult": d(self.vol_mult),
+            "range_mult": d(self.range_mult),
+            "min_score": self.min_score,
+            "allow_short": self.allow_short,
+            "max_hold_bars": self.max_hold_bars,
+            "fee_pct": d(self.fee_pct),
+            "slippage_pct": d(self.slippage_pct),
+            "drift_r": d(self.drift_r),
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class SignalSettings:
     enabled: bool = False
@@ -49,6 +91,7 @@ class SignalSettings:
     tp_r: tuple[Decimal, Decimal, Decimal] | None = None
     ai_min_score: int | None = None
     ai_max_calls: int | None = None
+    h4: H4Settings = H4Settings()
     notes: str = field(default="", compare=False)
 
     def as_json(self) -> dict[str, Any]:
@@ -67,6 +110,7 @@ class SignalSettings:
             "tp_r": None if self.tp_r is None else [d(v) for v in self.tp_r],
             "ai_min_score": self.ai_min_score,
             "ai_max_calls": self.ai_max_calls,
+            "h4": self.h4.as_json(),
         }
 
 
@@ -96,6 +140,45 @@ def _int(value: Any, name: str, problems: list[str]) -> int | None:
         problems.append(f"{name} must be a whole number")
         return None
     return int(out)
+
+
+def _parse_h4(raw: Any, problems: list[str]) -> H4Settings:
+    if not isinstance(raw, dict):
+        return H4Settings()
+    strategies = tuple(
+        str(x).strip().upper() for x in (raw.get("strategies") or []) if str(x).strip()
+    )
+    if any(x not in H4_STRATEGIES for x in strategies) or len(set(strategies)) != len(strategies):
+        problems.append(f"h4.strategies must be a list from {', '.join(H4_STRATEGIES)}")
+
+    def whole(name: str, lo: int, hi: int) -> int | None:
+        v = _int(raw.get(name), f"h4.{name}", problems)
+        if v is not None and not lo <= v <= hi:
+            problems.append(f"h4.{name} must be from {lo} to {hi}")
+        return v
+
+    def dec(name: str, lo: Decimal, hi: Decimal, *, lo_open: bool = False) -> Decimal | None:
+        v = _dec(raw.get(name), f"h4.{name}", problems)
+        if v is not None and not ((lo < v) if lo_open else (lo <= v)) or (v is not None and v > hi):
+            problems.append(
+                f"h4.{name} must be {'above' if lo_open else 'from'} {lo} and at most {hi}"
+            )
+        return v
+
+    return H4Settings(
+        enabled=bool(raw.get("enabled", False)),
+        strategies=strategies,
+        donchian_n=whole("donchian_n", 5, 200),
+        vol_period=whole("vol_period", 5, 100),
+        vol_mult=dec("vol_mult", Decimal(1), Decimal(20), lo_open=True),
+        range_mult=dec("range_mult", Decimal(0), Decimal(10), lo_open=True),
+        min_score=whole("min_score", 1, 100),
+        allow_short=bool(raw.get("allow_short", False)),
+        max_hold_bars=whole("max_hold_bars", 1, 200),
+        fee_pct=dec("fee_pct", Decimal(0), Decimal(5)),
+        slippage_pct=dec("slippage_pct", Decimal(0), Decimal(5)),
+        drift_r=dec("drift_r", Decimal(0), Decimal(3), lo_open=True),
+    )
 
 
 def parse_settings(body: dict[str, Any]) -> SignalSettings:
@@ -158,6 +241,8 @@ def parse_settings(body: dict[str, Any]) -> SignalSettings:
     if ai_calls is not None and not 1 <= ai_calls <= 50:
         problems.append("ai_max_calls must be from 1 to 50")
 
+    h4 = _parse_h4(body.get("h4"), problems)
+
     if problems:
         raise SignalSettingsError(problems)
     return SignalSettings(
@@ -172,6 +257,7 @@ def parse_settings(body: dict[str, Any]) -> SignalSettings:
         tp_r=tp,
         ai_min_score=ai_min,
         ai_max_calls=ai_calls,
+        h4=h4,
         notes=str(body.get("notes", ""))[:200],
     )
 
@@ -195,6 +281,23 @@ def unset_fields(s: SignalSettings) -> list[str]:
         missing.append("ai_min_score")
     if s.ai_max_calls is None:
         missing.append("ai_max_calls")
+    if s.h4.enabled:
+        h = s.h4
+        for name in (
+            "donchian_n",
+            "vol_period",
+            "vol_mult",
+            "range_mult",
+            "min_score",
+            "max_hold_bars",
+            "fee_pct",
+            "slippage_pct",
+            "drift_r",
+        ):
+            if getattr(h, name) is None:
+                missing.append(f"h4.{name}")
+        if not h.strategies:
+            missing.append("h4.strategies")
     return missing
 
 
@@ -211,6 +314,16 @@ def loosens(old: SignalSettings, new: SignalSettings) -> bool:
         return old_v is not None and new_v is not None and new_v > old_v
 
     if new.mode == "PUBLISH" and old.mode != "PUBLISH":
+        return True
+    a, b = old.h4, new.h4
+    if (
+        below(a.min_score, b.min_score)
+        or below(a.vol_mult, b.vol_mult)
+        or below(a.range_mult, b.range_mult)
+        or below(a.donchian_n, b.donchian_n)
+        or (b.allow_short and not a.allow_short)
+        or (a.enabled and bool(set(b.strategies) - set(a.strategies)))
+    ):
         return True
     return (
         below(old.min_score_ratio, new.min_score_ratio)

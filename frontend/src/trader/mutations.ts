@@ -491,6 +491,20 @@ export type SignalsConfigBodyValues = {
   ai_max_calls: number | null;
   confirm_publish: boolean;
   notes: string;
+  h4: {
+    enabled: boolean;
+    strategies: string[];
+    donchian_n: number | null;
+    vol_period: number | null;
+    vol_mult: string | null;
+    range_mult: string | null;
+    min_score: number | null;
+    allow_short: boolean;
+    max_hold_bars: number | null;
+    fee_pct: string | null;
+    slippage_pct: string | null;
+    drift_r: string | null;
+  };
 };
 
 export function useSaveSignalsConfig() {

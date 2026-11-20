@@ -17,6 +17,60 @@ export interface SignalsForm {
   aiMin: string;
   aiCalls: string;
   confirmPublish: boolean;
+  h4: H4Form;
+}
+
+/** The 4-hour breakout settings, as text for the same reason. */
+export interface H4Form {
+  enabled: boolean;
+  strategies: string[];
+  donchianN: string;
+  volPeriod: string;
+  volMult: string;
+  rangeMult: string;
+  minScore: string;
+  allowShort: boolean;
+  maxHold: string;
+  fee: string;
+  slip: string;
+  drift: string;
+}
+
+export const H4_STRATEGIES = ["DONCHIAN", "SPIKE"] as const;
+
+interface H4Stored {
+  enabled?: boolean;
+  strategies?: string[];
+  donchian_n?: number | null;
+  vol_period?: number | null;
+  vol_mult?: string | null;
+  range_mult?: string | null;
+  min_score?: number | null;
+  allow_short?: boolean;
+  max_hold_bars?: number | null;
+  fee_pct?: string | null;
+  slippage_pct?: string | null;
+  drift_r?: string | null;
+}
+
+const str = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : String(v));
+
+function h4From(config: SignalsConfig): H4Form {
+  const h = (config.settings.h4 ?? {}) as H4Stored;
+  return {
+    enabled: h.enabled ?? false,
+    strategies: [...(h.strategies ?? [])],
+    donchianN: str(h.donchian_n),
+    volPeriod: str(h.vol_period),
+    volMult: str(h.vol_mult),
+    rangeMult: str(h.range_mult),
+    minScore: str(h.min_score),
+    allowShort: h.allow_short ?? false,
+    maxHold: str(h.max_hold_bars),
+    fee: str(h.fee_pct),
+    slip: str(h.slippage_pct),
+    drift: str(h.drift_r),
+  };
 }
 
 export const HORIZON_ORDER = ["1d", "7d", "14d", "30d"] as const;
@@ -38,6 +92,7 @@ export function formFrom(config: SignalsConfig): SignalsForm {
     aiMin: s.ai_min_score === null ? "" : String(s.ai_min_score),
     aiCalls: s.ai_max_calls === null ? "" : String(s.ai_max_calls),
     confirmPublish: false,
+    h4: h4From(config),
   };
 }
 
@@ -66,11 +121,25 @@ export function bodyFrom(f: SignalsForm): SignalsConfigBodyValues {
     ai_max_calls: whole(f.aiCalls),
     confirm_publish: f.confirmPublish,
     notes: "",
+    h4: {
+      enabled: f.h4.enabled,
+      strategies: H4_STRATEGIES.filter((x) => f.h4.strategies.includes(x)),
+      donchian_n: whole(f.h4.donchianN),
+      vol_period: whole(f.h4.volPeriod),
+      vol_mult: text(f.h4.volMult),
+      range_mult: text(f.h4.rangeMult),
+      min_score: whole(f.h4.minScore),
+      allow_short: f.h4.allowShort,
+      max_hold_bars: whole(f.h4.maxHold),
+      fee_pct: text(f.h4.fee),
+      slippage_pct: text(f.h4.slip),
+      drift_r: text(f.h4.drift),
+    },
   };
 }
 
-const num = (v: string | null | undefined): number | null => {
-  if (v === null || v === undefined || v.trim() === "") return null;
+const num = (v: string | number | null | undefined): number | null => {
+  if (v === null || v === undefined || String(v).trim() === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
@@ -92,6 +161,14 @@ export function loosensSignals(current: SignalsConfig, next: SignalsForm): boole
   if (n.top_n !== null && n.top_n > a.top_n) return true;
   if (higher(num(a.atr_stop_multiple), num(n.atr_stop_multiple))) return true;
   if (higher(a.ai_max_calls, n.ai_max_calls)) return true;
+  const was = (a.h4 ?? {}) as H4Stored;
+  const now = n.h4;
+  if (lower(num(was.min_score), now.min_score)) return true;
+  if (lower(num(was.vol_mult), num(now.vol_mult))) return true;
+  if (lower(num(was.range_mult), num(now.range_mult))) return true;
+  if (lower(num(was.donchian_n), now.donchian_n)) return true;
+  if (now.allow_short && !(was.allow_short ?? false)) return true;
+  if ((was.enabled ?? false) && now.strategies.some((x) => !(was.strategies ?? []).includes(x))) return true;
   return false;
 }
 

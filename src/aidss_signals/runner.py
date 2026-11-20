@@ -15,6 +15,7 @@ from typing import Any
 
 from aidss_signals.ai_review import Reviewer
 from aidss_signals.config import ConfigError, SignalsConfig, config_from_settings
+from aidss_signals.h4_pass import H4Report, h4_slot, run_h4_pass
 from aidss_signals.market import MarketData
 from aidss_signals.store import DbState, SignalStore
 from aidss_signals.worker import PassReport, run_pass
@@ -115,5 +116,72 @@ def poll_once(
         errors=report.errors,
         ai_calls=report.ai_calls,
         signals=len(report.signals),
+    )
+    return report
+
+
+def due_h4(store: SignalStore, now: datetime, requested_at: datetime | None) -> Due | None:
+    """Due after each 4H close, and whenever the owner asked and no 4-hour pass has run since."""
+    last_any = store.last_scan_started(prefix="H4")
+    if requested_at is not None and (last_any is None or last_any < requested_at):
+        return Due("H4MANUAL")
+    last_sched = store.last_scan_started(kind="H4")
+    if last_sched is None or last_sched < h4_slot(now):
+        return Due("H4")
+    return None
+
+
+def poll_h4(
+    store: SignalStore,
+    market_for: Callable[[SignalsConfig], MarketData],
+    publish: Callable[[dict[str, Any]], None],
+    env: dict[str, str],
+    now: datetime,
+    log: Callable[[str, str], None] = lambda _l, _m: None,
+    receiver_ready: bool = False,
+) -> H4Report | None:
+    """One look at the database for the 4-hour signals: run a pass if one is due and the owner has
+    switched them on with every number set."""
+    settings, requested_at = store.load_settings()
+    if not settings.enabled or not settings.h4.enabled:
+        return None
+    missing = unset_fields(settings)
+    if missing:
+        log("WARN", "signals 4h: idle, these settings are not set: " + ", ".join(missing))
+        return None
+    due = due_h4(store, now, requested_at)
+    if due is None:
+        return None
+    try:
+        cfg = config_from_settings(settings, env)
+    except ConfigError as exc:
+        log("ERROR", f"signals 4h: not running ({exc})")
+        return None
+    if cfg.mode == "PUBLISH" and not receiver_ready:
+        log("WARN", "signals 4h: PUBLISH requested but no receiver server; running SHADOW")
+        cfg = replace(cfg, mode="SHADOW")
+    scan_id = store.begin_scan(due.kind, cfg.mode)
+    try:
+        report = run_h4_pass(cfg, store, market_for(cfg), scan_id, publish, now, log)
+    except Exception as exc:  # noqa: BLE001 - a pass must leave a record even when it breaks
+        store.finish_scan(
+            scan_id,
+            status="FAILED",
+            universe=[],
+            outcomes={},
+            errors=[type(exc).__name__],
+            ai_calls=0,
+            signals=0,
+        )
+        log("ERROR", f"signals 4h: pass failed ({type(exc).__name__})")
+        return None
+    store.finish_scan(
+        scan_id,
+        status="FAILED" if report.errors and not report.outcomes else "DONE",
+        universe=report.universe,
+        outcomes=report.outcomes,
+        errors=report.errors,
+        ai_calls=0,
+        signals=len(report.new_signals),
     )
     return report

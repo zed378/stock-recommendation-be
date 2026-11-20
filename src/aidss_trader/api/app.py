@@ -56,6 +56,7 @@ from aidss_trader.db.models import (
     SignalAckRow,
     SignalCandidate,
     SignalScan,
+    SignalTrade,
     StrategyRow,
     TradingEvent,
 )
@@ -123,6 +124,8 @@ from aidss_trader.signals_config import (
     unset_fields,
 )
 from aidss_trader.signals_config import loosens as signals_loosen
+from aidss_trader.signals_stats import Row as SignalStatsRow
+from aidss_trader.signals_stats import summarize as signals_summarize
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
 from aidss_trader.strategy.kinds import ID_PATTERN, KINDS, MAX_LABEL, ParameterError, build_strategy
 
@@ -638,6 +641,7 @@ class SignalsConfigBody(BaseModel):
     tp_r: list[str] | None = None
     ai_min_score: int | None = None
     ai_max_calls: int | None = None
+    h4: dict[str, Any] = {}
     notes: str = ""
     #: Required, and true, to switch to PUBLISH: a second deliberate act beside the password.
     confirm_publish: bool = False
@@ -655,6 +659,7 @@ class SignalsSettingsModel(BaseModel):
     tp_r: list[str | None] | None
     ai_min_score: int | None
     ai_max_calls: int | None
+    h4: dict[str, Any]
 
 
 class SignalsConfigData(BaseModel):
@@ -720,6 +725,54 @@ class SignalCandidateModel(BaseModel):
 class SignalCandidatesData(BaseModel):
     total: int
     items: list[SignalCandidateModel]
+
+
+class SignalTradeModel(BaseModel):
+    id: str
+    signal_id: str
+    strategy: str
+    symbol: str
+    side: str
+    mode: str
+    published: bool
+    candle_open: str
+    issued_at: str
+    score: int
+    components: dict[str, Any]
+    entry: str
+    stop: str
+    tp1: str
+    tp2: str
+    tp3: str
+    atr: str
+    btc_bias: str
+    state: str
+    outcome: str | None
+    tp_hits: int
+    fill_price: str | None
+    gross_r: str | None
+    net_r: str | None
+    bars_held: int
+    closed_at: str | None
+
+
+class SignalTradesData(BaseModel):
+    total: int
+    items: list[SignalTradeModel]
+    simulated: bool = True
+
+
+class SignalTradeSummaryData(BaseModel):
+    total: int
+    states: dict[str, int]
+    outcomes: dict[str, int]
+    overall: dict[str, Any]
+    by_strategy: dict[str, dict[str, Any]]
+    by_side: dict[str, dict[str, Any]]
+    by_score: dict[str, dict[str, Any]]
+    score_correlation: float | None
+    correlation_min_closed: int
+    simulated: bool
 
 
 class SignalAckModel(BaseModel):
@@ -2351,6 +2404,88 @@ def create_app(ctx: ApiContext) -> FastAPI:
                 "run_requested_at": None if requested is None else _cell(requested),
                 "run_pending": pending,
             },
+            origin="PAPER",
+        )
+
+    def _trade_row(x: SignalTrade) -> dict[str, Any]:
+        return {
+            "id": str(x.id),
+            "signal_id": x.signal_id,
+            "strategy": x.strategy,
+            "symbol": x.symbol,
+            "side": x.side,
+            "mode": x.mode,
+            "published": x.published,
+            "candle_open": _cell(x.candle_open),
+            "issued_at": _cell(x.issued_at),
+            "score": x.score,
+            "components": dict(x.components or {}),
+            "entry": _cell(x.entry),
+            "stop": _cell(x.stop),
+            "tp1": _cell(x.tp1),
+            "tp2": _cell(x.tp2),
+            "tp3": _cell(x.tp3),
+            "atr": _cell(x.atr),
+            "btc_bias": x.btc_bias,
+            "state": x.state,
+            "outcome": x.outcome,
+            "tp_hits": x.tp_hits,
+            "fill_price": None if x.fill_price is None else _cell(x.fill_price),
+            "gross_r": None if x.gross_r is None else _cell(x.gross_r),
+            "net_r": None if x.net_r is None else _cell(x.net_r),
+            "bars_held": x.bars_held,
+            "closed_at": None if x.closed_at is None else _cell(x.closed_at),
+        }
+
+    @app.get(f"{r}/signals/trades", response_model=Envelope[SignalTradesData])
+    def list_signal_trades(
+        strategy: str | None = None,
+        symbol: str | None = None,
+        state: str | None = None,
+        side: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        _: Principal = Depends(need(perm.VIEW)),
+        s: Session = Depends(db),
+    ):
+        query = select(SignalTrade)
+        if strategy:
+            query = query.where(SignalTrade.strategy == strategy.strip().upper())
+        if symbol:
+            query = query.where(SignalTrade.symbol == symbol.strip().upper())
+        if state:
+            query = query.where(SignalTrade.state == state.strip().upper())
+        if side:
+            query = query.where(SignalTrade.side == side.strip().upper())
+        total = s.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = s.scalars(
+            query.order_by(SignalTrade.issued_at.desc(), SignalTrade.symbol)
+            .limit(max(1, min(limit, 500)))
+            .offset(max(0, offset))
+        ).all()
+        return envelope(
+            {"total": total, "items": [_trade_row(x) for x in rows], "simulated": True},
+            origin="PAPER",
+        )
+
+    @app.get(f"{r}/signals/trades/summary", response_model=Envelope[SignalTradeSummaryData])
+    def signal_trade_summary(_: Principal = Depends(need(perm.VIEW)), s: Session = Depends(db)):
+        rows = s.scalars(select(SignalTrade)).all()
+        return envelope(
+            signals_summarize(
+                [
+                    SignalStatsRow(
+                        x.strategy,
+                        x.side,
+                        x.score,
+                        x.state,
+                        x.outcome,
+                        x.tp_hits,
+                        None if x.net_r is None else float(x.net_r),
+                    )
+                    for x in rows
+                ]
+            ),
             origin="PAPER",
         )
 
