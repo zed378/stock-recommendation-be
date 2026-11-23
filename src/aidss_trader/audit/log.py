@@ -11,8 +11,12 @@ Two honest deviations from the design document, recorded rather than hidden:
 * The timestamp comes from the Trader process, not the database. The hash needs
   the value before the row exists, and an UPDATE to add it later is exactly
   what the role's privileges forbid.
-* Appends assume a single writer. That holds because only the lease holder
-  trades (ADR-027); with two writers the chain could fork.
+* Appends are serialised on PostgreSQL by a transaction-scoped advisory lock. The earlier
+  "single writer" assumption was wrong: on 2026-11-19 an operator script and the API's own
+  backtest jobs each appended within milliseconds of the other, read the same last hash, and
+  forked the chain five times (seq 1423, 1492, 1638, 1679, 1982). Only the lease holder trades
+  (ADR-027), but the API, scripts and the runtime loop all write audit rows. SQLite has one
+  writer at a time already and needs no lock.
 """
 
 from __future__ import annotations
@@ -24,13 +28,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from aidss_trader.audit.redact import redact
 from aidss_trader.db.models import AuditLog
 
 GENESIS = "0" * 64
+#: Arbitrary constant naming the audit append lock ("AUDI" in ASCII).
+AUDIT_LOCK_KEY = 0x41554449
 
 
 class AuditChainBroken(RuntimeError):
@@ -72,6 +78,12 @@ class AuditLogger:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def _lock_appends(self) -> None:
+        """Wait for any other open transaction that is appending, and hold the lock until this one
+        ends, so the last hash read below is really the last one. Released at commit or rollback."""
+        if self._session.get_bind().dialect.name == "postgresql":
+            self._session.execute(text("select pg_advisory_xact_lock(:k)"), {"k": AUDIT_LOCK_KEY})
+
     def record(
         self,
         *,
@@ -85,6 +97,7 @@ class AuditLogger:
         correlation_id: str | None = None,
         at: datetime | None = None,
     ) -> AuditLog:
+        self._lock_appends()
         last = self._session.scalar(select(AuditLog).order_by(AuditLog.seq.desc()).limit(1))
         prev = last.hash if last is not None else GENESIS
         row = AuditLog(

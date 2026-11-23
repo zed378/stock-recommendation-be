@@ -161,6 +161,7 @@ def test_the_dashboard_indexes_are_declared() -> None:
         for shape in shapes:
             assert shape in have, (table, shape)
 
+
 @pytest.mark.postgres
 def test_p5_dashboard_open_orders_query_uses_an_index() -> None:
     url = os.environ.get("AIDSS_TRADER_TEST_OWNER_URL")
@@ -179,3 +180,58 @@ def test_p5_dashboard_open_orders_query_uses_an_index() -> None:
             )
         )
     assert "ix_order_origin_state" in plan or "Index" in plan, plan
+
+
+@pytest.mark.postgres
+def test_concurrent_audit_appends_never_fork_the_chain() -> None:
+    """On 2026-11-19 two writers appended within milliseconds and forked the chain five times.
+    Eight threads, each its own connection and transaction, must still produce one chain."""
+    import threading
+    import uuid
+
+    from sqlalchemy.orm import sessionmaker
+
+    from aidss_trader.audit.log import AuditLogger, verify_chain
+    from aidss_trader.db.base import Base
+
+    url = os.environ.get("AIDSS_TRADER_TEST_OWNER_URL")
+    if not url:
+        pytest.skip("AIDSS_TRADER_TEST_OWNER_URL not set")
+    scratch = "audit_race_" + uuid.uuid4().hex[:8]
+    admin = create_engine(url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as c:
+        c.execute(text(f'create schema "{scratch}"'))
+    engine = create_engine(url, pool_size=10).execution_options(
+        schema_translate_map={"trading": scratch}
+    )
+    try:
+        Base.metadata.tables["trading.audit_log"].create(engine)
+        factory = sessionmaker(engine, expire_on_commit=False)
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(8)
+
+        def worker(n: int) -> None:
+            try:
+                barrier.wait()
+                for i in range(25):
+                    with factory() as s:
+                        AuditLogger(s).record(
+                            actor=f"t{n}", action="race.test", correlation_id=str(i)
+                        )
+                        s.commit()
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(n,)) for n in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert not errors, errors[:1]
+        with factory() as s:
+            assert verify_chain(s) == 200
+    finally:
+        with admin.connect() as c:
+            c.execute(text(f'drop schema "{scratch}" cascade'))
+        engine.dispose()
+        admin.dispose()

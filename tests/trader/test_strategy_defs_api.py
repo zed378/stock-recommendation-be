@@ -51,6 +51,7 @@ def test_kinds_list_every_rule_with_bounds_and_no_defaults() -> None:
         "ema_adx_regime",
         "ema_adx_di_rising",
         "ema_adx_di_atr_filter",
+        "koro_obv_pullback",
     }
     assert {f["name"] for f in kinds["rsi_reversion"]["fields"]} >= {"rsi_period", "oversold"}
 
