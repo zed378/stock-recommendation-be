@@ -432,3 +432,25 @@ def test_the_payload_builder_uses_the_clients_field_names() -> None:
         "analytics",
     } <= set(p)
     assert p["sl"] > p["entryPrice"] > p["tp1"] and p["strength"] == "HIGH"
+
+
+def test_the_atlas_strategy_says_why_a_small_universe_gives_no_shortlist(factory) -> None:
+    # Percentile gates need many coins; two coins must not be treated as a universe.
+    configure(factory, h4={**H4_SETTINGS, "strategies": ["ATLAS"]})
+    store = SignalStore(factory, now=lambda: NOW)
+    logs: list[str] = []
+    report = run(store, world(), logs=logs)
+    assert report.new_signals == []
+    assert report.outcomes["ETHUSDT"].startswith("NO_SETUP:UNIVERSE_TOO_SMALL")
+    assert any("atlas shortlist empty" in m and "UNIVERSE_TOO_SMALL" in m for m in logs)
+    with factory() as s:
+        assert s.scalars(select(SignalTrade)).first() is None
+
+
+def test_a_coin_whose_candles_fail_is_reported_and_the_others_still_run(factory) -> None:
+    configure(factory, h4={**H4_SETTINGS, "strategies": ["DONCHIAN", "ATLAS"]})
+    store = SignalStore(factory, now=lambda: NOW)
+    report = run(store, {**world(), "SOLUSDT": 500})
+    assert report.outcomes["SOLUSDT"] == "DATA_ERROR" and report.outcomes["ETHUSDT"].startswith(
+        "SIGNAL:"
+    )

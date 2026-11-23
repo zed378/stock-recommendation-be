@@ -102,8 +102,12 @@ def compute(frame: pd.DataFrame, spec: IndicatorSpec) -> pd.DataFrame:
             )
         case "ichimoku":
             return core.ichimoku(
-                frame["high"], frame["low"], frame["close"],
-                p["conversion"], p["base"], p["span_b"],
+                frame["high"],
+                frame["low"],
+                frame["close"],
+                p["conversion"],
+                p["base"],
+                p["span_b"],
             )
         case "obv":
             return core.obv(frame["close"], frame["volume"]).to_frame("value")
@@ -124,6 +128,26 @@ def compute(frame: pd.DataFrame, spec: IndicatorSpec) -> pd.DataFrame:
                 atr_period=p.get("atr_period", 14),
                 max_extension_atr=p.get("max_extension_atr", 0.5),
             )
+        case "atrp":
+            return core.atrp(
+                frame["high"], frame["low"], frame["close"], p.get("period", 42)
+            ).to_frame("value")
+        case "amihud":
+            return core.amihud_illiquidity(
+                frame["close"], frame["volume"], p.get("period", 42)
+            ).to_frame("value")
+        case "zero_volume_rate":
+            return core.zero_volume_rate(frame["volume"], p.get("period", 42)).to_frame("value")
+        case "efficiency_ratio":
+            return core.efficiency_ratio(frame["close"], p.get("period", 42)).to_frame("value")
+        case "return_zscore":
+            return core.return_zscore(
+                frame["high"],
+                frame["low"],
+                frame["close"],
+                p.get("horizon", 1),
+                p.get("atrp_period", 42),
+            ).to_frame("value")
         case "lag1_autocorr":
             return core.lag1_autocorr(frame["close"], p.get("window", 180)).to_frame("value")
         case "variance_ratio":
@@ -181,9 +205,7 @@ class IndicatorEngine:
         for spec in self.specs:
             result = compute(frame, spec)
             key = f"{spec.name}({spec.params_key})" if spec.params_key else spec.name
-            latest[key] = {
-                column: _clean(result[column].iloc[-1]) for column in result.columns
-            }
+            latest[key] = {column: _clean(result[column].iloc[-1]) for column in result.columns}
 
         return {
             "bars": len(frame),

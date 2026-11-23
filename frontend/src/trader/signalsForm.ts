@@ -36,7 +36,7 @@ export interface H4Form {
   drift: string;
 }
 
-export const H4_STRATEGIES = ["DONCHIAN", "SPIKE"] as const;
+export const H4_STRATEGIES = ["DONCHIAN", "SPIKE", "ATLAS"] as const;
 
 interface H4Stored {
   enabled?: boolean;

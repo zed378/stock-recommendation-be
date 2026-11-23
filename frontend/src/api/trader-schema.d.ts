@@ -2085,6 +2085,22 @@ export interface components {
             };
             /** Correlation Min Closed */
             correlation_min_closed: number;
+            /**
+             * Episode Stats
+             * @default {}
+             */
+            episode_stats: {
+                [key: string]: unknown;
+            };
+            /**
+             * Episode Stats By Strategy
+             * @default {}
+             */
+            episode_stats_by_strategy: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
             /** Outcomes */
             outcomes: {
                 [key: string]: number;

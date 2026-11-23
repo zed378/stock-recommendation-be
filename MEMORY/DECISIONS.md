@@ -1280,3 +1280,11 @@ The password is the weakest point; a second factor is worth considering (ADR-046
   Existing strategy-definition edits retain audit, idempotency and version handling.
   Required builder context does not change the optional-context behavior of existing
   reference strategies (ADR-004). Deployment and live promotion remain unperformed.
+
+### ADR-069 — The spot part of the owner's KORO / Math Atlas notes: the `ATLAS` 4-hour strategy and episode statistics
+
+- **Date:** 2026-11-23
+- **Status:** accepted for SHADOW and statistics (owner, 2026-11-23: build slides 01, 02, 03 and 09 for crypto and stocks where possible); slide 09 turned out to be covered by the existing drawdown breaker; slides 04 to 08 not built. Spec: `MEMORY/specs/KORO-atlas-spot.md`.
+- **Context:** The notes describe a Binance perpetual-futures bot. Most of it (margin, funding, averaging in, a random entry draw, halving) has no meaning on spot or is excluded by the Trader's rules (ADR-004, ADR-009).
+- **Decision:** `aidss_signals/atlas.py` implements the character statistics, the percentile cascade and the OBV routing as a fourth selectable 4-hour strategy, `ATLAS`, with a minimum universe of 20 coins (our safeguard) so a percentile is never taken over a handful. Episode statistics (win rate, payoff ratio, profit factor, expectancy, break-even win rate, raw Kelly as a diagnostic, drawdown, recovery factor) are computed in R over the simulated outcomes. Stocks get the statistics as opt-in indicators; there is no closed-trade ledger for stocks yet, so slide 01 cannot be applied to them. Nothing in this ADR touches an order or the Risk Engine.
+- **Consequences:** The rank has no demonstrated edge; the 4-hour tab will say whether it has after enough closed signals. Kelly is displayed and never used to size anything. The cross-universe cascade for stocks and any session-reference drawdown halt are open and need the owner's decision.

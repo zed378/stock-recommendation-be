@@ -215,3 +215,66 @@ def test_a_half_filled_4h_section_keeps_the_daily_worker_ready() -> None:
     status = call("GET", "/signals/status").json()["data"]
     assert status["ready"] is True
     assert call("POST", "/signals/run").status_code == 202
+
+
+# ---------------------------------------------------------------- episode statistics (slide 01)
+
+
+def ep(net, minute, strategy="DONCHIAN") -> Row:
+    from datetime import datetime
+
+    return Row(
+        strategy, "LONG", 70, "CLOSED", "TP3" if net > 0 else "SL", 0, net,
+        datetime(2026, 11, 20, 0, minute),
+    )  # fmt: skip
+
+
+def test_episode_stats_match_a_hand_calculation() -> None:
+    from aidss_trader.signals_stats import episode_stats
+
+    # wins 2.0, 1.0, 0.6 ; losses 1.0, 1.0 ; one breakeven. Closed in this order.
+    rows = [ep(2.0, 1), ep(-1.0, 2), ep(-1.0, 3), ep(1.0, 4), ep(0.0, 5), ep(0.6, 6)]
+    s = episode_stats(rows)
+    assert (s["episodes"], s["wins"], s["losses"], s["breakeven"]) == (6, 3, 2, 1)
+    assert s["win_rate"] == pytest.approx(0.5)
+    assert s["avg_win_r"] == pytest.approx(3.6 / 3) and s["avg_loss_r"] == pytest.approx(1.0)
+    assert s["rr"] == pytest.approx(1.2) and s["pf"] == pytest.approx(3.6 / 2.0)
+    assert s["expectancy_r"] == pytest.approx(1.6 / 6) and s["total_net_r"] == pytest.approx(1.6)
+    assert s["wr_breakeven"] == pytest.approx(1 / 2.2)
+    decisive = 3 / 5
+    assert s["edge_wr"] == pytest.approx(decisive - 1 / 2.2)
+    assert s["kelly"] == pytest.approx(decisive - (1 - decisive) / 1.2)
+    # cumulative: 2, 1, 0, 1, 1, 1.6 -> peak 2, deepest 0 -> drawdown 2
+    assert s["max_drawdown_r"] == pytest.approx(2.0)
+    assert s["recovery_factor"] == pytest.approx(1.6 / 2.0)
+
+
+def test_episode_stats_order_by_close_time_not_by_input_order() -> None:
+    from aidss_trader.signals_stats import episode_stats
+
+    shuffled = [ep(-1.0, 3), ep(2.0, 1), ep(-1.0, 2)]
+    assert episode_stats(shuffled)["max_drawdown_r"] == pytest.approx(2.0)  # 2, 1, 0 -> peak 2
+
+
+def test_episode_stats_leave_undefined_ratios_empty() -> None:
+    from aidss_trader.signals_stats import episode_stats
+
+    empty = episode_stats([])
+    assert empty["episodes"] == 0 and empty["rr"] is None and empty["kelly"] is None
+    only_wins = episode_stats([ep(1.0, 1), ep(0.5, 2)])
+    assert only_wins["pf"] is None and only_wins["rr"] is None and only_wins["kelly"] is None
+    assert only_wins["max_drawdown_r"] == 0 and only_wins["recovery_factor"] is None
+    pending = Row("DONCHIAN", "LONG", 70, "PENDING", None, 0, None)
+    assert episode_stats([pending])["episodes"] == 0
+
+
+def test_the_summary_endpoint_carries_the_episode_statistics() -> None:
+    w = World("PAPER", configured=False)
+    call = api_for(w)
+    seed(w)
+    d = call("GET", "/signals/trades/summary").json()["data"]
+    e = d["episode_stats"]
+    assert e["episodes"] == 2 and e["wins"] == 1 and e["losses"] == 1
+    assert e["rr"] == pytest.approx(1.8 / 1.1) and e["total_net_r"] == pytest.approx(0.7)
+    assert set(d["episode_stats_by_strategy"]) == {"DONCHIAN", "SPIKE"}
+    assert d["episode_stats_by_strategy"]["SPIKE"]["losses"] == 1

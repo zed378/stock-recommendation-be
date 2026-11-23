@@ -786,6 +786,8 @@ class SignalTradeSummaryData(BaseModel):
     score_correlation: float | None
     correlation_min_closed: int
     simulated: bool
+    episode_stats: dict[str, Any] = {}
+    episode_stats_by_strategy: dict[str, dict[str, Any]] = {}
 
 
 class SignalAckModel(BaseModel):
@@ -2600,6 +2602,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
                         x.outcome,
                         x.tp_hits,
                         None if x.net_r is None else float(x.net_r),
+                        x.closed_at,
                     )
                     for x in rows
                 ]

@@ -25,10 +25,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from aidss.domain.types import Candle
+from aidss_signals import atlas as _atlas
 
 DONCHIAN = "DONCHIAN"
 SPIKE = "SPIKE"
-STRATEGIES = (DONCHIAN, SPIKE)
+ATLAS = "ATLAS"  # the owner's Math Atlas cascade and OBV routing (atlas.py)
+STRATEGIES = (DONCHIAN, SPIKE, ATLAS)
 ATR_PERIOD = 14  # a fixed convention, not a tuned number
 EXTREME_SHARE = 0.30  # the spike candle must close in the outer 30% of its range
 H4 = timedelta(hours=4)
@@ -109,6 +111,7 @@ def detect(
     strategies: Sequence[str],
     btc_bias: str,
     allow_short: bool,
+    atlas: tuple[_atlas.Pick, int] | None = None,
 ) -> Setup | None:
     """The best setup on the LAST candle, or None.
 
@@ -156,6 +159,16 @@ def detect(
                 setup(SPIKE, "LONG", low, c - o)
             elif allow_short and c < o and (c - low) / span <= EXTREME_SHARE:
                 setup(SPIKE, "SHORT", h, o - c)
+
+    if ATLAS in strategies and atlas is not None:
+        pick, k = atlas
+        r = _atlas.route(candles, pick, atr_now)
+        if r is not None and (r.side == "LONG" or allow_short):
+            sc, parts = _atlas.score(r, pick, k, _aligned(r.side, btc_bias))
+            parts["route_mr"] = 1.0 if r.kind == _atlas.MR else 0.0
+            found.append(
+                Setup(ATLAS, r.side, candles[-1].timestamp, c, atr_now, sc, parts, r.reference)
+            )
 
     if not found:
         return None

@@ -87,9 +87,7 @@ def rsi(close: pd.Series, period: int = 14) -> pd.Series:
     return result
 
 
-def macd(
-    close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
-) -> pd.DataFrame:
+def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
     if fast >= slow:
         raise ValueError("the fast period must be smaller than the slow period")
     macd_line = ema(close, fast) - ema(close, slow)
@@ -125,9 +123,7 @@ def stochastic(
 # ---------------------------------------------------------------------------
 
 
-def bollinger_bands(
-    close: pd.Series, period: int = 20, num_std: float = 2.0
-) -> pd.DataFrame:
+def bollinger_bands(close: pd.Series, period: int = 20, num_std: float = 2.0) -> pd.DataFrame:
     _check_period(period)
     middle = sma(close, period)
     # ddof=0 (population) is the Bollinger convention, and differs from pandas'
@@ -149,9 +145,7 @@ def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
     if len(high) == 0:
         return pd.Series(dtype=float, index=high.index)
     prev_close = close.shift(1)
-    ranges = pd.concat(
-        [high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1
-    )
+    ranges = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1)
     tr = ranges.max(axis=1)
     # The first bar has no previous close, so TR reduces to high - low.
     tr.iloc[0] = high.iloc[0] - low.iloc[0]
@@ -179,9 +173,7 @@ def rolling_volatility(
 # ---------------------------------------------------------------------------
 
 
-def adx(
-    high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14
-) -> pd.DataFrame:
+def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.DataFrame:
     """Wilder's ADX and directional indicators.
 
     Directional movement counts only when one direction *exceeds* the other; an
@@ -213,9 +205,7 @@ def adx(
     dx = 100.0 * (plus_di - minus_di).abs() / di_sum
     adx_series = wilder_smooth(dx.dropna(), period).reindex(high.index)
 
-    return pd.DataFrame(
-        {"adx": adx_series, "plus_di": plus_di, "minus_di": minus_di, "dx": dx}
-    )
+    return pd.DataFrame({"adx": adx_series, "plus_di": plus_di, "minus_di": minus_di, "dx": dx})
 
 
 def ichimoku(
@@ -271,9 +261,7 @@ def volume_ratio(volume: pd.Series, period: int = 20) -> pd.Series:
 # ---------------------------------------------------------------------------
 
 
-def pivot_points(
-    high: pd.Series, low: pd.Series, left: int = 3, right: int = 3
-) -> pd.DataFrame:
+def pivot_points(high: pd.Series, low: pd.Series, left: int = 3, right: int = 3) -> pd.DataFrame:
     """Fractal swing high/low detection.
 
     A bar is a swing high when its high exceeds the ``left`` bars before it and
@@ -441,6 +429,74 @@ def lag1_autocorr(close: pd.Series, window: int = 180) -> pd.Series:
         return np.nan if denom <= 0.0 else float(np.dot(dx, dy) / denom)
 
     return log_ret.rolling(window=window, min_periods=window).apply(_rho1, raw=True)
+
+
+def atrp(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 42) -> pd.Series:
+    """Mean of true range over close, over `period` bars (KORO Atlas 02/09 #01).
+
+    A plain rolling mean of the *relative* range, not Wilder's ATR: it answers "how much does
+    this asset move per bar, as a share of its price", which is comparable across assets.
+    """
+    _check_period(period)
+    c = close.astype(float).where(close.astype(float) > 0, np.nan)
+    prev = c.shift(1)
+    tr = pd.concat([(high - low).abs(), (high - prev).abs(), (low - prev).abs()], axis=1).max(
+        axis=1, skipna=False
+    )
+    return (tr / c).rolling(window=period, min_periods=period).mean()
+
+
+def amihud_illiquidity(close: pd.Series, volume: pd.Series, period: int = 42) -> pd.Series:
+    """Mean of |log return| over traded value, over `period` bars (KORO Atlas 02/09 #02).
+
+    Traded value is close times volume, which is the closest a candle gives to quote volume.
+    Bars with no traded value are left out of the mean; the share of them is `zero_volume_rate`.
+    """
+    _check_period(period)
+    c = close.astype(float).where(close.astype(float) > 0, np.nan)
+    value = c * volume.astype(float)
+    ratio = (np.log(c / c.shift(1)).abs() / value.where(value > 0, np.nan)).where(value > 0, np.nan)
+    return (
+        ratio.rolling(window=period, min_periods=1)
+        .apply(lambda a: float(np.nanmean(a)) if not np.isnan(a).all() else np.nan, raw=True)
+        .where(c.rolling(window=period, min_periods=period).count() == period, np.nan)
+    )
+
+
+def zero_volume_rate(volume: pd.Series, period: int = 42) -> pd.Series:
+    """Share of the last `period` bars with no volume (KORO Atlas 02/09 #02)."""
+    _check_period(period)
+    return (
+        (volume.astype(float) == 0).astype(float).rolling(window=period, min_periods=period).mean()
+    )
+
+
+def efficiency_ratio(close: pd.Series, period: int = 42) -> pd.Series:
+    """Net move over `period` bars divided by the path travelled (Kaufman; 02/09 #05).
+
+    Near 1 the price went one way; near 0 it went nowhere for all its movement.
+    """
+    _check_period(period)
+    c = close.astype(float)
+    path = c.diff().abs().rolling(window=period, min_periods=period).sum()
+    net = (c - c.shift(period)).abs()
+    return (net / path.where(path > 0, np.nan)).astype(float)
+
+
+def return_zscore(
+    high: pd.Series, low: pd.Series, close: pd.Series, horizon: int = 1, atrp_period: int = 42
+) -> pd.Series:
+    """Log return over `horizon` bars, in units of ATRP scaled by sqrt(horizon) (02/09 #05).
+
+    horizon 1 is the "z4" of the slides on 4-hour bars; on daily bars horizon 1 is the one-day
+    move and horizon 5 a trading week.
+    """
+    if not isinstance(horizon, int) or horizon < 1:
+        raise ValueError(f"horizon must be an integer >= 1, got {horizon!r}")
+    c = close.astype(float).where(close.astype(float) > 0, np.nan)
+    move = np.log(c / c.shift(horizon))
+    scale = atrp(high, low, close, atrp_period) * np.sqrt(horizon)
+    return move / scale.where(scale > 0, np.nan)
 
 
 def variance_ratio(close: pd.Series, window: int = 180, horizon: int = 6) -> pd.Series:

@@ -87,3 +87,4 @@ One line per record, newest first. Add new entries at the top.
 - [4-hour breakout signals (2026-11-20)](records/2026-11-20-signals-h4.md) — ADR-067, Donchian and volume spike, deterministic ids, simulated lifecycle, migration 0012; built, not deployed
 - [Signal decision builder for Indodax IDR (2026-11-20)](records/2026-11-20-signal-builder.md) — T3-07, visual rules, audited definitions, separate model worker, append-only reviews and PAPER entry gate; not deployed
 - [Audit chain forks and the append lock (2026-11-23)](records/2026-11-23-audit-append-race.md) — five forks from concurrent writers, advisory-lock fix, existing forks and anchor failures remain
+- [KORO / Math Atlas, spot part (2026-11-23)](records/2026-11-23-atlas-spot.md) — ADR-069, ATLAS 4h strategy, episode statistics, stock character indicators; slides 04 to 08 not built

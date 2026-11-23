@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 #: Below this many closed signals a correlation is noise; the API says so instead of printing it.
@@ -26,6 +27,7 @@ class Row:
     outcome: str | None
     tp_hits: int
     net_r: float | None
+    closed_at: datetime | None = None
 
 
 def _ranks(values: Sequence[float]) -> list[float]:
@@ -75,6 +77,61 @@ def _group(rows: Iterable[Row]) -> dict[str, Any]:
     return out
 
 
+def episode_stats(rows: Iterable[Row]) -> dict[str, Any]:
+    """Closed-episode accounting in R (the owner's Math Atlas slide 01/09, in R instead of USDT).
+
+    An episode is one closed signal. Everything here is a ratio of sums of net R, so it is only
+    as good as the simulation behind it; a field is None when its inputs do not exist (no
+    losses means no payoff ratio). `kelly` is a raw diagnostic from a small sample, **not a
+    position size**: it is shown so that an optimistic win rate is visible, and nothing sizes an
+    order from it.
+
+        WR        wins / episodes             RR   mean win / mean loss
+        PF        sum of wins / sum of losses E    mean net R per episode (p*A - q*B)
+        WR_BE     1 / (1 + RR)                edge WR of decisive episodes - WR_BE
+        K         p - (1 - p) / RR            MDD  largest fall of the cumulative net R
+        RF        total net R / MDD
+    """
+    closed = [r for r in rows if r.state == "CLOSED" and r.net_r is not None]
+    closed.sort(key=lambda r: (r.closed_at is None, r.closed_at or datetime.min))
+    ys = [float(r.net_r) for r in closed if r.net_r is not None]
+    n = len(ys)
+    out: dict[str, Any] = {"episodes": n}
+    keys = ("wins", "losses", "breakeven", "win_rate", "avg_win_r", "avg_loss_r", "rr", "pf")
+    keys += ("expectancy_r", "wr_breakeven", "edge_wr", "kelly", "max_drawdown_r")
+    keys += ("recovery_factor", "total_net_r")
+    out.update(dict.fromkeys(keys))
+    if n == 0:
+        return out
+    wins = [y for y in ys if y > 0]
+    losses = [-y for y in ys if y < 0]
+    out.update(wins=len(wins), losses=len(losses), breakeven=n - len(wins) - len(losses))
+    out["win_rate"] = len(wins) / n
+    out["total_net_r"] = sum(ys)
+    out["expectancy_r"] = sum(ys) / n
+    if wins:
+        out["avg_win_r"] = sum(wins) / len(wins)
+    if losses:
+        out["avg_loss_r"] = sum(losses) / len(losses)
+        out["pf"] = sum(wins) / sum(losses)
+    if wins and losses:
+        a, b = out["avg_win_r"], out["avg_loss_r"]
+        out["rr"] = a / b
+        out["wr_breakeven"] = b / (a + b)
+        decisive = len(wins) / (len(wins) + len(losses))
+        out["edge_wr"] = decisive - out["wr_breakeven"]
+        out["kelly"] = decisive - (1 - decisive) / out["rr"]
+    cum = peak = mdd = 0.0
+    for y in ys:
+        cum += y
+        peak = max(peak, cum)
+        mdd = max(mdd, peak - cum)
+    out["max_drawdown_r"] = mdd
+    if mdd > 0:
+        out["recovery_factor"] = sum(ys) / mdd
+    return out
+
+
 def summarize(rows: Sequence[Row]) -> dict[str, Any]:
     states: dict[str, int] = {}
     for r in rows:
@@ -102,6 +159,11 @@ def summarize(rows: Sequence[Row]) -> dict[str, Any]:
         "by_strategy": by_strategy,
         "by_side": by_side,
         "by_score": by_score,
+        "episode_stats": episode_stats(rows),
+        "episode_stats_by_strategy": {
+            s: episode_stats(r for r in rows if r.strategy == s)
+            for s in sorted({r.strategy for r in rows})
+        },
         "score_correlation": corr,
         "correlation_min_closed": MIN_FOR_CORRELATION,
         "simulated": True,

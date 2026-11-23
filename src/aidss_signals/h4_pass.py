@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from aidss_signals import h4
+from aidss_signals import atlas, h4
 from aidss_signals.config import MIN_DAILY_BARS, SignalsConfig
 from aidss_signals.lifecycle import CLOSED, SimParams, simulate
 from aidss_signals.market import MarketData, MarketDataError
@@ -26,7 +26,11 @@ from aidss_signals.worker import choose_universe
 BTC = "BTCUSDT"
 CANDLES = 300  # enough for the 200-bar trend and every window the owner can choose
 SLOT_OFFSET = timedelta(minutes=5)  # after a 4H close, once the exchange has settled the candle
-LABELS = {h4.DONCHIAN: "aidss_donchian_4h", h4.SPIKE: "aidss_spike_4h"}
+LABELS = {
+    h4.DONCHIAN: "aidss_donchian_4h",
+    h4.SPIKE: "aidss_spike_4h",
+    h4.ATLAS: "aidss_atlas_4h",
+}
 
 
 @dataclass(slots=True)
@@ -37,6 +41,16 @@ class H4Report:
     tracked: int = 0
     closed: int = 0
     errors: list[str] = field(default_factory=list)
+
+
+def _why(shortlist: atlas.Shortlist) -> str:
+    counts: dict[str, int] = {}
+    for reason in shortlist.rejected.values():
+        key = reason.split(":")[0]
+        counts[key] = counts.get(key, 0) + 1
+    return (
+        ", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "no coins with enough history"
+    )
 
 
 def h4_slot(now: datetime) -> datetime:
@@ -125,11 +139,40 @@ def run_h4_pass(
     seen: dict[str, list[Any]] = {BTC: btc}
     for symbol in report.universe:
         try:
-            candles = seen.get(symbol) or market.candles(symbol, "4h", now, CANDLES)
-            seen[symbol] = candles
-            setup = h4.detect(candles, params, h.strategies, bias, h.allow_short)
+            seen[symbol] = seen.get(symbol) or market.candles(symbol, "4h", now, CANDLES)
+        except MarketDataError as exc:
+            report.errors.append(f"{symbol}: {exc}")
+            report.outcomes[symbol] = "DATA_ERROR"
+
+    shortlist: atlas.Shortlist | None = None
+    if h4.ATLAS in h.strategies:
+        chars = {}
+        for symbol in report.universe:
+            ch = atlas.character(seen[symbol]) if symbol in seen else None
+            if ch is not None:
+                chars[symbol] = ch
+        v24 = {s: float(volumes.get(s, 0)) for s in chars}
+        shortlist = atlas.cascade(chars, v24, len(report.universe))
+        if not shortlist.picks:
+            log("INFO", f"signals 4h: atlas shortlist empty ({_why(shortlist)})")
+
+    for symbol in report.universe:
+        if report.outcomes.get(symbol) == "DATA_ERROR":
+            continue
+        try:
+            candles = seen[symbol]
+            pick = None if shortlist is None else shortlist.picks.get(symbol)
+            setup = h4.detect(
+                candles,
+                params,
+                h.strategies,
+                bias,
+                h.allow_short,
+                None if pick is None else (pick, shortlist.k),
+            )
             if setup is None:
-                report.outcomes[symbol] = "NO_SETUP"
+                why = "" if shortlist is None else shortlist.rejected.get(symbol, "")
+                report.outcomes[symbol] = f"NO_SETUP:{why}" if why else "NO_SETUP"
                 continue
             if setup.score < h.min_score:
                 report.outcomes[symbol] = f"BELOW_MIN_SCORE:{setup.score}"

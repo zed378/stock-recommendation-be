@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from aidss.indicators import core
 from aidss.indicators.engine import IndicatorSpec, compute
@@ -56,3 +57,63 @@ def test_stock_ema_atr_pullback_flags_touch_within_half_atr() -> None:
     )
     assert res["extension_atr"].iloc[-1] <= 0.5
     assert res["pullback_eligible"].iloc[-1] == 1.0
+
+
+def _noisy_frame(n: int = 120, seed: int = 5) -> pd.DataFrame:
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    closes = 1000 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    idx = pd.date_range("2026-01-01", periods=n, freq="D", tz="UTC")
+    return pd.DataFrame(
+        {
+            "open": closes,
+            "high": closes * (1 + rng.uniform(0.001, 0.01, n)),
+            "low": closes * (1 - rng.uniform(0.001, 0.01, n)),
+            "close": closes,
+            "volume": rng.uniform(50_000, 150_000, n),
+        },
+        index=idx,
+    )
+
+
+def test_stock_character_statistics_match_a_direct_calculation() -> None:
+    import numpy as np
+
+    f = _noisy_frame()
+    c, h, lo, v = (f[k].to_numpy() for k in ("close", "high", "low", "volume"))
+    n = 42
+    tr = np.maximum.reduce([h[1:] - lo[1:], abs(h[1:] - c[:-1]), abs(lo[1:] - c[:-1])])
+    expected_atrp = float(np.mean(tr[-n:] / c[1:][-n:]))
+    atrp = compute(f, IndicatorSpec("atrp", {"period": n}))["value"]
+    assert atrp.iloc[: n - 1].isna().all() and atrp.iloc[-1] == pytest.approx(expected_atrp)
+
+    r = np.diff(np.log(c))
+    ami = compute(f, IndicatorSpec("amihud", {"period": n}))["value"]
+    assert ami.iloc[-1] == pytest.approx(float(np.mean(np.abs(r[-n:]) / (c[1:] * v[1:])[-n:])))
+
+    er = compute(f, IndicatorSpec("efficiency_ratio", {"period": n}))["value"]
+    assert er.iloc[-1] == pytest.approx(abs(c[-1] - c[-1 - n]) / np.abs(np.diff(c[-n - 1 :])).sum())
+
+    z1 = compute(f, IndicatorSpec("return_zscore", {"horizon": 1, "atrp_period": n}))["value"]
+    assert z1.iloc[-1] == pytest.approx(float(np.log(c[-1] / c[-2])) / expected_atrp)
+    z5 = compute(f, IndicatorSpec("return_zscore", {"horizon": 5, "atrp_period": n}))["value"]
+    assert z5.iloc[-1] == pytest.approx(float(np.log(c[-1] / c[-6])) / (expected_atrp * 5**0.5))
+
+
+def test_zero_volume_bars_are_counted_and_do_not_enter_amihud() -> None:
+    f = _noisy_frame()
+    f.iloc[-10:-5, f.columns.get_loc("volume")] = 0.0
+    rate = compute(f, IndicatorSpec("zero_volume_rate", {"period": 42}))["value"]
+    assert rate.iloc[-1] == pytest.approx(5 / 42)
+    ami = compute(f, IndicatorSpec("amihud", {"period": 42}))["value"]
+    assert ami.iloc[-1] > 0 and not pd.isna(ami.iloc[-1])
+
+
+def test_character_statistics_reject_bad_arguments_and_short_history() -> None:
+    f = _noisy_frame(30)
+    assert compute(f, IndicatorSpec("atrp", {"period": 42}))["value"].isna().all()
+    with pytest.raises(ValueError):
+        core.return_zscore(f["high"], f["low"], f["close"], horizon=0)
+    with pytest.raises(ValueError):
+        core.atrp(f["high"], f["low"], f["close"], period=0)

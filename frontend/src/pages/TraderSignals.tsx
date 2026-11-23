@@ -336,6 +336,7 @@ function SettingsForm({ config }: { config: SignalsConfig }) {
             </label>
           ))}
         </div>
+        <p className="text-xs text-muted">{t("trader.signals.f.h4.atlasNote")}</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {H4_FIELDS.map(([key, label, mode]) => (
             <Field key={key} label={t(label)}>
@@ -428,6 +429,55 @@ function GroupTable({ title, groups }: { title: string; groups: Record<string, G
   );
 }
 
+type Episodes = {
+  episodes: number;
+  rr: number | null;
+  pf: number | null;
+  expectancy_r: number | null;
+  wr_breakeven: number | null;
+  edge_wr: number | null;
+  kelly: number | null;
+  max_drawdown_r: number | null;
+  recovery_factor: number | null;
+  total_net_r: number | null;
+};
+
+function EpisodeStats({ e }: { e: Episodes }) {
+  const { t } = useI18n();
+  if (e.episodes === 0) {
+    return (
+      <p className="text-xs text-muted">
+        {t("trader.signals.h4.episodes")}: {t("trader.signals.h4.ep.none")}
+      </p>
+    );
+  }
+  const rows: ReadonlyArray<readonly [MessageKey, string]> = [
+    ["trader.signals.h4.ep.rr", fixed(e.rr)],
+    ["trader.signals.h4.ep.pf", fixed(e.pf)],
+    ["trader.signals.h4.ep.expectancy", fixed(e.expectancy_r)],
+    ["trader.signals.h4.ep.wrBe", share(e.wr_breakeven)],
+    ["trader.signals.h4.ep.edge", e.edge_wr === null ? "-" : `${(e.edge_wr * 100).toFixed(1)} pp`],
+    ["trader.signals.h4.ep.kelly", share(e.kelly)],
+    ["trader.signals.h4.ep.mdd", fixed(e.max_drawdown_r)],
+    ["trader.signals.h4.ep.rf", fixed(e.recovery_factor)],
+    ["trader.signals.h4.ep.total", fixed(e.total_net_r)],
+  ];
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted">{t("trader.signals.h4.episodes")}</h3>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-xs text-muted">{t(label)}</dt>
+            <dd className="font-mono tnum text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-muted">{t("trader.signals.h4.ep.kellyNote")}</p>
+    </div>
+  );
+}
+
 function H4Summary() {
   const { t } = useI18n();
   const query = useTraderQuery<SignalTradeSummary>(["signals", "h4", "summary"], () =>
@@ -467,6 +517,7 @@ function H4Summary() {
                   .map(([k, v]) => `${t(`trader.signals.h4.state.${k}` as MessageKey)} ${v}`)
                   .join(", ")}
               </p>
+              <EpisodeStats e={d.episode_stats as unknown as Episodes} />
               <GroupTable title={t("trader.signals.h4.byStrategy")} groups={d.by_strategy as unknown as Record<string, Group>} />
               <GroupTable title={t("trader.signals.h4.bySide")} groups={d.by_side as unknown as Record<string, Group>} />
               <GroupTable title={t("trader.signals.h4.byScore")} groups={d.by_score as unknown as Record<string, Group>} />

@@ -39,7 +39,7 @@ class SignalSettingsError(ValueError):
         self.problems = problems
 
 
-H4_STRATEGIES = ("DONCHIAN", "SPIKE")
+H4_STRATEGIES = ("DONCHIAN", "SPIKE", "ATLAS")
 
 
 @dataclass(frozen=True, slots=True)
