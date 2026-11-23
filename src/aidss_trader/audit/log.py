@@ -38,6 +38,39 @@ GENESIS = "0" * 64
 #: Arbitrary constant naming the audit append lock ("AUDI" in ASCII).
 AUDIT_LOCK_KEY = 0x41554449
 
+#: The five forks of 2026-11-19 (see the module docstring), accepted by the owner on 2026-11-23.
+#: Each entry is seq -> (parent hash, dead-end sibling hash, child hash): the row at `seq` chains
+#: to the parent instead of to the row before it, and the sibling right before it is a dead end
+#: nothing chains to. The history was not rewritten. A fork anywhere else, or any change to
+#: these rows, still breaks verification. Do not add entries without the owner's decision.
+KNOWN_FORKS: dict[int, tuple[str, str, str]] = {
+    1423: (
+        "8b425e477f40670a87a31c6a7e74a2d04b452dd03086e6687cb267e05c946118",
+        "6766f4b5f3682ccd312327338cc16b4dbc4ec1b321041c2c79466b5e08e88ae5",
+        "e5c7165850f22c94e0541a9f8da34148fc0199edd8679e0d6606647023b4f214",
+    ),
+    1492: (
+        "c0dbe0e831924098a9b7fadefaadb4fb6d8b2b0865e82ee9c151ae307e1a25c2",
+        "39a1f9553333ffa559e449ac8c07ec1ba31899f489dab99242666f46a8367873",
+        "261b500cf7ca8a0806533ba3cf27887384e8bd19862d6e6aa621d157db3ceb54",
+    ),
+    1638: (
+        "4f7a1db02990fc869a419f62b20c233d7c95b99643b4ff3c4f8d8477266cf253",
+        "f55e38970e0441881b2e77abbd9ed99c5b6dce3c1cc5e22653f4e5f7c6b6218f",
+        "123e274867afb87ed340392f3528395d6550a27dc1ed3e6307d0c3981e1cb3f2",
+    ),
+    1679: (
+        "46e092b9b445fa9a512309ba7a8dbaaef579a346696283e7f1603cb4f583e734",
+        "17205ffdce0d1a72ba5c9079e7bf2dc2c5be9eeec596d485fcfb44d601565a77",
+        "b8b48a33f779ea36f7f5df84a3ecdbd5e31b22df89d791d9e01eb64a2f2d1a24",
+    ),
+    1982: (
+        "2b2223b97de8fcbcf721a496f87679e91df6b756cddf7c96b5c6129a7801384d",
+        "9efb7bcacf2ff742ca093d4737a560e065c5b08b941c56720001b36eb237e79a",
+        "b319b970d044e85100aed406ffe68d0686dbb4c6682fc9abb6b042abc2f8eaa0",
+    ),
+}
+
 
 class AuditChainBroken(RuntimeError):
     def __init__(self, seq: int, reason: str) -> None:
@@ -119,14 +152,20 @@ class AuditLogger:
         return row
 
 
+def _is_accepted_fork(row: AuditLog, previous_hash: str) -> bool:
+    known = KNOWN_FORKS.get(row.seq)
+    return known is not None and (row.prev_hash, previous_hash, row.hash) == known
+
+
 def verify_chain(session: Session) -> int:
     """Return the number of rows verified, or raise AuditChainBroken at the first bad one."""
     prev = GENESIS
     count = 0
     for row in session.scalars(select(AuditLog).order_by(AuditLog.seq)):
-        if row.prev_hash != prev:
+        if row.prev_hash != prev and not _is_accepted_fork(row, prev):
             raise AuditChainBroken(row.seq, "previous hash does not match (a row was removed?)")
-        if row.hash != _hash(prev, _fields(row)):
+        # row.prev_hash equals `prev` here, except at an accepted fork, where it is the parent
+        if row.hash != _hash(row.prev_hash, _fields(row)):
             raise AuditChainBroken(row.seq, "content does not match its hash (row was altered?)")
         prev = row.hash
         count += 1
