@@ -111,6 +111,25 @@ def compute(frame: pd.DataFrame, spec: IndicatorSpec) -> pd.DataFrame:
             return core.volume_ratio(frame["volume"], p["period"]).to_frame("value")
         case "volatility":
             return core.rolling_volatility(frame["close"], p["period"]).to_frame("value")
+        case "obv_slope":
+            return core.obv_regression_slope(frame["close"], frame["volume"], p["period"]).to_frame(
+                "value"
+            )
+        case "ema_atr_pullback":
+            return core.ema_atr_pullback(
+                frame["high"],
+                frame["low"],
+                frame["close"],
+                ema_period=p.get("ema_period", 21),
+                atr_period=p.get("atr_period", 14),
+                max_extension_atr=p.get("max_extension_atr", 0.5),
+            )
+        case "lag1_autocorr":
+            return core.lag1_autocorr(frame["close"], p.get("window", 180)).to_frame("value")
+        case "variance_ratio":
+            return core.variance_ratio(
+                frame["close"], p.get("window", 180), p.get("horizon", 6)
+            ).to_frame("value")
         case _:
             raise ValueError(f"Unknown indicator: {spec.name!r}")
 

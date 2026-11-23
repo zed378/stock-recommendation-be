@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from aidss_trader.strategy.base import Strategy
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
+from aidss_trader.strategy.koro import KoroObvPullback, KoroObvPullbackParams
 from aidss_trader.strategy.library import (
     BollingerParams,
     BollingerReversion,
@@ -37,6 +38,18 @@ def proposed_strategies() -> dict[str, Strategy]:
             RsiReversion(RsiParams(14, D(30), D(55), 14, STOP_MULTIPLE, COOLDOWN_S)),
             BollingerReversion(BollingerParams(20, D(2), 14, STOP_MULTIPLE, COOLDOWN_S)),
             MacdTrend(MacdTrendParams(12, 26, 9, 100, 14, STOP_MULTIPLE, COOLDOWN_S)),
+            KoroObvPullback(
+                KoroObvPullbackParams(
+                    obv_reg_period=48,
+                    ema_period=21,
+                    max_extension_atr=D("0.5"),
+                    autocorr_window=180,
+                    vr_horizon=6,
+                    atr_period=14,
+                    atr_stop_multiple=STOP_MULTIPLE,
+                    cooldown_s=COOLDOWN_S,
+                )
+            ),
         )
     }
 

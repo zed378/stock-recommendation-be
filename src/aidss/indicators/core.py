@@ -373,6 +373,101 @@ def market_structure(high: pd.Series, low: pd.Series, left: int = 3, right: int 
 
 
 # ---------------------------------------------------------------------------
+# Equity-applicable KORO Atlas indicators (02/09 & 03/09)
+# ---------------------------------------------------------------------------
+
+
+def obv_regression_slope(close: pd.Series, volume: pd.Series, period: int = 48) -> pd.Series:
+    """Rolling OLS slope of OBV over `period` bars (KORO Atlas 03/09 #01)."""
+    _check_period(period)
+    if period < 2:
+        raise ValueError("period must be >= 2")
+    obv_series = obv(close, volume).astype(float)
+    x = np.arange(period, dtype=float)
+    x_centered = x - x.mean()
+    denom = float(np.sum(x_centered**2))
+
+    def _slope(window: np.ndarray) -> float:
+        if np.isnan(window).any():
+            return np.nan
+        return float(np.dot(x_centered, window - window.mean()) / denom)
+
+    return obv_series.rolling(window=period, min_periods=period).apply(_slope, raw=True)
+
+
+def ema_atr_pullback(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    *,
+    ema_period: int = 21,
+    atr_period: int = 14,
+    max_extension_atr: float = 0.5,
+) -> pd.DataFrame:
+    """EMA-ATR pullback extension and long pullback flag (KORO Atlas 03/09 #05)."""
+    ema_line = ema(close, ema_period)
+    atr_line = atr(high, low, close, atr_period)
+    extension = (close.astype(float) - ema_line).abs() / atr_line.replace(0.0, np.nan)
+    pullback_bar = close.astype(float) < close.astype(float).shift(1)
+    touches_or_below = ((low.astype(float) <= ema_line) & (ema_line <= high.astype(float))) | (
+        close.astype(float) <= ema_line
+    )
+    eligible = (pullback_bar & touches_or_below & (extension <= max_extension_atr)).astype(float)
+    eligible = eligible.where(extension.notna(), np.nan)
+    return pd.DataFrame(
+        {
+            "ema": ema_line,
+            "atr": atr_line,
+            "extension_atr": extension,
+            "pullback_eligible": eligible,
+        },
+        index=close.index,
+    )
+
+
+def lag1_autocorr(close: pd.Series, window: int = 180) -> pd.Series:
+    """Rolling lag-1 autocorrelation of log returns (KORO Atlas 02/09 #03)."""
+    if not isinstance(window, int) or window < 3:
+        raise ValueError(f"window must be an integer >= 3, got {window!r}")
+    prices = close.astype(float).where(close.astype(float) > 0, np.nan)
+    log_ret = np.log(prices / prices.shift(1))
+
+    def _rho1(arr: np.ndarray) -> float:
+        if np.isnan(arr).any():
+            return np.nan
+        xs, ys = arr[:-1], arr[1:]
+        dx, dy = xs - xs.mean(), ys - ys.mean()
+        denom = float(np.sqrt(np.sum(dx**2) * np.sum(dy**2)))
+        return np.nan if denom <= 0.0 else float(np.dot(dx, dy) / denom)
+
+    return log_ret.rolling(window=window, min_periods=window).apply(_rho1, raw=True)
+
+
+def variance_ratio(close: pd.Series, window: int = 180, horizon: int = 6) -> pd.Series:
+    """Rolling overlapping Variance Ratio VR(q) (KORO Atlas 02/09 #04)."""
+    if not isinstance(horizon, int) or horizon < 2:
+        raise ValueError(f"horizon must be an integer >= 2, got {horizon!r}")
+    if not isinstance(window, int) or window <= horizon:
+        raise ValueError(f"window must be > horizon ({horizon}), got {window!r}")
+    prices = close.astype(float).where(close.astype(float) > 0, np.nan)
+    log_ret = np.log(prices / prices.shift(1))
+
+    def _vr(arr: np.ndarray) -> float:
+        if np.isnan(arr).any():
+            return np.nan
+        var_r = float(np.var(arr, ddof=1))
+        if var_r <= 0.0:
+            return np.nan
+        csum = np.concatenate(([0.0], np.cumsum(arr)))
+        rq = csum[horizon:] - csum[:-horizon]
+        if len(rq) < 2:
+            return np.nan
+        return float(np.var(rq, ddof=1) / (horizon * var_r))
+
+    return log_ret.rolling(window=window, min_periods=window).apply(_vr, raw=True)
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 

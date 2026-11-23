@@ -1,0 +1,59 @@
+{
+  "_about": "KORO Atlas-aligned starter profile for Rp 1,000,000 (max_drawdown_pct=7 from Atlas 09/09 W <= 0.93 R; ema_fast=21 and atr_period=14 from Atlas 03/09). PROPOSED, not decided: edit and verify with python deploy/trader/check_owner_defaults.py <this file>.",
+  "status": "proposed",
+  "basis": {
+    "equity_idr": "1000000",
+    "risk_profile": "koro_atlas_spot",
+    "timeframe": "4H",
+    "min_order_idr": "10000",
+    "assumed_stop_pct": "5"
+  },
+  "limits": {
+    "risk_per_trade_pct": "0.5",
+    "max_daily_loss_idr": "15000",
+    "max_drawdown_pct": "7",
+    "max_consecutive_losses": 4,
+    "max_open_positions": 2,
+    "max_exposure_per_pair_pct": "25",
+    "max_total_exposure_pct": "50",
+    "max_order_idr": "250000",
+    "price_deviation_pct": "0.5",
+    "freshness_limit_s": 60,
+    "cooldown_s": 900,
+    "order_rate_limit": 6,
+    "trading_window": null
+  },
+  "strategy_params": {
+    "ema_fast": 21,
+    "ema_slow": 50,
+    "adx_period": 14,
+    "adx_threshold": "25",
+    "atr_period": 14,
+    "atr_stop_multiple": "2.5",
+    "cooldown_s": 14400
+  },
+  "paper": {
+    "slippage_pct": "0.20",
+    "partial_fill_fraction": "0.50",
+    "maker_fee_pct": "0.10",
+    "taker_fee_pct": "0.20",
+    "tax_pct": "0.21",
+    "clearing_pct": "0.00555",
+    "start_equity_idr": "1000000"
+  },
+  "allowlist": {
+    "pairs": [
+      "BTCIDR",
+      "ETHIDR"
+    ],
+    "min_quote_volume_24h_idr": "1000000000",
+    "max_spread_pct": "0.10"
+  },
+  "promotion_thresholds": {
+    "min_paper_trades": 10,
+    "max_paper_drawdown_pct": "6",
+    "backtest_min_return_pct": "0",
+    "max_live_capital_idr": "1000000",
+    "max_slippage_pct": "0.30"
+  }
+}

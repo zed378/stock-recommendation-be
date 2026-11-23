@@ -5,6 +5,7 @@ __pycache__/
 .eggs/
 build/
 dist/
+param
 
 .env
 # Vite's local-override convention. `.env.example` stays tracked on purpose:

@@ -214,3 +214,90 @@ def efficiency_ratio(values: Sequence[Decimal], period: int) -> list[Decimal | N
         path = sum((abs(values[k] - values[k - 1]) for k in range(i - period + 1, i + 1)), ZERO)
         out[i] = ZERO if path == 0 else abs(values[i] - values[i - period]) / path
     return out
+
+
+def obv(candles: Sequence[Candle]) -> list[Decimal]:
+    """On-Balance Volume in `Decimal` (KORO Atlas 03/09): OBV[0] = 0."""
+    if not candles:
+        return []
+    out: list[Decimal] = [ZERO]
+    running = ZERO
+    for prev, cur in zip(candles, candles[1:], strict=False):
+        if cur.close > prev.close:
+            running += cur.volume
+        elif cur.close < prev.close:
+            running -= cur.volume
+        out.append(running)
+    return out
+
+
+def obv_slope(candles: Sequence[Candle], period: int) -> list[Decimal | None]:
+    """OLS linear regression slope of OBV over `period` bars (KORO Atlas 03/09 #01)."""
+    if period < 2:
+        raise ValueError("period must be at least 2")
+    series = obv(candles)
+    n = len(series)
+    out: list[Decimal | None] = [None] * n
+    if n < period:
+        return out
+    x_mean = Decimal(period - 1) / Decimal(2)
+    denom = sum(((Decimal(j) - x_mean) ** 2 for j in range(period)), ZERO)
+    if denom == 0:
+        return out
+    for i in range(period - 1, n):
+        window = series[i - period + 1 : i + 1]
+        y_mean = sum(window, ZERO) / period
+        num = sum(
+            ((Decimal(j) - x_mean) * (y - y_mean) for j, y in enumerate(window)),
+            ZERO,
+        )
+        out[i] = num / denom
+    return out
+
+
+def _log_returns(closes: Sequence[Decimal]) -> list[Decimal] | None:
+    returns: list[Decimal] = []
+    for prev, cur in zip(closes, closes[1:], strict=False):
+        if prev <= 0 or cur <= 0:
+            return None
+        returns.append((cur / prev).ln())
+    return returns
+
+
+def lag1_autocorr(closes: Sequence[Decimal], window: int) -> Decimal | None:
+    """Lag-1 sample autocorrelation of log returns over `window` returns (KORO Atlas 02/09 #03)."""
+    if window < 3 or len(closes) < window + 1:
+        return None
+    returns = _log_returns(closes[-(window + 1) :])
+    if returns is None or len(returns) < window:
+        return None
+    xs = returns[:-1]
+    ys = returns[1:]
+    n = len(xs)
+    x_bar = sum(xs, ZERO) / n
+    y_bar = sum(ys, ZERO) / n
+    num = sum(((x - x_bar) * (y - y_bar) for x, y in zip(xs, ys, strict=True)), ZERO)
+    den_x = sum(((x - x_bar) ** 2 for x in xs), ZERO)
+    den_y = sum(((y - y_bar) ** 2 for y in ys), ZERO)
+    if den_x <= 0 or den_y <= 0:
+        return None
+    return num / (den_x * den_y).sqrt()
+
+
+def variance_ratio(closes: Sequence[Decimal], window: int, horizon: int) -> Decimal | None:
+    """Overlapping q-period Variance Ratio VR(q) = Var(R_q)/(q*Var(r)) (KORO Atlas 02/09 #04)."""
+    if horizon < 2 or window <= horizon or len(closes) < window + 1:
+        return None
+    returns = _log_returns(closes[-(window + 1) :])
+    if returns is None or len(returns) < window:
+        return None
+    r_mean = sum(returns, ZERO) / len(returns)
+    var_r = sum(((r - r_mean) ** 2 for r in returns), ZERO) / (len(returns) - 1)
+    if var_r <= 0:
+        return None
+    rq = [sum(returns[i : i + horizon], ZERO) for i in range(len(returns) - horizon + 1)]
+    if len(rq) < 2:
+        return None
+    rq_mean = sum(rq, ZERO) / len(rq)
+    var_rq = sum(((x - rq_mean) ** 2 for x in rq), ZERO) / (len(rq) - 1)
+    return var_rq / (Decimal(horizon) * var_r)

@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation
 
 from aidss_trader.strategy.base import Strategy
 from aidss_trader.strategy.ema_adx import EmaAdxParams, EmaAdxStrategy
+from aidss_trader.strategy.koro import KoroObvPullback, KoroObvPullbackParams
 from aidss_trader.strategy.library import (
     BollingerParams,
     BollingerReversion,
@@ -98,6 +99,19 @@ KINDS: dict[str, KindSpec] = {
         "trend",
         (_int("entry_period", 2, 250, 20), _int("exit_period", 2, 250, 10), *_ATR),
         lambda v: DonchianBreakout(DonchianParams(**v)),  # type: ignore[arg-type]
+    ),
+    "koro_obv_pullback": KindSpec(
+        "koro_obv_pullback",
+        "trend",
+        (
+            _int("obv_reg_period", 2, 250, 48),
+            _int("ema_period", 2, 200, 21),
+            _dec("max_extension_atr", "0.05", "10", "0.5"),
+            _int("autocorr_window", 0, 500, 180),
+            _int("vr_horizon", 0, 50, 6),
+            *_ATR,
+        ),
+        lambda v: KoroObvPullback(KoroObvPullbackParams(**v)),  # type: ignore[arg-type]
     ),
     "rsi_reversion": KindSpec(
         "rsi_reversion",
