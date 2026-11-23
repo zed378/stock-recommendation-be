@@ -16,3 +16,9 @@ Checked against production data: a dump taken from the VM on 2026-11-20 (2876 ro
 
 Still to do, not done: deploy this image so the hourly anchor job (`rc=2` every hour since 2026-11-19 07:07 UTC) can record heads again. The anchor file has a 4-day gap; the first new anchor covers the rows written since.
 
+
+## Deployed (2026-11-23)
+
+`zed378/aidss-trader:875f56d` (digest `sha256:03041d6c…a452f`). No migration, no backup needed (code only). Only the Trader was recreated, with `--no-build --no-deps`, using a copy of the running override (`~/aidss-deploy-875f56d.json`, the `85f7f45` override with the new tag; the unfinished Kronos override `533c782` was deliberately not used, so no worker token mount was added). Healthy after 40 seconds; the Trader stayed `HALTED` (`HALT by deploy`, unchanged). Frontend `85f7f45`, signals `721e40a`, api, worker and postgres untouched.
+
+Checked: the hourly anchor wrapper, run once by hand on the new image, returned `rc=0` and anchored seq 2877 (head `43170c7d…eea06b`); before this the last anchor was seq 828 and every run since 2026-11-19 07:07 UTC had failed. The anchor file's gap between seq 828 and 2877 is real: nothing external vouches for those rows except the verified chain itself. Rollback image: `85f7f45`.
